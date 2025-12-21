@@ -5,6 +5,7 @@
   "type": "module",
   "dependencies": {
     "@assistant-ui/react": "latest",
+    "@assistant-ui/react-data-stream": "^0.11.13",
     "@assistant-ui/react-langgraph": "latest",
     "@assistant-ui/react-markdown": "latest",
     "@radix-ui/react-avatar": "^1.1.2",
