@@ -1,6 +1,9 @@
-# Assistant Transport Example
+# Frontend using Assistant Transport runtime provider
 
-This example demonstrates how to use assistant-ui with the `useAssistantTransportRuntime` hook to connect to a custom backend server that implements the assistant-transport protocol.
+This is adapted from the assistant-ui examples. It uses the latest node and next.js libraries, as well as the latest assistant-ui libraries (the assistant-ui repo version uses older versions). 
+
+It makes use of the `useAssistantTransportRuntime` hook to connect to a custom backend server that implements the assistant-transport protocol.
+The assistant-transport protocol is implemented in FastAPI (in the backend folder). 
 
 ## Overview
 
@@ -95,7 +98,7 @@ Your backend server should:
 ## Project Structure
 
 ```
-examples/with-assistant-transport/
+application/frontend/
 ├── app/
 │   ├── globals.css              # Global styles with Tailwind CSS
 │   ├── layout.tsx              # Root layout component
@@ -121,9 +124,8 @@ examples/with-assistant-transport/
 
 ## Backend Examples
 
-For a complete working backend example, check out:
+The original backend that the first version of this front-end was developed for can be found in the assistant-ui websites, under `python/assistant-transport-backend` or `python/assistant-transport-backend-langgraph`. It uses the assistant-strem library to implement the assistant transport interface. 
 
-- `python/assistant-transport-backend` - Python FastAPI server with assistant-stream integration
 
 ## Customization
 
