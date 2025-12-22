@@ -1,0 +1,22 @@
+## Laggraph-FastAPI-AssistantUI template
+
+This repo contains a template for building conversational interfaces for langgraph agents. 
+
+It makes use of a React library (assistant UI) and it is heavily based on the templates of this library.
+
+The currently used libraries in the semi-official repo of assistant-ui are based on deprecated versions and are not well documented. This repo is using the latest libraries available at the time of writting, making it a much better candidate for using it as a base for building new projects.
+
+## Backend
+
+The backend is an interface to langgraph build with FastAPI. It supports token streaming (the generative UI capabilities of Assistant UI are to be also tested in the future).
+
+## Frontend
+
+There are 2 versions of the frontend:
+* A minimal version (with only a chat interface)
+* A "full" version with prior chats etc
+
+The assistant-ui component supports different "runtimes" and in this repo the "AssistantTransport" backend runtime was implemented. There is a demo for the server in the assistant-ui repo but it is not working correctly. 
+
+Note that although langgraph supports assistant UI, the langgraph server is proprietary (hence limmiting in terms of usability for fully open source projects).
+
