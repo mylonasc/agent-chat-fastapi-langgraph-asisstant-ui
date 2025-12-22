@@ -12,50 +12,7 @@ import {
   LangChainMessage,
 } from "@assistant-ui/react-langgraph";
 import { ReactNode } from "react";
-import { z } from "zod";
 
-// Frontend tool with execute function
-const WeatherTool = makeAssistantTool({
-  type: "frontend",
-  toolName: "get_weather",
-  description: "Get the current weather for a city",
-  parameters: z.object({
-    location: z.string().describe("The city to get weather for"),
-    unit: z
-      .enum(["celsius", "fahrenheit"])
-      .optional()
-      .describe("Temperature unit"),
-  }),
-  execute: async ({ location, unit = "celsius" }) => {
-    console.log(`Getting weather for ${location} in ${unit}`);
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-
-    const temp = Math.floor(Math.random() * 30) + 10;
-    const conditions = ["sunny", "cloudy", "rainy", "partly cloudy"];
-    const condition = conditions[Math.floor(Math.random() * conditions.length)];
-
-    return {
-      location,
-      temperature: temp,
-      unit,
-      condition,
-      humidity: Math.floor(Math.random() * 40) + 40,
-      windSpeed: Math.floor(Math.random() * 20) + 5,
-    };
-  },
-  streamCall: async (reader) => {
-    console.log("streamCall", reader);
-    const city = await reader.args.get("location");
-    console.log("location", city);
-
-    const args = await reader.args.get();
-    console.log("args", args);
-
-    const result = await reader.response.get();
-    console.log("result", result);
-  },
-});
 
 type MyRuntimeProviderProps = {
   children: ReactNode;
@@ -73,31 +30,42 @@ export const converter = (
   state: State,
   connectionMetadata: AssistantTransportConnectionMetadata,
 ) => {
-  const optimisticStateMessages = connectionMetadata.pendingCommands.map(
-    (c): LangChainMessage[] => {
-      if (c.type === "add-message") {
-        return [
-          {
-            type: "human" as const,
-            content: [
-              {
-                type: "text" as const,
-                text: c.message.parts
-                  .map((p) => (p.type === "text" ? p.text : ""))
-                  .join("\n"),
-              },
-            ],
-          },
-        ];
-      }
-      return [];
-    },
-  );
+  const serverMessages = state.messages || [];
+  
+  // 1. Extract pending human messages from the transport layer
+  const pendingHumanMessages = connectionMetadata.pendingCommands
+    .filter((cmd) => cmd.type === "add-message")
+    .map((cmd) => ({
+      id: cmd.message.id,
+      type: "human" as const,
+      content: [
+        {
+          type: "text" as const,
+          // Extract text from the parts array
+          text: cmd.message.parts
+            .map((p) => (p.type === "text" ? p.text : ""))
+            .join(""),
+        },
+      ],
+    }));
 
-  const messages = [...state.messages, ...optimisticStateMessages.flat()];
+  // 2. Determine if the server has acknowledged the current turn.
+  // We check if the server list already contains a human message.
+  // Since you fixed the ID on the backend, checking for 'human' type is now reliable.
+  const hasHumanInServer = serverMessages.some((m) => m.type === "human");
+
+  // 3. Construct the combined message list.
+  // If the server hasn't sent the human message back yet, we prepend the optimistic version.
+  // Once the server sends it (with the ID fix), hasHumanInServer becomes true and we 
+  // switch entirely to the server's ordered array.
+  const allMessages = hasHumanInServer 
+    ? serverMessages 
+    : [...pendingHumanMessages, ...serverMessages];
+
   return {
-    messages: LangChainMessageConverter.toThreadMessages(messages),
-    isRunning: connectionMetadata.isSending || false,
+    // ThreadMessages handles the specific UI layout and bubble rendering
+    messages: LangChainMessageConverter.toThreadMessages(allMessages),
+    isRunning: connectionMetadata.isSending,
   };
 };
 
@@ -131,7 +99,6 @@ export function MyRuntimeProvider({ children }: MyRuntimeProviderProps) {
 
   return (
     <AssistantRuntimeProvider runtime={runtime}>
-      <WeatherTool />
 
       {children}
     </AssistantRuntimeProvider>
