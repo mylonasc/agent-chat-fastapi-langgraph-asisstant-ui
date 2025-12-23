@@ -108,4 +108,4 @@ async def chat_endpoint(request: ScopedChatRequest):
             )
             
     stream = create_run(run_callback, state=request.state)
-    return DataStreamResponse(stream)
+    return DataStreamResponse(stream, headers={"x-thread-id": thread_id})

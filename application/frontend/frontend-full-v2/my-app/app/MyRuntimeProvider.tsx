@@ -32,42 +32,80 @@ export const converter = (
 ) => {
   const serverMessages = state.messages || [];
   
-  // 1. Extract pending human messages from the transport layer
+  // 1. Check if we are currently in an "active" request cycle
+  const isSending = connectionMetadata.isSending;
+
+  // 2. Extract pending human messages
   const pendingHumanMessages = connectionMetadata.pendingCommands
     .filter((cmd) => cmd.type === "add-message")
     .map((cmd) => ({
       id: cmd.message.id,
       type: "human" as const,
-      content: [
-        {
-          type: "text" as const,
-          // Extract text from the parts array
-          text: cmd.message.parts
-            .map((p) => (p.type === "text" ? p.text : ""))
-            .join(""),
-        },
-      ],
+      content: [{ type: "text" as const, text: cmd.message.parts.map(p => p.type === 'text' ? p.text : '').join("") }],
     }));
 
-  // 2. Determine if the server has acknowledged the current turn.
-  // We check if the server list already contains a human message.
-  // Since you fixed the ID on the backend, checking for 'human' type is now reliable.
+  // 3. Logic Refinement:
+  // If we are sending and the server hasn't mirrored our message back yet, 
+  // we show the optimistic message. Otherwise, we trust the server state entirely.
   const hasHumanInServer = serverMessages.some((m) => m.type === "human");
-
-  // 3. Construct the combined message list.
-  // If the server hasn't sent the human message back yet, we prepend the optimistic version.
-  // Once the server sends it (with the ID fix), hasHumanInServer becomes true and we 
-  // switch entirely to the server's ordered array.
-  const allMessages = hasHumanInServer 
-    ? serverMessages 
-    : [...pendingHumanMessages, ...serverMessages];
+  
+  let allMessages;
+  if (isSending && !hasHumanInServer) {
+    // We are mid-stream and waiting for the server to acknowledge the human msg
+    allMessages = [...pendingHumanMessages, ...serverMessages];
+  } else {
+    // We are either idle (viewing history) or the server has taken over the message list
+    allMessages = serverMessages;
+  }
 
   return {
-    // ThreadMessages handles the specific UI layout and bubble rendering
     messages: LangChainMessageConverter.toThreadMessages(allMessages),
-    isRunning: connectionMetadata.isSending,
+    isRunning: isSending,
   };
 };
+
+// export const converter = (
+//   state: State,
+//   connectionMetadata: AssistantTransportConnectionMetadata,
+// ) => {
+//   const serverMessages = state.messages || [];
+  
+//   // 1. Extract pending human messages from the transport layer
+//   const pendingHumanMessages = connectionMetadata.pendingCommands
+//     .filter((cmd) => cmd.type === "add-message")
+//     .map((cmd) => ({
+//       id: cmd.message.id,
+//       type: "human" as const,
+//       content: [
+//         {
+//           type: "text" as const,
+//           // Extract text from the parts array
+//           text: cmd.message.parts
+//             .map((p) => (p.type === "text" ? p.text : ""))
+//             .join(""),
+//         },
+//       ],
+//     }));
+
+//   // 2. Determine if the server has acknowledged the current turn.
+//   // We check if the server list already contains a human message.
+//   // Since you fixed the ID on the backend, checking for 'human' type is now reliable.
+//   const hasHumanInServer = serverMessages.some((m) => m.type === "human");
+
+//   // 3. Construct the combined message list.
+//   // If the server hasn't sent the human message back yet, we prepend the optimistic version.
+//   // Once the server sends it (with the ID fix), hasHumanInServer becomes true and we 
+//   // switch entirely to the server's ordered array.
+//   const allMessages = hasHumanInServer 
+//     ? serverMessages 
+//     : [...pendingHumanMessages, ...serverMessages];
+
+//   return {
+//     // ThreadMessages handles the specific UI layout and bubble rendering
+//     messages: LangChainMessageConverter.toThreadMessages(allMessages),
+//     isRunning: connectionMetadata.isSending,
+//   };
+// };
 
 export function MyRuntimeProvider({ children }: MyRuntimeProviderProps) {
   const runtime = useAssistantTransportRuntime({

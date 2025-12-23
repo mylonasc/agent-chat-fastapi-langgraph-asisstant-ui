@@ -26,13 +26,48 @@ import {
 
 export const Assistant = () => {
 
-  const runtime = useAssistantTransportRuntime({
+const runtime = useAssistantTransportRuntime({
     initialState: {
       messages: [],
     },
     api: "http://localhost:8010/assistant",
-    converter
-  }); 
+    converter,
+    // 1. Pass the current threadId to the backend
+    body: (thread) => ({
+      thread_id: thread.threadId, 
+      user_id : 'default_user'
+    }),
+    // 2. Handle switching threads
+    onSwitchToNewThread: async (runtime) => {
+      runtime.switchToThread(null); // Clears local state for a new thread
+    },
+    onSwitchToThread: async (threadId, runtime) => {
+      // Fetch history from your backend endpoint: /threads/{thread_id}/messages
+      const res = await fetch(`http://localhost:8010/threads/${threadId}/messages`);
+      const data = await res.json();
+      
+      // Load the messages into the UI
+      runtime.switchToThread(threadId, {
+        messages: data.messages, 
+      });
+    },
+    threads: {
+    // 1. Tell assistant-ui how to fetch the list of threads for the sidebar
+      fetchThreads: async () => {
+        const res = await fetch("http://localhost:8010/threads?user_id=default_user");
+        const threads = await res.json();
+        return threads.map((t: any) => ({
+          threadId: t.id,
+          title: t.title || "New Chat",
+        }));
+      },
+      // 2. (Optional) Handle deletions
+      removeThread: async (threadId) => {
+         await fetch(`http://localhost:8010/threads/${threadId}`, { method: 'DELETE' });
+      }
+    }
+  });
+  
   
   return (
     <AssistantRuntimeProvider runtime={runtime}>
