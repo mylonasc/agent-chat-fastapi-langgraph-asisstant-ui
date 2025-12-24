@@ -1,3 +1,4 @@
+// components/assistant-ui/thread-list.tsx
 import type { FC } from "react";
 import {
   ThreadListItemPrimitive,
@@ -11,11 +12,12 @@ import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button
 import { Skeleton } from "@/components/ui/skeleton";
 
 export const ThreadList: FC = () => {
+  // ✅ Root is now provided by Assistant.tsx
   return (
-    <ThreadListPrimitive.Root className="aui-root aui-thread-list-root flex flex-col items-stretch gap-1.5">
+    <div className="aui-thread-list-root flex flex-col items-stretch gap-1.5">
       <ThreadListNew />
       <ThreadListItems />
-    </ThreadListPrimitive.Root>
+    </div>
   );
 };
 
@@ -34,12 +36,9 @@ const ThreadListNew: FC = () => {
 };
 
 const ThreadListItems: FC = () => {
-  const isLoading = useAssistantState(({ threads }) => threads.isLoading);
+  const isLoading = useAssistantState((s) => !!(s as any).threads?.isLoading);
 
-  if (isLoading) {
-    return <ThreadListSkeleton />;
-  }
-
+  if (isLoading) return <ThreadListSkeleton />;
   return <ThreadListPrimitive.Items components={{ ThreadListItem }} />;
 };
 
@@ -65,31 +64,20 @@ const ThreadListItem: FC = () => {
   return (
     <ThreadListItemPrimitive.Root className="aui-thread-list-item flex items-center gap-2 rounded-lg transition-all hover:bg-muted focus-visible:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none data-active:bg-muted">
       <ThreadListItemPrimitive.Trigger className="aui-thread-list-item-trigger flex-grow px-3 py-2 text-start">
-        <ThreadListItemTitle />
+        <span className="aui-thread-list-item-title text-sm">
+          <ThreadListItemPrimitive.Title fallback="New Chat" />
+        </span>
       </ThreadListItemPrimitive.Trigger>
-      <ThreadListItemArchive />
+
+      <ThreadListItemPrimitive.Archive asChild>
+        <TooltipIconButton
+          className="aui-thread-list-item-archive mr-3 ml-auto size-4 p-0 text-foreground hover:text-primary"
+          variant="ghost"
+          tooltip="Archive thread"
+        >
+          <ArchiveIcon />
+        </TooltipIconButton>
+      </ThreadListItemPrimitive.Archive>
     </ThreadListItemPrimitive.Root>
-  );
-};
-
-const ThreadListItemTitle: FC = () => {
-  return (
-    <span className="aui-thread-list-item-title text-sm">
-      <ThreadListItemPrimitive.Title fallback="New Chat" />
-    </span>
-  );
-};
-
-const ThreadListItemArchive: FC = () => {
-  return (
-    <ThreadListItemPrimitive.Archive asChild>
-      <TooltipIconButton
-        className="aui-thread-list-item-archive mr-3 ml-auto size-4 p-0 text-foreground hover:text-primary"
-        variant="ghost"
-        tooltip="Archive thread"
-      >
-        <ArchiveIcon />
-      </TooltipIconButton>
-    </ThreadListItemPrimitive.Archive>
   );
 };

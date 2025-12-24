@@ -1,13 +1,15 @@
 
 
 
-frontend_path = 'frontend/frontend-full/my-app'
+frontend_path = 'frontend/frontend-full-v2/my-app'
 file_list = [
   ('backend/langgraph_server-v2/server.py', 'the fastapi backend server'),
   (f'{frontend_path}/components/assistant-ui/threadlist-sidebar.tsx', 'the threadlist sidebar component'),
   (f'{frontend_path}/components/assistant-ui/thread-list.tsx' , 'thread list component'),
+  (f'{frontend_path}/components/assistant-ui/share-button.tsx','the share button impl'),
+  (f'{frontend_path}/app/langchainToAui.tsx','the share button impl'),
   (f'{frontend_path}/app/assistant.tsx', 'the assistant.tsx file (containing most of the main page elements)'),
-  (f'{frontend_path}/app/MyRuntimeProvider.tsx', 'the runtime provider')
+  (f'{frontend_path}/app/MyRuntimeProvider.tsx', 'the runtime provider'),
 ]
 
 from pathlib import Path
