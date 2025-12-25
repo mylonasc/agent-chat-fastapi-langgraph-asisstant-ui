@@ -14,10 +14,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 export const ThreadList: FC = () => {
   // ✅ Root is now provided by Assistant.tsx
   return (
+    
+    <ThreadListPrimitive.Root className="aui-thread-list-root flex flex-col items-stretch gap-1.5">
     <div className="aui-thread-list-root flex flex-col items-stretch gap-1.5">
       <ThreadListNew />
       <ThreadListItems />
     </div>
+    </ThreadListPrimitive.Root>    
   );
 };
 
