@@ -3,6 +3,7 @@ on:
   push:
     paths:
       - '**.puml'  # Only run when PlantUML files change
+  workflow_dispatch:
 
 permissions:
   contents: write # Required to push the images back to the repo
