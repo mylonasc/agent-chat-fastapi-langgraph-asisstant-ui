@@ -1,52 +1,50 @@
 @startuml
-skinparam wrapWidth 240
-skinparam maxMessageSize 200
-title Streaming message flow (POST /assistant) — current implementation
+title Streaming message flow (POST /assistant) - current implementation
 
 actor User
-participant "Assistant UI\n(@assistant-ui/react components)" as UI
+participant "Assistant UI\n(@assistant-ui/react)" as UI
 participant "useAssistantTransportRuntime\n(MyRuntimeProvider.tsx)" as RT
 participant "converter\n(MyMessageConverter.tsx)" as CONV
 participant "FastAPI server.py\nPOST /assistant" as API
 participant "assistant_stream_ce\ncreate_run / RunController" as STREAM
-participant "LangGraph graph\nmake_agent_with_weather_tool" as GRAPH
+participant "LangGraph graph\n(make_agent_with_weather_tool)" as GRAPH
 participant "MemorySaver\n(checkpointer)" as CP
 
-User -> UI : types message + send
-UI -> RT : dispatch pending command\n(type=add-message)
-RT -> API : POST /assistant\n(body includes state + commands)\ninitialState.thread_id/user_id
-API -> STREAM : create_run(run_callback,\nstate=request.state)
+User -> UI : Send message
+UI -> RT : enqueue pending command\n(type = add-message)
+RT -> API : POST /assistant\n(payload includes commands + state + metadata)
+
+API -> STREAM : create_run(run_callback)
 
 note right of API
-In run_callback:
+run_callback (server.py) does:
 - ensure controller.state exists
-- for each command type "add-message":
-  - text = join(text parts)
-  - _msg = HumanMessage(content=text, id=msg_id)
-  - controller.state["messages"].append(_msg.model_dump())
-- input_msg = {"messages": list(controller.state["messages"])}
-- async for ... in graph.astream(... stream_mode=["messages"]):
-    append_langgraph_event(controller.state, namespace, event_type, chunk)
+- for each command where type is add-message:
+  - concatenate text parts
+  - create HumanMessage(content=text, id=msg_id)
+  - append model_dump to controller.state["messages"]
+- build input_msg with key "messages"
+- async iterate graph.astream with stream_mode "messages"
+- append_langgraph_event writes events into controller.state
 end note
 
-STREAM -> GRAPH : graph.astream(input_msg,\nconfig={thread_id},\nstream_mode=["messages"],\nsubgraphs=True)
-GRAPH -> CP : read/write state\nkeyed by thread_id (configurable)
+STREAM -> GRAPH : astream(input_msg,\nconfig(thread_id),\nstream_mode=messages,\nsubgraphs=true)
+GRAPH -> CP : read/write state\nscoped by thread_id
+GRAPH --> STREAM : stream message events/chunks
 
-GRAPH --> STREAM : streamed events\n(messages chunks)
-STREAM --> API : stream events
-API --> RT : DataStreamResponse\n(headers: x-thread-id)
+STREAM --> API : streamed events
+API --> RT : DataStreamResponse (stream)
+
 RT -> CONV : converter(state, connectionMetadata)
 CONV -> UI : toThreadMessages(allMessages)\n(convertLangChainMessages)
-UI --> User : incremental render updates
+UI --> User : Incremental render updates
 
-note bottom of CONV
-MyMessageConverter.tsx (current):
-- serverMessages = state?.messages ?? []
-- pendingHumanMessages from connectionMetadata.pendingCommands
-- merge if sending + no human in server
-- return { messages: LangChainMessageConverter.toThreadMessages(allMessages),
-           isRunning: isSending }
+note over CONV
+MyMessageConverter.tsx:
+- serverMessages = state.messages or []
+- pendingHumanMessages from pendingCommands
+- merge pending human + server messages while sending
+- convert with unstable_createMessageConverter(convertLangChainMessages)
 end note
 
 @enduml
-
