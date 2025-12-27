@@ -1,0 +1,69 @@
+@startuml
+skinparam classAttributeIconSize 0
+skinparam wrapWidth 240
+title Backend data model (langgraph_server-v2)
+
+class ThreadMetadata {
+  +id: str
+  +user_id: str
+  +title: str
+}
+
+class ThreadManager {
+  -threads: Dict[str, ThreadMetadata]
+  +create_thread(user_id: str, title: str, thread_id: Optional[str]) : ThreadMetadata
+  +list(user_id: str) : List[ThreadMetadata]
+  +get(thread_id: str) : Optional[ThreadMetadata]
+}
+
+class "PERSISTED_AUI_MESSAGES\n(server.py global)" as PersistedAUI {
+  +store: Dict[str, List[Dict[str, Any]]]
+}
+
+class AgentState {
+  +messages: list[BaseMessage]\n<<Annotated add_messages>>
+}
+
+class "LangGraph app\n(StateGraph compiled)" as GraphApp {
+  +astream(input, config, stream_mode, subgraphs) : AsyncIterator
+  +get_state(config) : StateSnapshot
+}
+
+class MemorySaver
+
+class "FastAPI server.py" as Server {
+  +GET /threads
+  +POST /threads
+  +GET /threads/{thread_id}
+  +GET /threads/{thread_id}/messages
+  +POST /threads/{thread_id}/messages
+  +POST /assistant
+}
+
+Server --> ThreadManager : uses
+Server --> PersistedAUI : reads/writes
+Server --> GraphApp : uses
+GraphApp --> MemorySaver : checkpointer
+
+note right of PersistedAUI
+Populated only by POST /threads/{thread_id}/messages
+Body model: AppendMessageBody { message: Dict[str,Any] }
+Stored verbatim to allow tool UI parts to rehydrate.
+end note
+
+note right of GraphApp
+Built in demo_agent/get_graph.py:
+- AgentState.messages uses add_messages
+- ToolNode + tools_condition
+- Compiled with checkpointer
+end note
+
+note bottom of Server
+/assistant run_callback:
+- controller.state["messages"] stores model_dump() dicts,
+  not BaseMessage objects.
+- These are passed as input_msg to graph.astream.
+end note
+
+@enduml
+

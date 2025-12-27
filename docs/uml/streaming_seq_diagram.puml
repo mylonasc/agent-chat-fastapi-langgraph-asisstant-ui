@@ -1,0 +1,52 @@
+@startuml
+skinparam wrapWidth 240
+skinparam maxMessageSize 200
+title Streaming message flow (POST /assistant) — current implementation
+
+actor User
+participant "Assistant UI\n(@assistant-ui/react components)" as UI
+participant "useAssistantTransportRuntime\n(MyRuntimeProvider.tsx)" as RT
+participant "converter\n(MyMessageConverter.tsx)" as CONV
+participant "FastAPI server.py\nPOST /assistant" as API
+participant "assistant_stream_ce\ncreate_run / RunController" as STREAM
+participant "LangGraph graph\nmake_agent_with_weather_tool" as GRAPH
+participant "MemorySaver\n(checkpointer)" as CP
+
+User -> UI : types message + send
+UI -> RT : dispatch pending command\n(type=add-message)
+RT -> API : POST /assistant\n(body includes state + commands)\ninitialState.thread_id/user_id
+API -> STREAM : create_run(run_callback,\nstate=request.state)
+
+note right of API
+In run_callback:
+- ensure controller.state exists
+- for each command type "add-message":
+  - text = join(text parts)
+  - _msg = HumanMessage(content=text, id=msg_id)
+  - controller.state["messages"].append(_msg.model_dump())
+- input_msg = {"messages": list(controller.state["messages"])}
+- async for ... in graph.astream(... stream_mode=["messages"]):
+    append_langgraph_event(controller.state, namespace, event_type, chunk)
+end note
+
+STREAM -> GRAPH : graph.astream(input_msg,\nconfig={thread_id},\nstream_mode=["messages"],\nsubgraphs=True)
+GRAPH -> CP : read/write state\nkeyed by thread_id (configurable)
+
+GRAPH --> STREAM : streamed events\n(messages chunks)
+STREAM --> API : stream events
+API --> RT : DataStreamResponse\n(headers: x-thread-id)
+RT -> CONV : converter(state, connectionMetadata)
+CONV -> UI : toThreadMessages(allMessages)\n(convertLangChainMessages)
+UI --> User : incremental render updates
+
+note bottom of CONV
+MyMessageConverter.tsx (current):
+- serverMessages = state?.messages ?? []
+- pendingHumanMessages from connectionMetadata.pendingCommands
+- merge if sending + no human in server
+- return { messages: LangChainMessageConverter.toThreadMessages(allMessages),
+           isRunning: isSending }
+end note
+
+@enduml
+

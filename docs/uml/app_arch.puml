@@ -1,0 +1,85 @@
+@startuml
+skinparam componentStyle rectangle
+skinparam wrapWidth 240
+skinparam maxMessageSize 200
+
+title agent-chat-fastapi-langgraph-asisstant-ui (current implementation)
+
+package "Frontend (Next.js / React)\nfrontend-full-v2/my-app" {
+  [MyRuntimeProvider.tsx] as FR_Provider
+  [useRemoteThreadListRuntime\n(unstable_useRemoteThreadListRuntime)] as FR_ThreadListRuntime
+  [useAssistantTransportRuntime] as FR_TransportRuntime
+  [Hydration useEffect\n(GET /threads/{id}/messages\n+ mapBackendMessageToUi\n+ thread.import)] as FR_Hydration
+  [MyMessageConverter.tsx\n(converter)] as FR_Converter
+  [Assistant UI Components\n(@assistant-ui/react)] as FR_UI
+}
+
+package "Backend (FastAPI)\nlanggraph_server-v2" {
+  [server.py] as BE_Server
+  [ThreadManager\n(thread_manager.py)] as BE_TM
+  [PERSISTED_AUI_MESSAGES\n(in-memory dict)] as BE_AUI
+  [LangGraph Graph\n(demo_agent/get_graph.py)] as BE_Graph
+  [MemorySaver Checkpointer] as BE_Checkpointer
+}
+
+package "Libraries" {
+  [assistant_stream_ce] as LIB_Stream
+  [@assistant-ui/react-langgraph\nconvertLangChainMessages] as LIB_Convert
+  [LangChain / LangGraph\n(BaseMessage etc.)] as LIB_Lang
+}
+
+' --- relationships ---
+FR_UI --> FR_Provider
+FR_Provider --> FR_ThreadListRuntime
+FR_Provider --> FR_TransportRuntime
+FR_TransportRuntime --> FR_Converter
+FR_Converter --> LIB_Convert
+
+FR_ThreadListRuntime --> BE_Server : HTTP\nGET /threads\nGET /threads/{id}\nPOST /threads
+FR_TransportRuntime --> BE_Server : HTTP\nPOST /assistant (stream)
+FR_Hydration --> BE_Server : HTTP\nGET /threads/{id}/messages
+
+BE_Server --> BE_TM
+BE_Server --> BE_AUI
+BE_Server --> BE_Graph
+BE_Graph --> BE_Checkpointer
+BE_Graph --> LIB_Lang
+BE_Server --> LIB_Stream : create_run\nDataStreamResponse\nappend_langgraph_event
+
+note right of BE_Server
+Endpoints in server.py:
+- GET /threads
+- POST /threads
+- GET /threads/{thread_id}
+- GET /threads/{thread_id}/messages
+- POST /threads/{thread_id}/messages
+- POST /assistant
+
+CORS exposes: x-thread-id, etc.
+end note
+
+note right of BE_AUI
+PERSISTED_AUI_MESSAGES:
+thread_id -> list of assistant-ui message JSON
+
+Populated only by:
+POST /threads/{thread_id}/messages
+end note
+
+note right of BE_Checkpointer
+MemorySaver checkpointer stores
+LangGraph state keyed by config:
+{configurable: {thread_id}}
+end note
+
+note bottom of FR_Hydration
+Current provider hydrates on refresh by:
+1) GET /threads/{id}/messages
+2) mapBackendMessageToUi (forces {id, role, content, createdAt, parentId})
+3) thread.import({ messages })
+
+This path bypasses ThreadHistoryAdapter
+(end-user "history.append") used in MyRuntimeProvider_bu.tsx.
+end note
+@enduml
+

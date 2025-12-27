@@ -1,0 +1,59 @@
+@startuml
+skinparam wrapWidth 260
+skinparam maxMessageSize 200
+title Refresh hydration flow — current implementation in MyRuntimeProvider.tsx
+
+actor Browser as B
+participant "MyRuntimeProvider.tsx\nusePerThreadTransportRuntime" as PR
+participant "useAssistantTransportRuntime" as RT
+participant "FastAPI server.py\nGET /threads/{id}/messages" as API
+participant "PERSISTED_AUI_MESSAGES" as AUI
+participant "LangGraph graph\nget_state(thread_id)" as GRAPH
+participant "mapBackendMessageToUi" as MAP
+participant "threadRuntime.import({messages})" as IMP
+participant "Assistant UI Render" as UI
+
+B -> PR : page refresh\nthread is selected (remoteId known)
+PR -> RT : runtime created with initialState\n{thread_id, user_id}
+PR -> API : GET /threads/{remoteId}/messages
+
+alt if thread_id in PERSISTED_AUI_MESSAGES
+  API -> AUI : lookup messages list
+  AUI --> API : list[assistant-ui message json]
+  API --> PR : { messages: <assistant-ui json list> }
+else fallback: read LangGraph checkpointer state
+  API -> GRAPH : graph.get_state(config={thread_id})
+  GRAPH --> API : state.values["messages"]\n(list of BaseMessage)
+  API --> PR : { messages: [m.model_dump() ...] }\n(NOT assistant-ui shaped)
+end alt
+
+PR -> MAP : for each rawMsg:\nmapBackendMessageToUi(rawMsg, lastId)
+MAP --> PR : cleanMsg with fields:\n{id, role, content, createdAt, parentId}
+PR -> IMP : thread.import({ messages: cleanMessages })
+IMP -> UI : render imported messages
+
+note right of MAP
+mapBackendMessageToUi does:
+1) role mapping from msg.type / msg.role:
+   - human/user -> "user"
+   - ai/assistant -> "assistant"
+   - system/system -> "system"
+2) id string coercion (fallback random)
+3) content normalization:
+   - string -> [{type:"text", text: content}]
+   - array -> map parts -> {type, text}
+4) sets parentId = previousId (linear chain)
+end note
+
+note bottom of API
+GET /threads/{id}/messages is shape-polymorphic:
+- Preferred: returns persisted AUI message objects (verbatim)
+- Fallback: returns LangChain/LangGraph message dumps
+
+The frontend hydration path always remaps to {content: ...},
+which may not match the message shape produced during streaming
+via convertLangChainMessages/toThreadMessages.
+end note
+
+@enduml
+

@@ -1,5 +1,7 @@
 ## Laggraph-FastAPI-AssistantUI template
 
+(work in progress...)
+
 This repo contains a template for building conversational interfaces for langgraph agents. 
 
 It makes use of a React library (assistant UI) and it is heavily based on the templates of this library.
