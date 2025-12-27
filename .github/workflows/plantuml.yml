@@ -2,23 +2,36 @@ name: Generate PlantUML Diagrams
 on:
   push:
     paths:
-      - '**.puml'  # Only run when PlantUML files change
+      - '**.puml'
   workflow_dispatch:
 
 permissions:
-  contents: write # Required to push the images back to the repo
+  contents: write
 
 jobs:
-  render-diagrams:
+  render:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Source
         uses: actions/checkout@v4
 
-      - name: Generate SVG Diagrams
-        uses: grassedge/generate-plantuml-action@v1.5
-        with:
-          path: docs/uml/       # Where your .puml files are located
-          message: "Render PlantUML diagrams [skip ci]" # Commit message
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install Graphviz
+        run: sudo apt-get install -y graphviz
+
+      - name: Download PlantUML
+        run: |
+          curl -L https://github.com/plantuml/plantuml/releases/download/v1.2023.13/plantuml-1.2023.13.jar -o plantuml.jar
+
+      - name: Run PlantUML
+        # This command runs recursively (-r) on your specific folder
+        # It outputs SVG files (-tsvg)
+        run: java -jar plantuml.jar -tsvg -r docs/uml/
+
+      - name: Commit and Push Changes
+        run: |
+          git config --global user.name "GitHub Action"
+          git config --global user.email "action@github.com"
+          git add docs/uml/*.svg
+          # Only commit if there are changes to avoid empty commit errors
+          git diff --quiet && git diff --staged --quiet || (git commit -m "Render PlantUML diagrams [skip ci]" && git push)
+          
