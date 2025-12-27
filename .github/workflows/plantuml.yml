@@ -1,0 +1,23 @@
+name: Generate PlantUML Diagrams
+on:
+  push:
+    paths:
+      - '**.puml'  # Only run when PlantUML files change
+
+permissions:
+  contents: write # Required to push the images back to the repo
+
+jobs:
+  render-diagrams:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source
+        uses: actions/checkout@v4
+
+      - name: Generate SVG Diagrams
+        uses: grassedge/generate-plantuml-action@v1.5
+        with:
+          path: docs/uml/       # Where your .puml files are located
+          message: "Render PlantUML diagrams [skip ci]" # Commit message
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
