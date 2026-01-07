@@ -164,8 +164,8 @@ export const Assistant = () => {
 
   return (
     <MyRuntimeProvider>
-      <RuntimeInspector />
-        <MinimalProbe />
+      {/* <RuntimeInspector /> */}
+        {/* <MinimalProbe /> */}
       
         <SidebarProvider>
           
@@ -181,10 +181,8 @@ export const Assistant = () => {
               
               <div className="flex-1 overflow-hidden">
                   
-                  {/* <ThreadContextGuard> */}
-                    <RuntimeDebugProbe />
+                    {/* <RuntimeDebugProbe /> */}
                     <Thread />
-                  {/* </ThreadContextGuard> */}
               </div>
               
             </SidebarInset>

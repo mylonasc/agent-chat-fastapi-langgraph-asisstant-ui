@@ -112,6 +112,7 @@ async def append_thread_message(thread_id: str, body: AppendMessageBody):
     logger.info(f"Appended message to {thread_id}. Total now: {len(PERSISTED_AUI_MESSAGES[thread_id])}")
     return {"ok": True}
 
+
 # --- Agent Logic ---
 from pathlib import Path
 import sys
@@ -131,7 +132,6 @@ async def chat_endpoint(req: Request, request: ScopedChatRequest):
     payload = await req.json()
     
     logger.info(f"/assistant payload keys: {list(payload.keys())}")
-    logger.info(f"/assistant payload : {str(payload)}")
 
     user_id = request.user_id or "default_user"
 
