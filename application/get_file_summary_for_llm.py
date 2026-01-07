@@ -12,6 +12,7 @@ file_list = [
   (f'{frontend_path}/app/langchainToAui.tsx','the share button impl'),
   (f'{frontend_path}/app/assistant.tsx', 'the assistant.tsx file (containing most of the main page elements)'),
   (f'{frontend_path}/app/MyRuntimeProvider.tsx', 'the runtime provider'),
+  (f'{frontend_path}/app/MyMessageConverter.tsx', 'contains the converter implementation'),
 ]
 
 from pathlib import Path

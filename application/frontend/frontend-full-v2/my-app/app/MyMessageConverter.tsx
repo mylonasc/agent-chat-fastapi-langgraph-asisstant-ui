@@ -21,19 +21,14 @@ export const converter = (
   const isSending = connectionMetadata.isSending;
 
   const pendingHumanMessages = connectionMetadata.pendingCommands
-    .filter((cmd) => cmd.type === "add-message")
-    .map((cmd) => ({
-      id: cmd.message.id,
-      type: "human" as const,
-      content: [
-        {
-          type: "text" as const,
-          text: cmd.message.parts
-            .map((p) => (p.type === "text" ? p.text : ""))
-            .join(""),
-        },
-      ],
-    }));
+  .filter((cmd) => cmd.type === "add-message")
+  .map((cmd) => ({
+    id: cmd.message.id,
+    type: "human" as const,
+    content: cmd.message.parts
+      .map((p) => (p.type === "text" ? p.text : ""))
+      .join(""),
+  }));
 
   const hasHumanInServer = serverMessages.some((m: any) => m.type === "human");
   const allMessages =

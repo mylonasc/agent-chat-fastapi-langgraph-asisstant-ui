@@ -23,38 +23,37 @@ const debugLog = (label: string, ...data: any[]) => {
 // ------------------------------------------------------------------
 // HELPER: Sanitizes AND Links Messages
 // ------------------------------------------------------------------
-const mapBackendMessageToUi = (msg: any, previousId: string | null) => {
-  // 1. Map Role
-  let role = "user";
-  if (msg.type === "human" || msg.role === "user") role = "user";
-  else if (msg.type === "ai" || msg.role === "assistant") role = "assistant";
-  else if (msg.type === "system" || msg.role === "system") role = "system";
+// const mapBackendMessageToUi = (msg: any, previousId: string | null) => {
+//   // 1. Map Role
+//   let role = "user";
+//   if (msg.type === "human" || msg.role === "user") role = "user";
+//   else if (msg.type === "ai" || msg.role === "assistant") role = "assistant";
+//   else if (msg.type === "system" || msg.role === "system") role = "system";
 
-  // 2. Strict ID Coercion
-  const id = msg.id ? String(msg.id) : Math.random().toString(36).slice(2);
+//   // 2. Strict ID Coercion
+//   const id = msg.id ? String(msg.id) : Math.random().toString(36).slice(2);
 
-  // 3. Normalize Content
-  let content = msg.content;
-  if (typeof content === "string") {
-    content = [{ type: "text", text: content }];
-  } else if (Array.isArray(content)) {
-    content = content.map((part: any) => ({
-      type: part.type ?? "text",
-      text: String(part.text ?? ""),
-    }));
-  } else {
-    content = [{ type: "text", text: "" }];
-  }
+//   // 3. Normalize Content
+//   let content = msg.content;
+//   if (typeof content === "string") {
+//     content = [{ type: "text", text: content }];
+//   } else if (Array.isArray(content)) {
+//     content = content.map((part: any) => ({
+//       type: part.type ?? "text",
+//       text: String(part.text ?? ""),
+//     }));
+//   } else {
+//     content = [{ type: "text", text: "" }];
+//   }
 
-  return {
-    id,
-    role,
-    content,
-    createdAt: msg.created_at ? new Date(msg.created_at) : new Date(),
-    // CRITICAL: Link this message to the previous one to form a thread
-    parentId: previousId, 
-  };
-};
+//   return {
+//     id,
+//     role,
+//     content,
+//     // createdAt: msg.created_at ? new Date(msg.created_at) : new Date(),
+//     // parentId: previousId, 
+//   };
+// };
 
 // ------------------------------------------------------------------
 // RUNTIME HOOK
@@ -93,21 +92,34 @@ function usePerThreadTransportRuntime() {
         if (!isMounted || !data.messages) return;
 
         // --- STEP 1: Process Linear History ---
-        const cleanMessages = [];
-        let lastId = null;
+        // const cleanMessages = [];
+        // let lastId = null;
 
-        for (const rawMsg of data.messages) {
-           const cleanMsg = mapBackendMessageToUi(rawMsg, lastId);
-           cleanMessages.push(cleanMsg);
-           lastId = cleanMsg.id; // Set current ID as parent for next msg
-        }
+        // for (const rawMsg of data.messages) {
+        //   //  const cleanMsg = mapBackendMessageToUi(rawMsg, lastId);
+        //    cleanMessages.push(cleanMsg);
+        //   //  lastId = cleanMsg.id; // Set current ID as parent for next msg
+        // }
 
         // --- STEP 2: Import ---
         const threadRuntime = (runtime as any).thread;
         if (threadRuntime?.import) {
           try {
-             threadRuntime.import({ messages: cleanMessages });
-             debugLog("Hydration:Success", `${cleanMessages.length} msgs imported`);
+            console.log('---');
+            console.log(data.messages);
+            
+            const threadRuntime = (runtime as any).thread;
+
+            console.log("[Hydration] fetched", data.messages?.length, data.messages?.[0]);
+
+            threadRuntime.unstable_loadExternalState({
+              thread_id: backendThreadId,
+              user_id: "default_user",
+              messages: data.messages ?? [],
+            });
+
+            console.log("[Hydration] transport state after load", (runtime as any).thread?.getState?.());
+
           } catch (importErr) {
              console.error("[Hydration:CRASH]", importErr);
              // This catch block prevents the entire app from white-screening

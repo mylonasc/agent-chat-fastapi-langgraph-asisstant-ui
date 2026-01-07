@@ -112,7 +112,6 @@ async def append_thread_message(thread_id: str, body: AppendMessageBody):
     logger.info(f"Appended message to {thread_id}. Total now: {len(PERSISTED_AUI_MESSAGES[thread_id])}")
     return {"ok": True}
 
-
 # --- Agent Logic ---
 from pathlib import Path
 import sys
@@ -176,4 +175,4 @@ async def chat_endpoint(req: Request, request: ScopedChatRequest):
             append_langgraph_event(controller.state, namespace, event_type, chunk)
 
     stream = create_run(run_callback, state=request.state)
-    return DataStreamResponse(stream, headers={"x-thread-id": thread_id})
+    return DataStreamResponse(stream)
