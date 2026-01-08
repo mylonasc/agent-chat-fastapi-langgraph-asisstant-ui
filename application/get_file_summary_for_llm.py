@@ -2,9 +2,10 @@
 
 
 frontend_path = 'frontend/frontend-full-v2/my-app'
+backend_path = 'backend/langgraph-server-full'
 file_list = [
-  ('backend/langgraph_server-v2/server.py', 'the fastapi backend server'),
-  ('backend/langgraph_server-v2/thread_manager.py','the model of thread metadata.'),
+  ('{backend_path}/server.py', 'the fastapi backend server'),
+  ('{backend_path}/thread_manager.py','the model of thread metadata.'),
   (f'{frontend_path}/components/assistant-ui/threadlist-sidebar.tsx', 'the threadlist sidebar component'),
   (f'{frontend_path}/components/assistant-ui/thread.tsx', 'the thread component '),
   (f'{frontend_path}/components/assistant-ui/thread-list.tsx' , 'thread list component'),

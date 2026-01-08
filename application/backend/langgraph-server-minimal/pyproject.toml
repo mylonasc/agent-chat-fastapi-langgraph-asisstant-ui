@@ -1,0 +1,12 @@
+[project]
+name = "langgraph-server-demo"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "assistant-stream-ce>=0.0.2",
+    "fastapi>=0.127.0",
+    "langchain>=1.2.0",
+    "langgraph>=1.0.5",
+]

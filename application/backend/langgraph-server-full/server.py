@@ -54,7 +54,7 @@ class AppendMessageBody(BaseModel):
 async def get_threads(user_id: str = "default_user"):
     threads = thread_manager.list_user_threads(user_id)
     logger.info(f"Listing threads for {user_id}: Found {len(threads)}")
-    return threads
+    return reversed(threads)
 
 
 @app.post("/threads", response_model=ThreadMetadata)
