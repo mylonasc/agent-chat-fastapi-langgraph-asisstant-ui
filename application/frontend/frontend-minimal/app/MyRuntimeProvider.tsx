@@ -13,6 +13,7 @@ import {
 } from "@assistant-ui/react-langgraph";
 import { ReactNode } from "react";
 import { z } from "zod";
+import { GraphToolUI } from "@/components/tools/GraphToolUI";
 
 // // Frontend tool with execute function
 // const WeatherTool = makeAssistantTool({
@@ -143,7 +144,7 @@ export function MyRuntimeProvider({ children }: MyRuntimeProviderProps) {
   return (
     <AssistantRuntimeProvider runtime={runtime}>
       {/* <WeatherTool /> */}
-
+     <GraphToolUI />
       {children}
     </AssistantRuntimeProvider>
   );

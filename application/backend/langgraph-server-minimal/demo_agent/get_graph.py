@@ -6,6 +6,7 @@ from langchain_core.tools import tool
 from langgraph.graph import StateGraph, END
 from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode, tools_condition
+from .tools.graph_tool import render_graph
 
 # 1. Define the State
 class AgentState(TypedDict):
@@ -20,9 +21,10 @@ def get_weather(city: str):
         return "It's 15°C and cloudy in London."
     return f"The weather in {city} is sunny and 25°C."
 
+
 def make_agent_with_weather_tool(model = 'gpt-4o-mini') -> StateGraph:
 
-    tools = [get_weather]
+    tools = [get_weather, render_graph]
     tool_node = ToolNode(tools)
 
     # 3. Define the Model
