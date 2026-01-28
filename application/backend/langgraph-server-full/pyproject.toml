@@ -1,9 +1,9 @@
 [project]
-name = "langgraph-server-demo"
+name = "fastlang"
 version = "0.1.0"
-description = "Add your description here"
+description = "A langgraph + FastAPI server for assistant UI, supporting multiple chats."
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<=3.14"
 dependencies = [
     "assistant-stream-ce>=0.0.2",
     "fastapi>=0.127.0",

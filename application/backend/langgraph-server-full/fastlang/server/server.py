@@ -5,7 +5,7 @@ from assistant_stream_ce.serialization import DataStreamResponse
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 from langchain_core.messages import HumanMessage
-from thread_manager import ThreadManager, ThreadMetadata
+from .thread_manager import ThreadManager, ThreadMetadata
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 import uuid
@@ -118,13 +118,16 @@ from pathlib import Path
 import sys
 curr_path = Path(__file__).resolve().parent.as_posix()
 sys.path.append(curr_path)
-from demo_agent.get_graph import make_agent_with_weather_tool
+
+# from examples.demo_agent.get_graph import make_agent_with_weather_tool
+from .agent_loader import _make_demo_agent
+
 from langgraph.checkpoint.memory import MemorySaver
 
 # NOTE: MemorySaver is lost if uvicorn restarts!
 checkpointer = MemorySaver()
-graph = make_agent_with_weather_tool("gpt-4o-mini", checkpointer=checkpointer)
-
+# graph = make_agent_with_weather_tool("gpt-4o-mini", checkpointer=checkpointer)
+graph = _make_demo_agent("gpt-4o-mini", checkpointer=checkpointer)
 
 @app.post("/assistant") 
 async def chat_endpoint(req: Request, request: ScopedChatRequest):
