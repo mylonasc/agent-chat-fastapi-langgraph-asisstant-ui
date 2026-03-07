@@ -1,0 +1,22 @@
+services:
+  backend-minimal:
+    build:
+      context: ./application/backend/langgraph-server-minimal
+      dockerfile: Dockerfile
+    ports:
+      - "8011:8011"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    env_file:
+      - .env
+
+  frontend-minimal:
+    build:
+      context: ./application/frontend/frontend-minimal
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://backend-minimal:8011/assistant
+    depends_on:
+      - backend-minimal

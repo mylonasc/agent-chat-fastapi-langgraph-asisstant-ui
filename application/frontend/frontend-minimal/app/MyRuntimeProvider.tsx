@@ -119,7 +119,7 @@ export function MyRuntimeProvider({ children }: MyRuntimeProviderProps) {
       messages: [],
     },
     api:
-      process.env["NEXT_PUBLIC_API_URL"] || "http://localhost:8010/assistant",
+      process.env["NEXT_PUBLIC_API_URL"] || "http://localhost:8011/assistant",
     converter,
     headers: async () => ({
       "Test-Header": "test-value",

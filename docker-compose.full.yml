@@ -1,0 +1,22 @@
+services:
+  backend-full:
+    build:
+      context: ./application/backend/full
+      dockerfile: Dockerfile
+    ports:
+      - "8010:8010"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    env_file:
+      - .env
+
+  frontend-full:
+    build:
+      context: ./application/frontend/frontend-full
+      dockerfile: Dockerfile
+    ports:
+      - "3001:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://backend-full:8010/assistant
+    depends_on:
+      - backend-full

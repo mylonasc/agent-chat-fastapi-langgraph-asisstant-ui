@@ -1,0 +1,5 @@
+('backend/langgraph_server-v2/server.py', 'the fastapi backend server')
+('frontend/frontend-full/my-app/components/assistant-ui/threadlist-sidebar.tsx', 'the threadlist sidebar component')
+('frontend/frontend-full/my-app/components/assistant-ui/thread-list.tsx' , 'thread list component')
+('frontend/frontend-full/my-app/app/assistant.tsx', 'the assistant.tsx file (containing most of the main page elements)')
+('frontend/frontend-full/my-app/app/MyRuntimeProvider.tsx', 'the runtime provider')

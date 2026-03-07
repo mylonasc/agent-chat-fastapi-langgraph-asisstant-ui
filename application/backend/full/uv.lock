@@ -194,7 +194,9 @@ dependencies = [
     { name = "assistant-stream-ce" },
     { name = "fastapi" },
     { name = "langchain" },
+    { name = "langchain-openai" },
     { name = "langgraph" },
+    { name = "uvicorn" },
 ]
 
 [package.metadata]
@@ -202,7 +204,9 @@ requires-dist = [
     { name = "assistant-stream-ce", specifier = ">=0.0.2" },
     { name = "fastapi", specifier = ">=0.127.0" },
     { name = "langchain", specifier = ">=1.2.0" },
+    { name = "langchain-openai", specifier = ">=0.2.0" },
     { name = "langgraph", specifier = ">=1.0.5" },
+    { name = "uvicorn", specifier = ">=0.34.0" },
 ]
 
 [[package]]

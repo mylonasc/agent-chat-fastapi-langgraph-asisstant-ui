@@ -10,6 +10,13 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 import uuid
 import logging
+import os
+
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+if not OPENAI_API_KEY:
+    print(
+        "WARNING: OPENAI_API_KEY not set. The /assistant endpoint will return an error message."
+    )
 
 # Setup Logging
 logging.basicConfig(level=logging.INFO)
@@ -31,7 +38,6 @@ thread_manager = ThreadManager()
 # --- NEW: in-memory persisted assistant-ui messages ---
 # maps thread_id -> list[assistant-ui message json]
 PERSISTED_AUI_MESSAGES: Dict[str, List[Dict[str, Any]]] = {}
-
 
 
 class ScopedChatRequest(ChatRequest):
@@ -64,15 +70,18 @@ async def create_thread(body: CreateThreadBody):
         return existing
 
     logger.info(f"Thread registered: {body.localId}")
-    return thread_manager.create_thread(body.user_id, title=body.title, thread_id=body.localId)
+    return thread_manager.create_thread(
+        body.user_id, title=body.title, thread_id=body.localId
+    )
 
 
 @app.get("/threads/{thread_id}", response_model=ThreadMetadata)
-async def fetch_thread(thread_id: str ):
+async def fetch_thread(thread_id: str):
     thread = thread_manager.get(thread_id)
     if not thread:
         raise HTTPException(status_code=404, detail="Thread not found")
     return thread
+
 
 @app.get("/threads/{thread_id}/messages")
 async def get_thread_messages(thread_id: str):
@@ -86,12 +95,16 @@ async def get_thread_messages(thread_id: str):
         return {"messages": msgs}
 
     # --- fallback to old behavior (LangGraph state dumps) ---
-    logger.info(f"No persisted AUI messages for {thread_id}. Falling back to graph state.")
+    logger.info(
+        f"No persisted AUI messages for {thread_id}. Falling back to graph state."
+    )
     config = {"configurable": {"thread_id": thread_id}}
     state = graph.get_state(config)
 
     if not state or "messages" not in state.values:
-        logger.warning(f"No state/messages found in checkpointer for thread: {thread_id}")
+        logger.warning(
+            f"No state/messages found in checkpointer for thread: {thread_id}"
+        )
         return {"messages": []}
 
     msgs = state.values["messages"]
@@ -109,13 +122,16 @@ async def append_thread_message(thread_id: str, body: AppendMessageBody):
     if thread_id not in PERSISTED_AUI_MESSAGES:
         PERSISTED_AUI_MESSAGES[thread_id] = []
     PERSISTED_AUI_MESSAGES[thread_id].append(body.message)
-    logger.info(f"Appended message to {thread_id}. Total now: {len(PERSISTED_AUI_MESSAGES[thread_id])}")
+    logger.info(
+        f"Appended message to {thread_id}. Total now: {len(PERSISTED_AUI_MESSAGES[thread_id])}"
+    )
     return {"ok": True}
 
 
 # --- Agent Logic ---
 from pathlib import Path
 import sys
+
 curr_path = Path(__file__).resolve().parent.as_posix()
 sys.path.append(curr_path)
 
@@ -129,11 +145,21 @@ checkpointer = MemorySaver()
 # graph = make_agent_with_weather_tool("gpt-4o-mini", checkpointer=checkpointer)
 graph = _make_demo_agent("gpt-4o-mini", checkpointer=checkpointer)
 
-@app.post("/assistant") 
+
+@app.post("/assistant")
 async def chat_endpoint(req: Request, request: ScopedChatRequest):
-    
+    if not OPENAI_API_KEY:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "error": "OPENAI_API_KEY not configured",
+                "message": "Please set the OPENAI_API_KEY environment variable to use the chat functionality.",
+                "instructions": "Add OPENAI_API_KEY=your-key to your .env file and restart the server.",
+            },
+        )
+
     payload = await req.json()
-    
+
     logger.info(f"/assistant payload keys: {list(payload.keys())}")
 
     user_id = request.user_id or "default_user"
@@ -159,12 +185,14 @@ async def chat_endpoint(req: Request, request: ScopedChatRequest):
     async def run_callback(controller: RunController):
         if controller.state is None:
             controller.state = {"messages": []}
-        if 'messages' not in controller.state:
-            controller.state['messages'] = []
+        if "messages" not in controller.state:
+            controller.state["messages"] = []
 
         for command in request.commands:
             if command.type == "add-message":
-                text = " ".join([p.text for p in command.message.parts if p.type == "text"])
+                text = " ".join(
+                    [p.text for p in command.message.parts if p.type == "text"]
+                )
                 if text:
                     msg_id = getattr(command.message, "id", str(uuid.uuid4()))
                     _msg = HumanMessage(content=text, id=msg_id)
