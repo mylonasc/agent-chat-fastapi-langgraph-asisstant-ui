@@ -7,6 +7,10 @@ services:
       - "8010:8010"
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - SERPER_API_KEY=${SERPER_API_KEY}
+      - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER:-fastembed}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-}
+      - AGENT_MODE=${AGENT_MODE:-react}
     env_file:
       - .env
 
@@ -17,6 +21,6 @@ services:
     ports:
       - "3001:3000"
     environment:
-      - NEXT_PUBLIC_API_URL=http://backend-full:8010/assistant
+      - NEXT_PUBLIC_API_BASE=http://localhost:8010
     depends_on:
       - backend-full

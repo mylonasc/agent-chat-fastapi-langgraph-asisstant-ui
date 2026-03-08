@@ -11,7 +11,10 @@ import {
 
 import { converter } from "./MyMessageConverter";
 
-const API_BASE = "http://localhost:8010";
+const API_BASE =
+  process.env.NEXT_PUBLIC_API_BASE ??
+  process.env.NEXT_PUBLIC_API_URL?.replace(/\/assistant$/, "") ??
+  "http://localhost:8010";
 
 const debugLog = (label: string, ...data: any[]) => {
   console.log(

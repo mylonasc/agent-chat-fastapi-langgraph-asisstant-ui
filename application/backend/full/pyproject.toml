@@ -12,8 +12,24 @@ dependencies = [
     "langchain-openai>=0.2.0",
     "langchain-community>=0.2.0",
     "rank-bm25>=0.2.2",
-    "sentence-transformers>=2.7.0",
     "fastembed>=0.3.6",
     "faiss-cpu>=1.8.0",
     "uvicorn>=0.34.0",
+]
+
+[project.optional-dependencies]
+
+# CPU-only sentence transformers (torch CPU)
+sentence-cpu = [
+    "sentence-transformers>=2.7.0",
+]
+
+# GPU-enabled sentence transformers (expects CUDA-enabled torch resolution)
+sentence-gpu = [
+    "sentence-transformers>=2.7.0",
+]
+
+# GPU FAISS backend
+gpu = [
+    "faiss-gpu>=1.8.0",
 ]
