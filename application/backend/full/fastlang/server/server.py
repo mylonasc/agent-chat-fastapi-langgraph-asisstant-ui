@@ -35,6 +35,24 @@ app.add_middleware(
 
 thread_manager = ThreadManager()
 
+# Mount tool routers
+from tools.registry import TOOL_REGISTRY
+
+for router in TOOL_REGISTRY.get_routers():
+    app.include_router(router)
+
+# --- Startup Validation ---
+from .startup_validation import run_startup_validation
+from tools.config import CONFIG_STORE
+
+
+@app.on_event("startup")
+def startup_checks():
+    # Use web_rag config if present, otherwise minimal default
+    config = CONFIG_STORE.get("web_rag") or {"embedding_provider": "fastembed"}
+    run_startup_validation(config)
+
+
 # --- NEW: in-memory persisted assistant-ui messages ---
 # maps thread_id -> list[assistant-ui message json]
 PERSISTED_AUI_MESSAGES: Dict[str, List[Dict[str, Any]]] = {}
@@ -136,14 +154,17 @@ curr_path = Path(__file__).resolve().parent.as_posix()
 sys.path.append(curr_path)
 
 # from examples.demo_agent.get_graph import make_agent_with_weather_tool
-from .agent_loader import _make_demo_agent
+from .get_graph import make_web_rag_search_agent
 
 from langgraph.checkpoint.memory import MemorySaver
 
 # NOTE: MemorySaver is lost if uvicorn restarts!
 checkpointer = MemorySaver()
-# graph = make_agent_with_weather_tool("gpt-4o-mini", checkpointer=checkpointer)
-graph = _make_demo_agent("gpt-4o-mini", checkpointer=checkpointer)
+# Default full agent: Web Search + Hybrid RAG
+graph = make_web_rag_search_agent(
+    model_name="gpt-4o-mini",
+    checkpointer=checkpointer,
+)
 
 
 @app.post("/assistant")
@@ -172,8 +193,9 @@ async def chat_endpoint(req: Request, request: ScopedChatRequest):
     logger.info(f"Resolved Thread ID: {thread_id}")
 
     if not thread_id:
-        logger.error(f"Failed to find thread_id. State was: {request.state}")
-        raise HTTPException(400, "thread_id missing from request state")
+        # Auto-generate thread_id if missing (to satisfy tests and UX)
+        thread_id = str(uuid.uuid4())
+        logger.info(f"Auto-generated thread_id: {thread_id}")
 
     # Ensure thread metadata exists
     if not thread_manager.get(thread_id):
