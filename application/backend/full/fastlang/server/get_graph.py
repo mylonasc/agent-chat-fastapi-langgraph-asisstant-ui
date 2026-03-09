@@ -34,7 +34,9 @@ def make_web_rag_search_agent(
         )
 
     # Default: ReAct agent with both tools
-    tools = TOOL_REGISTRY.get_langchain_tools(names=["web_rag", "web_search"])
+    tools = TOOL_REGISTRY.get_langchain_tools(
+        names=["web_rag", "web_search", "web_rag_status"]
+    )
 
     return create_react_agent(
         model=model_name,

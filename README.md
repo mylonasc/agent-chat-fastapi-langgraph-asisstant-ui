@@ -29,9 +29,10 @@ This repo contains two flavors of a full-stack chat application:
 cp .env.example .env
 ```
 
-2. Add your OpenAI API key to `.env`:
+2. Add your API keys to `.env`:
 ```
 OPENAI_API_KEY=sk-...
+SERPER_API_KEY=...
 ```
 
 ### Run Minimal Flavor
@@ -128,6 +129,7 @@ application/
 | Variable | Description |
 |----------|-------------|
 | `OPENAI_API_KEY` | Your OpenAI API key (required) |
+| `SERPER_API_KEY` | Serper API key (required for `web_search` tool in full backend) |
 | `NEXT_PUBLIC_API_URL` | Backend URL (frontend only) |
 
 See [RUNNING.md](./RUNNING.md) for more detailed documentation.

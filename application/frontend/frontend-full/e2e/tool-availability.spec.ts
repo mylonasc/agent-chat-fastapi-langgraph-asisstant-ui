@@ -6,6 +6,16 @@ test("web_search and web_rag are available from chat UI", async ({
   page,
   request,
 }) => {
+  const overviewRes = await request.get(
+    `${API_BASE}/tools/overview?user_id=default_user`
+  );
+  test.skip(!overviewRes.ok(), "tools overview endpoint is not reachable");
+
+  const overview = await overviewRes.json();
+  const runtime = overview?.runtime ?? {};
+  test.skip(!runtime.openai_configured, "OPENAI_API_KEY is not configured");
+  test.skip(!runtime.serper_configured, "SERPER_API_KEY is not configured");
+
   await test.step("Prepare RAG index and tool config", async () => {
     const ragConfig = await request.post(`${API_BASE}/tools/web_rag/configuration`, {
       data: {
@@ -32,7 +42,7 @@ test("web_search and web_rag are available from chat UI", async ({
     expect(ragIndexResponse.ok()).toBeTruthy();
 
     const ragIndexBody = await ragIndexResponse.json();
-    expect(ragIndexBody.status).toBe("indexed");
+    expect(["queued", "indexed"]).toContain(ragIndexBody.status);
   });
 
   await test.step("Send message that requires both tools", async () => {
@@ -56,8 +66,8 @@ test("web_search and web_rag are available from chat UI", async ({
   });
 
   await test.step("Verify tool calls appear in UI", async () => {
-    await expect(page.getByText("Used tool: web_search")).toBeVisible();
-    await expect(page.getByText("Used tool: web_rag")).toBeVisible();
+    await expect(page.getByText(/Tool:\s*web_search/i)).toBeVisible();
+    await expect(page.getByText(/Tool:\s*web_rag/i)).toBeVisible();
     await expect(page.getByText("TOOLS_OK")).toBeVisible();
   });
 });

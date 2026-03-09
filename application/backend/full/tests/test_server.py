@@ -2,7 +2,12 @@ import pytest
 from httpx import AsyncClient, ASGITransport
 import uuid
 
-from fastlang.server.server import app, thread_manager
+from fastlang.server.server import (
+    app,
+    thread_manager,
+    _append_tool_update,
+    _append_updates_from_graph_chunk,
+)
 
 
 @pytest.fixture
@@ -101,3 +106,88 @@ async def test_list_threads_filtering():
         data = resp.json()
         assert len(data) == 1
         assert data[0]["title"] == "Title A"
+
+
+@pytest.mark.anyio
+async def test_rename_thread_endpoint_updates_title():
+    thread = thread_manager.create_thread("user_rename", "New Chat")
+
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        resp = await ac.patch(
+            f"/threads/{thread.id}", json={"title": "RAG Debug Session"}
+        )
+        assert resp.status_code == 200
+        payload = resp.json()
+        assert payload["title"] == "RAG Debug Session"
+
+
+@pytest.mark.anyio
+async def test_archive_and_delete_thread_endpoints_persist_changes():
+    thread = thread_manager.create_thread("user_archive", "Session To Archive")
+
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        archive_resp = await ac.post(f"/threads/{thread.id}/archive")
+        assert archive_resp.status_code == 200
+        assert archive_resp.json()["is_archived"] is True
+
+        list_resp = await ac.get("/threads?user_id=user_archive")
+        assert list_resp.status_code == 200
+        assert list_resp.json() == []
+
+        list_all_resp = await ac.get(
+            "/threads?user_id=user_archive&include_archived=true"
+        )
+        assert list_all_resp.status_code == 200
+        assert len(list_all_resp.json()) == 1
+
+        delete_resp = await ac.delete(f"/threads/{thread.id}")
+        assert delete_resp.status_code == 200
+        assert delete_resp.json()["ok"] is True
+
+        fetch_resp = await ac.get(f"/threads/{thread.id}")
+        assert fetch_resp.status_code == 404
+
+
+@pytest.mark.anyio
+async def test_tools_overview_endpoint_returns_tool_and_docling_info():
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        resp = await ac.get("/tools/overview?user_id=default_user")
+        assert resp.status_code == 200
+        payload = resp.json()
+
+        assert "tools" in payload
+        assert "available" in payload["tools"]
+        assert "web_rag" in payload["tools"]["available"]
+        assert payload["docling"]["is_standalone_tool"] is False
+        assert payload["docling"]["owner_tool"] == "web_rag"
+
+
+def test_append_tool_update_keeps_recent_entries_only():
+    state = {"tool_updates": []}
+
+    for i in range(250):
+        _append_tool_update(state, {"i": i})
+
+    assert len(state["tool_updates"]) == 200
+    assert state["tool_updates"][0]["i"] == 50
+    assert state["tool_updates"][-1]["i"] == 249
+
+
+def test_append_updates_from_graph_chunk_tracks_requested_and_completed_tools():
+    class DummyAI:
+        type = "ai"
+        tool_calls = [{"name": "web_search", "id": "call_1"}]
+
+    class DummyTool:
+        type = "tool"
+        name = "web_search"
+        tool_call_id = "call_1"
+
+    state = {"tool_updates": []}
+
+    _append_updates_from_graph_chunk(state, {"agent": {"messages": [DummyAI()]}})
+    _append_updates_from_graph_chunk(state, {"tools": {"messages": [DummyTool()]}})
+
+    assert state["tool_updates"][0]["status"] == "requested"
+    assert state["tool_updates"][1]["status"] == "completed"
+    assert state["tool_updates"][1]["tool"] == "web_search"

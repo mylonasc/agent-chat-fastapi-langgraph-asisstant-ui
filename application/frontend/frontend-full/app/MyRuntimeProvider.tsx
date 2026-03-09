@@ -1,12 +1,12 @@
 "use client";
 
 import React, { ReactNode, useEffect, useMemo } from "react";
+import type { AssistantStreamChunk } from "assistant-stream";
 import {
   AssistantRuntimeProvider,
   unstable_useRemoteThreadListRuntime as useRemoteThreadListRuntime,
   useAssistantTransportRuntime,
-  useAssistantState,
-  // useThreadListItem,
+  useThreadListItem,
 } from "@assistant-ui/react";
 
 import { converter } from "./MyMessageConverter";
@@ -16,25 +16,17 @@ const API_BASE =
   process.env.NEXT_PUBLIC_API_URL?.replace(/\/assistant$/, "") ??
   "http://localhost:8010";
 
-const debugLog = (label: string, ...data: any[]) => {
-  console.log(
-    `%c[${label}]`,
-    "background: #007acc; color: white; padding: 2px 4px; border-radius: 2px;",
-    ...data
-  );
-};
-
 // ------------------------------------------------------------------
 // RUNTIME HOOK
 // ------------------------------------------------------------------
 function usePerThreadTransportRuntime() {
-  // const item = useThreadListItem();
-  const item = useAssistantState(({ threadListItem }) => threadListItem);
+  const item = useThreadListItem();
   const backendThreadId = item.remoteId ?? item.id;
 
   // Memoize config to prevent runtime recreation on re-renders
   const runtimeConfig = useMemo(() => ({
     api: `${API_BASE}/assistant`,
+    headers: {},
     converter,
     initialState: {
       thread_id: backendThreadId,
@@ -55,17 +47,16 @@ function usePerThreadTransportRuntime() {
 
     const fetchAndImport = async () => {
       try {
-        // debugLog("Hydration:Start", `Fetching ${item.remoteId}`);
-        const res = await fetch(`${API_BASE}/threads/${item.remoteId}/messages`);
+        const res = await fetch(`${API_BASE}/threads/${item.remoteId}/messages`, {
+          cache: "no-store",
+        });
         const data = await res.json();
 
         if (!isMounted || !data.messages) return;
 
         const threadRuntime = (runtime as any).thread;
-        if (threadRuntime?.import) {
+        if (threadRuntime?.unstable_loadExternalState) {
           try {
-            
-            const threadRuntime = (runtime as any).thread;
             threadRuntime.unstable_loadExternalState({
               thread_id: backendThreadId,
               user_id: "default_user",
@@ -95,21 +86,27 @@ function ProviderInner({ children }: { children: ReactNode }) {
   const adapter = useMemo(() => ({
       async list() {
         try {
-          const res = await fetch(`${API_BASE}/threads?user_id=default_user`);
+          const res = await fetch(`${API_BASE}/threads?user_id=default_user`, {
+            cache: "no-store",
+          });
           const data = await res.json();
           return {
             threads: (data || []).map((t: any) => ({
               remoteId: t.id,
               title: t.title || "New Chat",
-              status: "regular" as const,
+              status: t.is_archived ? ("archived" as const) : ("regular" as const),
             })),
           };
         } catch (e) { return { threads: [] }; }
       },
       async fetch(threadId: string) {
-        const res = await fetch(`${API_BASE}/threads/${threadId}`);
+        const res = await fetch(`${API_BASE}/threads/${threadId}`, { cache: "no-store" });
         const data = await res.json();
-        return { remoteId: data.id, title: data.title, status: "regular" as const };
+        return {
+          remoteId: data.id,
+          title: data.title,
+          status: data.is_archived ? ("archived" as const) : ("regular" as const),
+        };
       },
       async initialize(localId: string) {
         const res = await fetch(`${API_BASE}/threads`, {
@@ -120,10 +117,35 @@ function ProviderInner({ children }: { children: ReactNode }) {
         const data = await res.json();
         return { remoteId: data.id };
       },
-      async generateTitle() { return "New Chat"; },
-      async rename(threadId: string, newTitle: string) { return { title: newTitle }; },
-      async archive() {},
-      async delete() {},
+      async generateTitle() {
+        return new ReadableStream<AssistantStreamChunk>();
+      },
+      async rename(threadId: string, newTitle: string) {
+        const res = await fetch(`${API_BASE}/threads/${threadId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title: newTitle }),
+        });
+        if (!res.ok) throw new Error("Failed to rename thread");
+      },
+      async archive(threadId: string) {
+        const res = await fetch(`${API_BASE}/threads/${threadId}/archive`, {
+          method: "POST",
+        });
+        if (!res.ok) throw new Error("Failed to archive thread");
+      },
+      async unarchive(threadId: string) {
+        const res = await fetch(`${API_BASE}/threads/${threadId}/unarchive`, {
+          method: "POST",
+        });
+        if (!res.ok) throw new Error("Failed to unarchive thread");
+      },
+      async delete(threadId: string) {
+        const res = await fetch(`${API_BASE}/threads/${threadId}`, {
+          method: "DELETE",
+        });
+        if (!res.ok) throw new Error("Failed to delete thread");
+      },
     }), []);
 
   const runtime = useRemoteThreadListRuntime({

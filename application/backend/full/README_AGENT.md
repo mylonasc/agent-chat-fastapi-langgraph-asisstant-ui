@@ -50,13 +50,46 @@ Supported formats:
 - DOCX (local)
 - Plain text fallback
 
-Parsing uses LangChain document loaders:
+Parsing uses configurable PDF extraction:
 
-- `WebBaseLoader`
-- `PyPDFLoader`
+- `PyPDFLoader` (default)
+- `Docling` (optional CPU/GPU)
 - `Docx2txtLoader`
 
 Documents are chunked and indexed into both dense and sparse stores.
+
+### PDF parser configuration
+
+Set in `web_rag` config:
+
+```json
+{
+  "pdf_parser": "pypdf"
+}
+```
+
+or
+
+```json
+{
+  "pdf_parser": "docling",
+  "docling_device": "cpu"
+}
+```
+
+or
+
+```json
+{
+  "pdf_parser": "docling",
+  "docling_device": "cuda"
+}
+```
+
+Install optional dependencies accordingly:
+
+- CPU: `uv sync --extra docling-cpu`
+- GPU: `uv sync --extra docling-gpu`
 
 ---
 

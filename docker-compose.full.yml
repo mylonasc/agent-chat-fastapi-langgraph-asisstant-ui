@@ -3,6 +3,8 @@ services:
     build:
       context: ./application/backend/full
       dockerfile: Dockerfile
+      args:
+        DOCLING_VARIANT: ${DOCLING_VARIANT:-none}
     ports:
       - "8010:8010"
     environment:
@@ -13,6 +15,8 @@ services:
       - AGENT_MODE=${AGENT_MODE:-react}
     env_file:
       - .env
+    volumes:
+      - ./application/backend/full/data:/app/data
 
   frontend-full:
     build:

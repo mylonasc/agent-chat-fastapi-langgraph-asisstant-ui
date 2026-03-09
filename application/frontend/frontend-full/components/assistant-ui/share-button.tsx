@@ -6,8 +6,9 @@ import { Button } from "@/components/ui/button";
 
 export const ShareButton = () => {
   // 1. Return primitives directly to avoid "infinite loop" error
-  
-  const threadId = useAssistantState((s) => s.thread.threadId);
+  const threadId = useAssistantState(
+    (s) => s.threadListItem.remoteId ?? s.threadListItem.id
+  );
   const messageCount = useAssistantState((s) => s.thread.messages.length);
 
   const handleShare = () => {

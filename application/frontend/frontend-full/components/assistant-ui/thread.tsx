@@ -1,6 +1,7 @@
 "use client";
 
 import { ShareButton } from "./share-button";
+import Link from "next/link";
 import {
   ArrowDownIcon,
   ArrowUpIcon,
@@ -25,13 +26,18 @@ import {
 } from "@assistant-ui/react";
 
 import type { FC } from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { LazyMotion, MotionConfig, domAnimation } from "motion/react";
 import * as m from "motion/react-m";
 
 import { Button } from "@/components/ui/button";
 import { MarkdownText } from "@/components/assistant-ui/markdown-text";
 import { Reasoning, ReasoningGroup } from "@/components/assistant-ui/reasoning";
+import {
+  WebRAGStatusToolUI,
+  WebRAGToolUI,
+  WebSearchToolUI,
+} from "@/components/assistant-ui/source-indexing-widget";
 import { ToolFallback } from "@/components/assistant-ui/tool-fallback";
 import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button";
 import {
@@ -41,6 +47,11 @@ import {
 } from "@/components/assistant-ui/attachment";
 
 import { cn } from "@/lib/utils";
+
+const API_BASE =
+  process.env.NEXT_PUBLIC_API_BASE ??
+  process.env.NEXT_PUBLIC_API_URL?.replace(/\/assistant$/, "") ??
+  "http://localhost:8010";
 
 export const Thread: FC = () => {
   return (
@@ -53,9 +64,19 @@ export const Thread: FC = () => {
           }}
         >
           <div className="flex items-center justify-between border-b px-4 py-2">
-            <span className="text-sm font-medium">Chat</span>
-            <ShareButton />
+            <ChatTitle />
+            <div className="flex items-center gap-2">
+              <Button asChild variant="outline" size="sm">
+                <Link href="/admin">Admin</Link>
+              </Button>
+              <ShareButton />
+            </div>
           </div>
+
+          <WebSearchToolUI />
+          <WebRAGToolUI />
+          <WebRAGStatusToolUI />
+          <AutoThreadTitle />
 
           <ThreadPrimitive.Viewport className="aui-thread-viewport relative flex flex-1 flex-col overflow-x-auto overflow-y-scroll px-4">
             <ThreadPrimitive.If empty>
@@ -70,6 +91,8 @@ export const Thread: FC = () => {
               }}
             />
 
+            <IndexingStatusPanel />
+
             <ThreadPrimitive.If empty={false}>
               <div className="aui-thread-viewport-spacer min-h-8 grow" />
             </ThreadPrimitive.If>
@@ -80,6 +103,82 @@ export const Thread: FC = () => {
       </MotionConfig>
     </LazyMotion>
   );
+};
+
+const ChatTitle: FC = () => {
+  const api = useAssistantApi();
+  const title = useAssistantState((s) => s.threadListItem.title ?? "New Chat");
+
+  const rename = () => {
+    const next = window.prompt("Rename chat", title);
+    if (next == null) return;
+    const cleaned = cleanTitle(next);
+    if (!cleaned || cleaned === title) return;
+    api.threadListItem().rename(cleaned);
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={rename}
+      className="text-sm font-medium hover:underline"
+      title="Rename chat"
+    >
+      {title}
+    </button>
+  );
+};
+
+const AUTO_TITLE_DEFAULTS = new Set(["", "New Chat", "Untitled"]);
+
+function cleanTitle(input: string): string {
+  const compact = input.replace(/\s+/g, " ").trim();
+  const stripped = compact.replace(/^[-:.,\s]+|[-:.,\s]+$/g, "");
+  return stripped.slice(0, 64);
+}
+
+function deriveThreadTitle(messages: readonly any[]): string | null {
+  const userMessages = messages.filter((m) => m?.role === "user");
+  const assistantMessages = messages.filter((m) => m?.role === "assistant");
+
+  if (userMessages.length < 2 || assistantMessages.length < 2) {
+    return null;
+  }
+
+  const userText = userMessages
+    .flatMap((m) => (Array.isArray(m?.content) ? m.content : []))
+    .filter((p) => p?.type === "text")
+    .map((p) => String(p?.text ?? ""))
+    .join(" ");
+
+  const cleaned = cleanTitle(userText);
+  if (!cleaned) return null;
+
+  return cleaned;
+}
+
+const AutoThreadTitle: FC = () => {
+  const api = useAssistantApi();
+  const threadItem = useAssistantState((s) => s.threadListItem);
+  const messages = useAssistantState((s) => s.thread.messages);
+  const autoTitledByThreadRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    const threadId = threadItem.remoteId ?? threadItem.id;
+    const currentTitle = String(threadItem.title ?? "");
+
+    if (!threadId) return;
+    if (!AUTO_TITLE_DEFAULTS.has(currentTitle)) return;
+    if (autoTitledByThreadRef.current.has(threadId)) return;
+
+    const suggested = deriveThreadTitle(messages as readonly any[]);
+    if (!suggested || AUTO_TITLE_DEFAULTS.has(suggested)) return;
+
+    autoTitledByThreadRef.current.add(threadId);
+    api.threadListItem().rename(suggested);
+  }, [api, messages, threadItem.id, threadItem.remoteId, threadItem.title]);
+
+  return null;
 };
 
 const ThreadScrollToBottom: FC = () => {
@@ -101,53 +200,7 @@ const ThreadScrollToBottom: FC = () => {
  * This prevents POST /assistant with thread_id="new".
  */
 function useEnsureThreadInitialized() {
-  const api = useAssistantApi();
-  const threadId = useAssistantState((s) => s.thread.threadId);
-
-  const [isInitializing, setIsInitializing] = useState(false);
-
-  // Helps avoid duplicate init calls in StrictMode / rapid remounts
-  const lastInitForThreadRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function ensure() {
-      if (!threadId || threadId !== "new") {
-        setIsInitializing(false);
-        lastInitForThreadRef.current = null;
-        return;
-      }
-
-      // If we've already kicked off init for this "new" instance, don't re-run.
-      if (lastInitForThreadRef.current === "new") return;
-
-      lastInitForThreadRef.current = "new";
-      setIsInitializing(true);
-
-      try {
-        await api.threadListItem().initialize();
-      } finally {
-        if (!cancelled) setIsInitializing(false);
-      }
-    }
-
-    void ensure();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [api, threadId]);
-
-  const canSend = useMemo(() => {
-    // Only block when we are definitely still "new" or actively initializing
-    if (isInitializing) return false;
-    if (!threadId) return false;
-    if (threadId === "new") return false;
-    return true;
-  }, [threadId, isInitializing]);
-
-  return { canSend, isInitializing };
+  return { canSend: true, isInitializing: false };
 }
 
 const ThreadWelcome: FC = () => {
@@ -314,6 +367,65 @@ const MessageError: FC = () => {
         <ErrorPrimitive.Message className="aui-message-error-message line-clamp-2" />
       </ErrorPrimitive.Root>
     </MessagePrimitive.Error>
+  );
+};
+
+type IndexJob = {
+  job_id: string;
+  status: string;
+  total_urls: number;
+  completed_urls: number;
+  failed_urls: number;
+};
+
+const IndexingStatusPanel: FC = () => {
+  const [jobs, setJobs] = useState<IndexJob[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const fetchStatus = async () => {
+      try {
+        const res = await fetch(
+          `${API_BASE}/tools/web_rag/status?user_id=default_user`,
+          { cache: "no-store" }
+        );
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        if (cancelled) return;
+
+        const list = Array.isArray(data?.jobs) ? (data.jobs as IndexJob[]) : [];
+        const active = list.filter((j) =>
+          ["queued", "running"].includes((j?.status ?? "").toLowerCase())
+        );
+        setJobs(active);
+      } catch {
+        if (!cancelled) setJobs([]);
+      }
+    };
+
+    void fetchStatus();
+    const id = window.setInterval(fetchStatus, 1200);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, []);
+
+  if (!jobs.length) return null;
+
+  return (
+    <div className="mx-auto mt-2 w-full max-w-[var(--thread-max-width)] px-2">
+      <div className="rounded-lg border border-dashed px-3 py-2 text-xs text-muted-foreground">
+        {jobs.map((job) => (
+          <div key={job.job_id} className="mb-1 last:mb-0">
+            Indexing {job.completed_urls}/{job.total_urls}
+            {job.failed_urls ? ` (${job.failed_urls} failed)` : ""} - {job.status}
+          </div>
+        ))}
+      </div>
+    </div>
   );
 };
 

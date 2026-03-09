@@ -1,11 +1,12 @@
 // components/assistant-ui/thread-list.tsx
 import type { FC } from "react";
 import {
+  useAssistantApi,
   ThreadListItemPrimitive,
   ThreadListPrimitive,
   useAssistantState,
 } from "@assistant-ui/react";
-import { ArchiveIcon, PlusIcon } from "lucide-react";
+import { ArchiveIcon, PencilIcon, PlusIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button";
@@ -64,6 +65,17 @@ const ThreadListSkeleton: FC = () => {
 };
 
 const ThreadListItem: FC = () => {
+  const api = useAssistantApi();
+  const title = useAssistantState((s) => s.threadListItem.title ?? "New Chat");
+
+  const renameChat = () => {
+    const next = window.prompt("Rename chat", title);
+    if (next == null) return;
+    const trimmed = next.trim();
+    if (!trimmed || trimmed === title) return;
+    api.threadListItem().rename(trimmed);
+  };
+
   return (
     <ThreadListItemPrimitive.Root className="aui-thread-list-item flex items-center gap-2 rounded-lg transition-all hover:bg-muted focus-visible:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none data-active:bg-muted">
       <ThreadListItemPrimitive.Trigger className="aui-thread-list-item-trigger flex-grow px-3 py-2 text-start">
@@ -71,6 +83,19 @@ const ThreadListItem: FC = () => {
           <ThreadListItemPrimitive.Title fallback="New Chat" />
         </span>
       </ThreadListItemPrimitive.Trigger>
+
+      <TooltipIconButton
+        className="aui-thread-list-item-rename size-4 p-0 text-foreground hover:text-primary"
+        variant="ghost"
+        tooltip="Rename thread"
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          renameChat();
+        }}
+      >
+        <PencilIcon />
+      </TooltipIconButton>
 
       <ThreadListItemPrimitive.Archive asChild>
         <TooltipIconButton
