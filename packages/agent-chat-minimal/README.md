@@ -24,3 +24,21 @@ minimal-chat-serve --port 8011
 Open <http://localhost:8011/>. Set `OPENAI_API_KEY` to enable `/assistant`;
 without it, the UI and `/health` still work and `/assistant` returns 503.
 `MINIMAL_WEB_DIR` may override the bundled web directory.
+
+Run the offline serving tests and clean-venv smoke check from the repository
+root:
+
+```bash
+python3 -m venv /tmp/agent-chat-minimal-tests
+/tmp/agent-chat-minimal-tests/bin/pip install \
+  "packages/agent-chat-minimal[test]"
+/tmp/agent-chat-minimal-tests/bin/pytest packages/agent-chat-minimal
+packages/agent-chat-minimal/scripts/smoke_test_wheel.sh
+```
+
+Build the Python-only runtime image after building the wheel:
+
+```bash
+docker build -t agent-chat-minimal packages/agent-chat-minimal
+docker run --rm -p 8011:8011 agent-chat-minimal
+```
