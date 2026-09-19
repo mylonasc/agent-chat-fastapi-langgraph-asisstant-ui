@@ -1,6 +1,7 @@
-from typing import List, Optional, TypedDict
+from typing import List, Optional
 
 from langchain_core.tools import tool
+from typing_extensions import TypedDict
 
 
 class GraphNode(TypedDict, total=False):
