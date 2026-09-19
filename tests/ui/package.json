@@ -1,0 +1,20 @@
+{
+  "name": "agent-chat-ui-tests",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.20.0",
+  "scripts": {
+    "install:browsers": "playwright install chromium",
+    "test": "playwright test",
+    "typecheck": "tsc --noEmit --module esnext --moduleResolution bundler --target es2022 --types node,@playwright/test playwright.config.ts lib/dom-quality.ts specs/full-ui.spec.ts specs/minimal-ui.spec.ts",
+    "test:full": "PLAYWRIGHT_STACK=full playwright test --project=full-desktop --project=full-mobile",
+    "test:minimal": "PLAYWRIGHT_STACK=minimal playwright test --project=minimal-desktop --project=minimal-mobile",
+    "inspect:full": "docker compose -f ../../docker-compose.full.yml up -d --build --wait && node scripts/inspect-ui.mjs full",
+    "inspect:minimal": "docker compose -f ../../docker-compose.minimal.yml up -d --build --wait && node scripts/inspect-ui.mjs minimal"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.58.2",
+    "@types/node": "^24.10.1",
+    "typescript": "^5.9.3"
+  }
+}

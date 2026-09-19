@@ -138,3 +138,18 @@ application/
 | `NEXT_PUBLIC_API_BASE` | Full frontend backend base URL |
 
 See [RUNNING.md](./RUNNING.md) for more detailed documentation.
+
+## DOM-only UI Testing
+
+Playwright tests and machine-readable inspection scripts for both frontends
+live in [`tests/ui`](./tests/ui). They inspect DOM structure, ARIA, computed
+styles, and layout geometry without screenshots or visual snapshots.
+
+```bash
+cd tests/ui
+pnpm install
+pnpm install:browsers
+pnpm test
+pnpm inspect:full
+pnpm inspect:minimal
+```

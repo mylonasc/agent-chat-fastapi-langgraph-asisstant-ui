@@ -1,4 +1,5 @@
-from typing import TypedDict, Optional, List, Literal
+from typing import Optional, List, Literal
+from typing_extensions import TypedDict
 from langchain_core.tools import tool
 
 class GraphNode(TypedDict, total=False):

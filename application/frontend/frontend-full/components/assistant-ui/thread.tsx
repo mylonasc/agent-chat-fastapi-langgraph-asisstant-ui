@@ -210,14 +210,14 @@ const ThreadWelcome: FC = () => {
     <div className="aui-thread-welcome-root mx-auto my-auto flex w-full max-w-[var(--thread-max-width)] flex-grow flex-col">
       <div className="aui-thread-welcome-center flex w-full flex-grow flex-col items-center justify-center">
         <div className="aui-thread-welcome-message flex size-full flex-col justify-center px-8">
-          <m.div
+          <m.h1
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 10 }}
             className="aui-thread-welcome-message-motion-1 text-2xl font-semibold"
           >
             Hello there!
-          </m.div>
+          </m.h1>
           <m.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
