@@ -1,0 +1,27 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "agent-chat-minimal"
+version = "0.1.0"
+description = "Portable FastAPI and LangGraph chat with a bundled static UI"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "assistant-stream-ce>=0.0.2",
+    "fastapi>=0.127.0",
+    "langchain>=1.2.0",
+    "langchain-openai>=0.2.0",
+    "langgraph>=1.0.5",
+    "uvicorn>=0.34.0",
+]
+
+[project.scripts]
+minimal-chat-serve = "agent_chat_minimal.server:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/agent_chat_minimal"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"src/agent_chat_minimal/web" = "agent_chat_minimal/web"
