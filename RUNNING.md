@@ -106,6 +106,7 @@ Then set `web_rag` tool config with `pdf_parser: "docling"` and `docling_device:
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/assistant` | POST | Chat endpoint (SSE streaming) |
+| `/health` | GET | Health check |
 | `/threads` | GET | List all threads |
 | `/threads` | POST | Create new thread |
 | `/threads/{id}` | GET | Get thread details |
@@ -128,7 +129,11 @@ Then set `web_rag` tool config with `pdf_parser: "docling"` and `docling_device:
 |----------|-------------|
 | `OPENAI_API_KEY` | Your OpenAI API key (required) |
 | `SERPER_API_KEY` | Serper API key (required for `web_search` in full backend) |
-| `NEXT_PUBLIC_API_URL` | Backend URL (frontend only, optional in Docker) |
+| `EMBEDDING_PROVIDER` | Full-backend embedding provider (`fastembed` or `openai`) |
+| `EMBEDDING_MODEL` | Optional embedding model override |
+| `RAG_STARTUP_VALIDATION` | Set to `1` to run the network/model-dependent RAG preflight |
+| `NEXT_PUBLIC_API_URL` | Minimal frontend backend URL (optional in Docker) |
+| `NEXT_PUBLIC_API_BASE` | Full frontend backend base URL (optional in Docker) |
 
 ## Tech Stack
 

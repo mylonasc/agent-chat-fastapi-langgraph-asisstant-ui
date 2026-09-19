@@ -1,0 +1,10 @@
+node_modules
+.next
+playwright-report
+test-results
+npm-debug.log*
+pnpm-debug.log*
+.DS_Store
+.git
+.gitignore
+.env*

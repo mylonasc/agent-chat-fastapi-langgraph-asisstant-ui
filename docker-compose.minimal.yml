@@ -1,3 +1,5 @@
+name: agent-chat-minimal
+
 services:
   backend-minimal:
     build:
@@ -9,6 +11,12 @@ services:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
     env_file:
       - .env
+    healthcheck:
+      test: ["CMD", ".venv/bin/python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8011/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
 
   frontend-minimal:
     build:
@@ -17,6 +25,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - NEXT_PUBLIC_API_URL=http://backend-minimal:8011/assistant
+      - NEXT_PUBLIC_API_URL=http://localhost:8011/assistant
     depends_on:
-      - backend-minimal
+      backend-minimal:
+        condition: service_healthy

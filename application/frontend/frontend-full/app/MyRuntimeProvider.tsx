@@ -29,6 +29,7 @@ function usePerThreadTransportRuntime() {
     headers: {},
     converter,
     initialState: {
+      messages: [],
       thread_id: backendThreadId,
       user_id: "default_user",
     },

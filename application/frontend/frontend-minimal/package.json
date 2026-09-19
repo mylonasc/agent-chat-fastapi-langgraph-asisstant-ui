@@ -3,18 +3,19 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "packageManager": "pnpm@10.20.0",
   "dependencies": {
-    "@assistant-ui/react": "latest",
+    "@assistant-ui/react": "0.11.52",
     "@assistant-ui/react-data-stream": "^0.11.13",
-    "@assistant-ui/react-langgraph": "latest",
-    "@assistant-ui/react-markdown": "latest",
+    "@assistant-ui/react-langgraph": "0.7.12",
+    "@assistant-ui/react-markdown": "0.11.8",
     "@radix-ui/react-avatar": "^1.1.2",
     "@radix-ui/react-dialog": "^1.1.4",
     "@radix-ui/react-slot": "^1.1.1",
     "@radix-ui/react-tooltip": "^1.1.6",
     "@tailwindcss/postcss": "^4.0.0",
     "assistant-stream": "^0.2.45",
-    "assistant-ui": "latest",
+    "assistant-ui": "0.0.69",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "d3": "^7.9.0",
@@ -31,6 +32,7 @@
     "zustand": "^5.0.3"
   },
   "devDependencies": {
+    "@types/d3": "^7.4.3",
     "@types/node": "^22.13.1",
     "@types/react": "19.2.7",
     "@types/react-dom": "19.2.3",
@@ -45,6 +47,10 @@
     "start": "next start"
   },
   "pnpm": {
+    "onlyBuiltDependencies": [
+      "sharp",
+      "unrs-resolver"
+    ],
     "overrides": {
       "@types/react": "19.2.7",
       "@types/react-dom": "19.2.3"

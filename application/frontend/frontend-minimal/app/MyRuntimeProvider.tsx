@@ -80,7 +80,6 @@ const converter = (
   const pendingHumanMessages = connectionMetadata.pendingCommands
     .filter((cmd) => cmd.type === "add-message")
     .map((cmd) => ({
-      id: cmd.message.id,
       type: "human" as const,
       content: [
         {

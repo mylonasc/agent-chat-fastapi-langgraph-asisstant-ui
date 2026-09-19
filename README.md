@@ -118,6 +118,7 @@ application/
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/assistant` | POST | Chat endpoint (SSE streaming) |
+| `/health` | GET | Health check |
 | `/threads` | GET | List all threads |
 | `/threads` | POST | Create new thread |
 | `/threads/{id}` | GET | Get thread details |
@@ -130,6 +131,10 @@ application/
 |----------|-------------|
 | `OPENAI_API_KEY` | Your OpenAI API key (required) |
 | `SERPER_API_KEY` | Serper API key (required for `web_search` tool in full backend) |
-| `NEXT_PUBLIC_API_URL` | Backend URL (frontend only) |
+| `EMBEDDING_PROVIDER` | Full-backend embedding provider (`fastembed` or `openai`) |
+| `EMBEDDING_MODEL` | Optional embedding model override |
+| `RAG_STARTUP_VALIDATION` | Set to `1` to run the network/model-dependent RAG preflight |
+| `NEXT_PUBLIC_API_URL` | Minimal frontend backend URL |
+| `NEXT_PUBLIC_API_BASE` | Full frontend backend base URL |
 
 See [RUNNING.md](./RUNNING.md) for more detailed documentation.

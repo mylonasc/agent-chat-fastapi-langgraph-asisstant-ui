@@ -25,6 +25,15 @@ def clear_threads():
 
 
 @pytest.mark.anyio
+async def test_health():
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        response = await ac.get("/health")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
+
+
+@pytest.mark.anyio
 async def test_create_thread_on_chat():
     """Test that sending a message creates a record in the thread manager."""
     user_id = "test_user_1"

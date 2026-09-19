@@ -64,13 +64,15 @@ logs/
 htmlcov/
 .pytest_cache/
 .tox/
+playwright-report/
+test-results/
 
 # Ruff
 .ruff_cache/
 
-# Docker
-.dockerignore
-
 # Misc
 *.bak
 *.tmp
+
+# Generated application data
+application/backend/full/data/

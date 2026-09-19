@@ -36,6 +36,11 @@ import uuid
 graph = make_agent_with_weather_tool("gpt-4o-mini")
 
 
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
+
+
 @app.post("/assistant")
 async def chat_endpoint(request: ChatRequest):
     if not OPENAI_API_KEY:

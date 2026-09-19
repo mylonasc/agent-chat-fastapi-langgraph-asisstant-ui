@@ -97,14 +97,17 @@ from .startup_validation import run_startup_validation
 from tools.config import CONFIG_STORE
 
 
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
+
+
 @app.on_event("startup")
 def startup_checks():
-    # Use web_rag config if present, otherwise minimal default
-    config = CONFIG_STORE.get("web_rag") or {
-        "embedding_provider": "fastembed",
-        "pdf_parser": "pypdf",
-    }
-    run_startup_validation(config)
+    if os.getenv("RAG_STARTUP_VALIDATION", "0") == "1":
+        run_startup_validation(CONFIG_STORE.get("web_rag"))
+    else:
+        logger.info("Skipping optional embedding and FAISS startup validation.")
     if not os.getenv("SERPER_API_KEY"):
         logger.warning(
             "SERPER_API_KEY is not set. web_search tool calls will return a configuration error."

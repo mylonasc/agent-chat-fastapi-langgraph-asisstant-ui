@@ -8,9 +8,8 @@ RUN pip install uv
 
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev
-RUN uv pip install --python .venv/bin/python pypdf docx2txt
-RUN if [ "$DOCLING_VARIANT" = "cpu" ]; then uv pip install --python .venv/bin/python docling; fi
-RUN if [ "$DOCLING_VARIANT" = "gpu" ]; then uv pip install --python .venv/bin/python docling onnxruntime-gpu; fi
+RUN if [ "$DOCLING_VARIANT" = "cpu" ]; then uv sync --frozen --no-dev --extra docling-cpu; fi
+RUN if [ "$DOCLING_VARIANT" = "gpu" ]; then uv sync --frozen --no-dev --extra docling-gpu; fi
 
 COPY . .
 

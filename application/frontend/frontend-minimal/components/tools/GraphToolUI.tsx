@@ -152,7 +152,7 @@ export function ForceGraph({
     // Nodes
     const node = g
       .append("g")
-      .selectAll("circle")
+      .selectAll<SVGCircleElement, GraphNode & d3.SimulationNodeDatum>("circle")
       .data(nodes)
       .join("circle")
       .attr("r", (d: any) => nodeRadius(d.weight ?? 50))
@@ -205,7 +205,9 @@ export function ForceGraph({
       label.attr("x", (d: any) => d.x).attr("y", (d: any) => d.y);
     });
 
-    return () => sim.stop();
+    return () => {
+      sim.stop();
+    };
   }, [data, width, height, charge, linkDistance, showLabels, nodeScale, edgeScale]);
 
   return (

@@ -1,3 +1,5 @@
+name: agent-chat-full
+
 services:
   backend-full:
     build:
@@ -13,10 +15,18 @@ services:
       - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER:-fastembed}
       - EMBEDDING_MODEL=${EMBEDDING_MODEL:-}
       - AGENT_MODE=${AGENT_MODE:-react}
+      - DOCLING_VARIANT=${DOCLING_VARIANT:-none}
+      - RAG_STARTUP_VALIDATION=${RAG_STARTUP_VALIDATION:-0}
     env_file:
       - .env
     volumes:
       - ./application/backend/full/data:/app/data
+    healthcheck:
+      test: ["CMD", ".venv/bin/python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8010/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
 
   frontend-full:
     build:
@@ -27,4 +37,5 @@ services:
     environment:
       - NEXT_PUBLIC_API_BASE=http://localhost:8010
     depends_on:
-      - backend-full
+      backend-full:
+        condition: service_healthy

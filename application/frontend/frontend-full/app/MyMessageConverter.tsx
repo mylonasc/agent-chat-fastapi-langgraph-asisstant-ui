@@ -12,6 +12,11 @@ import {
 
 const LangChainMessageConverter = createMessageConverter(convertLangChainMessages);
 
+type State = {
+  messages: LangChainMessage[];
+  thread_id?: string;
+  user_id?: string;
+};
 
 export const converter = (
   state: State | undefined,
@@ -23,7 +28,6 @@ export const converter = (
   const pendingHumanMessages = connectionMetadata.pendingCommands
   .filter((cmd) => cmd.type === "add-message")
   .map((cmd) => ({
-    id: cmd.message.id,
     type: "human" as const,
     content: cmd.message.parts
       .map((p) => (p.type === "text" ? p.text : ""))
