@@ -1,0 +1,131 @@
+name: publish-workflow.yml
+
+# Publishes packages/agent-chat-minimal to PyPI via PyPI Trusted Publishing
+# (OIDC) - no API token is stored in GitHub. The repo must be registered as a
+# trusted publisher for the `agent-chat-minimal` PyPI project with workflow
+# filename `publish-workflow.yml`.
+#
+# Release flow:
+#   1. (Maintainer) bump `version` in packages/agent-chat-minimal/pyproject.toml
+#      (and `__version__` in src/agent_chat_minimal/__init__.py to match).
+#   2. Publish a GitHub Release, ideally tagged `agent-chat-minimal-vX.Y.Z`
+#      matching the bumped version - the workflow fails fast on mismatch.
+#   3. This workflow rebuilds the frontend static export (Node/pnpm are
+#      CI-only; people installing from PyPI need Python only), runs the
+#      offline serving tests, builds the sdist + wheel, and uploads them.
+#
+# If the PyPI trusted publisher entry restricts publishing to a GitHub
+# Environment, add `environment: <name>` to the `publish` job below.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Build and publish to PyPI
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # required for PyPI trusted publishing (OIDC)
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.20.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: application/frontend/frontend-minimal/pnpm-lock.yaml
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install frontend dependencies
+        run: pnpm --dir application/frontend/frontend-minimal install --frozen-lockfile
+
+      - name: Build frontend static export
+        run: pnpm --dir application/frontend/frontend-minimal build
+
+      - name: Stage prebuilt UI as package data
+        run: |
+          set -euo pipefail
+          web="packages/agent-chat-minimal/src/agent_chat_minimal/web"
+          rm -rf "$web"
+          cp -R application/frontend/frontend-minimal/out "$web"
+          test -f "$web/index.html"
+
+      - name: Check release tag matches package version
+        if: github.event_name == 'release'
+        run: |
+          set -euo pipefail
+          version="$(python3 -c 'import tomllib; print(tomllib.load(open("packages/agent-chat-minimal/pyproject.toml", "rb"))["project"]["version"])')"
+          tag="${{ github.event.release.tag_name }}"
+          echo "package version: $version"
+          echo "release tag: $tag"
+          if [[ "$tag" == agent-chat-minimal-v* ]]; then
+            if [[ "${tag#agent-chat-minimal-v}" != "$version" ]]; then
+              echo "::error::Release tag $tag does not match pyproject version $version"
+              exit 1
+            fi
+          else
+            echo "Tag does not follow agent-chat-minimal-vX.Y.Z; skipping strict check."
+          fi
+
+      - name: Install package with test extras
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install "./packages/agent-chat-minimal[test]"
+
+      - name: Run offline serving tests
+        run: python3 -m pytest packages/agent-chat-minimal
+
+      - name: Build sdist and wheel
+        run: |
+          python3 -m pip install build twine
+          rm -rf packages/agent-chat-minimal/dist
+          python3 -m build --outdir packages/agent-chat-minimal/dist packages/agent-chat-minimal
+
+      - name: Verify distributions
+        run: |
+          set -euo pipefail
+          python3 -m twine check packages/agent-chat-minimal/dist/*
+          python3 - <<'EOF'
+          import glob
+          import tarfile
+          import zipfile
+
+          sdists = glob.glob("packages/agent-chat-minimal/dist/*.tar.gz")
+          wheels = glob.glob("packages/agent-chat-minimal/dist/*.whl")
+          assert len(sdists) == 1, sdists
+          assert len(wheels) == 1, wheels
+
+          with tarfile.open(sdists[0]) as tar:
+              assert any(name.endswith("/src/agent_chat_minimal/web/index.html") for name in tar.getnames()), "sdist is missing the bundled UI"
+
+          with zipfile.ZipFile(wheels[0]) as whl:
+              assert "agent_chat_minimal/web/index.html" in whl.namelist(), "wheel is missing the bundled UI"
+
+          print("distributions verified: sdist and wheel both bundle the UI")
+          EOF
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: packages/agent-chat-minimal/dist
+          print-hash: true

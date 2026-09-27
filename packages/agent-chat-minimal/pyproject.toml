@@ -32,3 +32,10 @@ packages = ["src/agent_chat_minimal"]
 
 [tool.hatch.build.targets.wheel.force-include]
 "src/agent_chat_minimal/web" = "agent_chat_minimal/web"
+
+# The sdist must also bundle the prebuilt static UI (which is gitignored and
+# staged from application/frontend/frontend-minimal/out before building).
+# python -m build builds the wheel from the sdist, so without this the PyPI
+# wheel would ship without the UI.
+[tool.hatch.build.targets.sdist.force-include]
+"src/agent_chat_minimal/web" = "src/agent_chat_minimal/web"
