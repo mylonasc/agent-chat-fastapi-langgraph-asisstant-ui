@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agent-chat-fastapi-langgraph-assistant-ui"
-version = "0.1.0"
+version = "0.2.0"
 description = "Portable FastAPI and LangGraph chat with a bundled static UI"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -26,6 +26,10 @@ test = [
 
 [project.scripts]
 minimal-chat-serve = "agent_chat_minimal.server:main"
+
+# Third-party agents register here, e.g.
+# [project.entry-points."agent_chat.agents"]
+# my_agent = "my_package.my_module:make_my_agent"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/agent_chat_minimal"]
