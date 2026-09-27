@@ -53,6 +53,30 @@ app = create_app(graph=make_my_agent("anthropic:claude-sonnet-4-5"))
   `state.thread_id` / `runConfig.thread_id` is forwarded as LangGraph
   `configurable.thread_id` for checkpointer-backed graphs.
 
+## Documentation (in the wheel)
+
+Six guides ship inside the package and are readable at runtime:
+
+```python
+from agent_chat_minimal import docs
+docs.list()           # ['index', 'quickstart', 'agents', ...]
+docs.show("threads")
+```
+
+| Guide | Covers |
+| ----- | ------ |
+| `quickstart` | install → first chat in 2 minutes |
+| `agents` | write + serve + share your own agent |
+| `providers` | OpenAI / Anthropic / Ollama specs & creds |
+| `configuration` | env vars, CLI flags, hooks, 503 semantics |
+| `threads` | multi-thread chats, frontend-full compat |
+
+## Threads (frontend-full compatible)
+
+The server also speaks the full-stack thread protocol (`/threads`,
+`/threads/{id}/messages`, scoped `POST /assistant` with `thread_id`/`user_id`),
+so `frontend-full` works against either backend. See the `threads` guide.
+
 ## Configuration
 
 ```text
