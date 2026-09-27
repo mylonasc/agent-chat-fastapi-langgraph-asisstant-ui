@@ -35,6 +35,7 @@ curl -s localhost:8011/agents
 ```
 
 In the UI, try *"What is 12 × 8?"* (calculator) or *"Weather in London?"*.
+For the sidebar with previous chats, open <http://localhost:8011/full/>.
 
 ## Next steps
 

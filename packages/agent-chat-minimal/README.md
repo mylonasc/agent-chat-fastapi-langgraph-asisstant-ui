@@ -28,9 +28,11 @@ python -m pip install packages/agent-chat-minimal/dist/*.whl
 minimal-chat-serve --port 8011
 ```
 
-Open <http://localhost:8011/>. Set `OPENAI_API_KEY` to enable `/assistant`;
-without it, the UI and `/health` still work and `/assistant` returns 503.
-`MINIMAL_WEB_DIR` may override the bundled web directory.
+Open <http://localhost:8011/> (single-prompt chat) or
+<http://localhost:8011/full/> (thread sidebar with previous chats).
+Set `OPENAI_API_KEY` to enable `/assistant`; without it, the UIs and
+`/health` still work and `/assistant` returns 503.
+`MINIMAL_WEB_DIR` / `FULL_WEB_DIR` may override the bundled web directories.
 
 ## Arbitrary agents & providers
 
