@@ -17,6 +17,8 @@ from . import docs
 from .config import ENV_DOC, Settings
 from .registry import AGENT_REGISTRY, discover_agents
 from .server import (
+    DEFAULT_WEB_DIR,
+    DEFAULT_WEB_FULL_DIR,
     ChatGraph,
     ScopedChatRequest,
     create_app,
@@ -33,6 +35,8 @@ __all__ = [
     "AGENT_REGISTRY",
     "ENV_DOC",
     "ChatGraph",
+    "DEFAULT_WEB_DIR",
+    "DEFAULT_WEB_FULL_DIR",
     "ScopedChatRequest",
     "Settings",
     "ThreadManager",

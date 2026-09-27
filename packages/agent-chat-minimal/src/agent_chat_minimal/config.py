@@ -16,6 +16,7 @@ class Settings:
     model: str = "openai:gpt-4o-mini"
     default_agent: str = "weather"
     web_dir: str | None = None
+    web_full_dir: str | None = None
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -30,6 +31,7 @@ class Settings:
             model=os.getenv("MODEL", "openai:gpt-4o-mini"),
             default_agent=os.getenv("DEFAULT_AGENT", "weather"),
             web_dir=os.getenv("MINIMAL_WEB_DIR"),
+            web_full_dir=os.getenv("FULL_WEB_DIR"),
         )
 
     def web_dir_path(self, fallback: Path) -> Path | None:
@@ -44,6 +46,7 @@ PORT=8011                   # uvicorn bind port
 MODEL=openai:gpt-4o-mini    # provider:model spec (anthropic:.., ollama:..)
 DEFAULT_AGENT=weather       # registry id aliased by POST /assistant
 MINIMAL_WEB_DIR=            # override bundled web/ (empty = bundled)
+FULL_WEB_DIR=               # override bundled web_full/ (empty = bundled)
 OPENAI_API_KEY=             # credential for the default openai model
 ANTHROPIC_API_KEY=          # credential when MODEL uses anthropic:
 """
