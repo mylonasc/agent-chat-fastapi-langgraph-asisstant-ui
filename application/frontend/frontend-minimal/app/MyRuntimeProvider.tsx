@@ -75,7 +75,7 @@ const converter = (
   connectionMetadata: AssistantTransportConnectionMetadata,
 ) => {
   const serverMessages = state.messages || [];
-  
+
   // 1. Extract pending human messages from the transport layer
   const pendingHumanMessages = connectionMetadata.pendingCommands
     .filter((cmd) => cmd.type === "add-message")
@@ -99,15 +99,18 @@ const converter = (
 
   // 3. Construct the combined message list.
   // If the server hasn't sent the human message back yet, we prepend the optimistic version.
-  // Once the server sends it (with the ID fix), hasHumanInServer becomes true and we 
+  // Once the server sends it (with the ID fix), hasHumanInServer becomes true and we
   // switch entirely to the server's ordered array.
-  const allMessages = hasHumanInServer 
-    ? serverMessages 
+  const allMessages = hasHumanInServer
+    ? serverMessages
     : [...pendingHumanMessages, ...serverMessages];
+  const threadMessages = LangChainMessageConverter.toThreadMessages(
+    allMessages,
+  ).map((message, index) => ({ ...message, id: String(index) }));
 
   return {
-    // ThreadMessages handles the specific UI layout and bubble rendering
-    messages: LangChainMessageConverter.toThreadMessages(allMessages),
+    // Stable logical IDs keep incremental repository updates in transcript order.
+    messages: threadMessages,
     isRunning: connectionMetadata.isSending,
   };
 };
@@ -142,7 +145,7 @@ export function MyRuntimeProvider({ children }: MyRuntimeProviderProps) {
   return (
     <AssistantRuntimeProvider runtime={runtime}>
       {/* <WeatherTool /> */}
-     <GraphToolUI />
+      <GraphToolUI />
       {children}
     </AssistantRuntimeProvider>
   );
