@@ -38,8 +38,13 @@ done
 
 "$curl_bin" -sf "http://127.0.0.1:$port/health"
 "$curl_bin" -sf "http://127.0.0.1:$port/" | /bin/grep -qi "<html"
+chat_payload='{"state":{"messages":[]},"commands":[{"type":"add-message","message":{"id":"smoke-1","parts":[{"type":"text","text":"hello smoke"}]}}]}'
 test "$("$curl_bin" -s -o /dev/null -w '%{http_code}' \
   -X POST "http://127.0.0.1:$port/assistant" \
   -H 'content-type: application/json' \
-  -d '{"state":{"messages":[]},"commands":[]}')" = "503"
+  -d "$chat_payload")" = "200"
+"$curl_bin" -s \
+  -X POST "http://127.0.0.1:$port/assistant" \
+  -H 'content-type: application/json' \
+  -d "$chat_payload" | /bin/grep -q "hello smoke"
 echo "wheel smoke test passed"
