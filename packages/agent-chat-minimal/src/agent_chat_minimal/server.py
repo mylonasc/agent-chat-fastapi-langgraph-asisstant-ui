@@ -14,6 +14,7 @@ from assistant_stream_ce.modules.langgraph import append_langgraph_event
 from assistant_stream_ce.serialization import DataStreamResponse
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from langchain_core.messages import HumanMessage
 from pydantic import BaseModel
@@ -24,6 +25,7 @@ from .threads import ThreadManager, ThreadMessageStore, ThreadMetadata
 
 logger = logging.getLogger(__name__)
 DEFAULT_WEB_DIR = Path(__file__).parent / "web"
+DEFAULT_WEB_FULL_DIR = Path(__file__).parent / "web_full"
 
 
 @runtime_checkable
@@ -45,6 +47,7 @@ class SPAStaticFiles(StaticFiles):
             "assistant",
             "agents",
             "threads",
+            "full",
             "health",
             "docs",
             "openapi.json",
@@ -217,6 +220,7 @@ def create_app(
     agents: dict[str, Callable[..., ChatGraph | None]] | None = None,
     default_agent: str = "weather",
     web_dir: Path | None = None,
+    web_full_dir: Path | None = None,
     prepare_state: Callable[[dict, ChatRequest], list] | None = None,
     checkpointer: Any | None = "memory",
     thread_manager: ThreadManager | None = None,
@@ -249,7 +253,8 @@ def create_app(
             build). Receives ``checkpointer=`` when its signature accepts it.
         agents: Mapping of name -> factory (multi-agent mode).
         default_agent: Name aliased by ``POST /assistant``.
-        web_dir: Override for the bundled static UI directory.
+        web_dir: Override for the bundled minimal UI directory (``/``).
+        web_full_dir: Override for the bundled full UI directory (``/full``).
         prepare_state: ``(state, request) -> message dicts`` reducer hook;
             defaults to :func:`default_prepare_state`.
         checkpointer: Shared LangGraph checkpointer passed to factories that
@@ -547,6 +552,29 @@ def create_app(
     @app.post("/assistant/{agent_id}")
     async def chat_endpoint_for_agent(agent_id: str, request: ScopedChatRequest):
         return await run_assistant(request, agent_id)
+
+    # Full UI (thread sidebar) first: Starlette matches mounts in order, so
+    # /full must be registered before the catch-all / mount.
+    resolved_full_dir = Path(
+        web_full_dir or os.getenv("FULL_WEB_DIR", DEFAULT_WEB_FULL_DIR)
+    ).resolve()
+    if resolved_full_dir.is_dir() and (resolved_full_dir / "index.html").is_file():
+
+        @app.get("/full", include_in_schema=False)
+        async def full_root():
+            return RedirectResponse(url="/full/", status_code=307)
+
+        app.mount(
+            "/full",
+            SPAStaticFiles(directory=resolved_full_dir, html=True),
+            name="web-full",
+        )
+    else:
+        logger.warning(
+            "Full UI build not found at %s; /full is disabled. "
+            "Set FULL_WEB_DIR to a frontend-full/out directory.",
+            resolved_full_dir,
+        )
 
     resolved_web_dir = Path(
         web_dir or os.getenv("MINIMAL_WEB_DIR", DEFAULT_WEB_DIR)

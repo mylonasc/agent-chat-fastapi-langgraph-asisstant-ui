@@ -12,9 +12,10 @@ name: publish-workflow.yml
 #   2. Publish a GitHub Release, ideally tagged
 #      `agent-chat-fastapi-langgraph-assistant-ui-vX.Y.Z` matching the bumped
 #      version - the workflow fails fast on mismatch.
-#   3. This workflow rebuilds the frontend static export (Node/pnpm are
-#      CI-only; people installing from PyPI need Python only), runs the
-#      offline serving tests, builds the sdist + wheel, and uploads them.
+#   3. This workflow rebuilds both frontend static exports - minimal (/) and
+#      full (/full) - (Node/pnpm are CI-only; people installing from PyPI
+#      need Python only), runs the offline serving tests, builds the sdist +
+#      wheel, and uploads them.
 #
 # If the PyPI trusted publisher entry restricts publishing to a GitHub
 # Environment, add `environment: <name>` to the `publish` job below.
@@ -59,18 +60,26 @@ jobs:
           python-version: "3.11"
 
       - name: Install frontend dependencies
-        run: pnpm --dir application/frontend/frontend-minimal install --frozen-lockfile
+        run: |
+          pnpm --dir application/frontend/frontend-minimal install --frozen-lockfile
+          pnpm --dir application/frontend/frontend-full install --frozen-lockfile
 
-      - name: Build frontend static export
-        run: pnpm --dir application/frontend/frontend-minimal build
+      - name: Build frontend static exports
+        run: |
+          pnpm --dir application/frontend/frontend-minimal build
+          NEXT_PUBLIC_API_BASE="" FULL_UI_BASE_PATH=/full pnpm --dir application/frontend/frontend-full build
 
-      - name: Stage prebuilt UI as package data
+      - name: Stage prebuilt UIs as package data
         run: |
           set -euo pipefail
           web="packages/agent-chat-minimal/src/agent_chat_minimal/web"
           rm -rf "$web"
           cp -R application/frontend/frontend-minimal/out "$web"
           test -f "$web/index.html"
+          web_full="packages/agent-chat-minimal/src/agent_chat_minimal/web_full"
+          rm -rf "$web_full"
+          cp -R application/frontend/frontend-full/out "$web_full"
+          test -f "$web_full/index.html"
 
       - name: Check release tag matches package version
         if: github.event_name == 'release'
@@ -118,12 +127,16 @@ jobs:
           assert len(wheels) == 1, wheels
 
           with tarfile.open(sdists[0]) as tar:
-              assert any(name.endswith("/src/agent_chat_minimal/web/index.html") for name in tar.getnames()), "sdist is missing the bundled UI"
+              names = tar.getnames()
+              assert any(name.endswith("/src/agent_chat_minimal/web/index.html") for name in names), "sdist is missing the bundled minimal UI"
+              assert any(name.endswith("/src/agent_chat_minimal/web_full/index.html") for name in names), "sdist is missing the bundled full UI"
 
           with zipfile.ZipFile(wheels[0]) as whl:
-              assert "agent_chat_minimal/web/index.html" in whl.namelist(), "wheel is missing the bundled UI"
+              names = whl.namelist()
+              assert "agent_chat_minimal/web/index.html" in names, "wheel is missing the bundled minimal UI"
+              assert "agent_chat_minimal/web_full/index.html" in names, "wheel is missing the bundled full UI"
 
-          print("distributions verified: sdist and wheel both bundle the UI")
+          print("distributions verified: sdist and wheel bundle both UIs")
           EOF
 
       - name: Publish to PyPI

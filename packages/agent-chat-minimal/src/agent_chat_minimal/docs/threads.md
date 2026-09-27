@@ -43,11 +43,23 @@ curl localhost:8011/threads/trip/messages
 
 ## Frontend-full compatibility
 
-Point the full frontend at the portable server (`NEXT_PUBLIC_API_URL` without
-the trailing `/assistant`); thread list, switching, rename, archive, and
-history rehydration all use the endpoints above. Responses stream over the
-Assistant Stream protocol with `messages`/`updates`/`custom` events, including
-`tool_updates` progress entries like the full backend.
+## Bundled full UI
+
+The wheel ships the full frontend (thread sidebar) at `/full/` — no separate
+Next.js server needed. It is built with `NEXT_PUBLIC_API_BASE=""` so it talks
+to the same origin (`/assistant`, `/threads`). The minimal single-prompt chat
+stays at `/`. To serve a custom full build instead:
+
+```bash
+FULL_WEB_DIR=/path/to/frontend-full/out minimal-chat-serve
+```
+
+Pointing an external full frontend at the portable server also works
+(`NEXT_PUBLIC_API_URL` without the trailing `/assistant`); thread list,
+switching, rename, archive, and history rehydration all use the endpoints
+above. Responses stream over the Assistant Stream protocol with
+`messages`/`updates`/`custom` events, including `tool_updates` progress
+entries like the full backend.
 
 ## Persistence notes
 

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agent-chat-fastapi-langgraph-assistant-ui"
-version = "0.3.1"
+version = "0.3.2"
 description = "Portable FastAPI and LangGraph chat with a bundled static UI"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -36,10 +36,12 @@ packages = ["src/agent_chat_minimal"]
 
 [tool.hatch.build.targets.wheel.force-include]
 "src/agent_chat_minimal/web" = "agent_chat_minimal/web"
+"src/agent_chat_minimal/web_full" = "agent_chat_minimal/web_full"
 
-# The sdist must also bundle the prebuilt static UI (which is gitignored and
-# staged from application/frontend/frontend-minimal/out before building).
-# python -m build builds the wheel from the sdist, so without this the PyPI
-# wheel would ship without the UI.
+# The sdist must also bundle the prebuilt static UIs (which are gitignored and
+# staged from application/frontend/{frontend-minimal,frontend-full}/out before
+# building). python -m build builds the wheel from the sdist, so without this
+# the PyPI wheel would ship without the UIs.
 [tool.hatch.build.targets.sdist.force-include]
 "src/agent_chat_minimal/web" = "src/agent_chat_minimal/web"
+"src/agent_chat_minimal/web_full" = "src/agent_chat_minimal/web_full"
