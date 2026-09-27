@@ -1,17 +1,12 @@
-from typing import Annotated, TypedDict
-
-from langchain_core.messages import BaseMessage
+from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.tools import tool
-from langchain_openai import ChatOpenAI
 from langgraph.graph import StateGraph
-from langgraph.graph.message import add_messages
-from langgraph.prebuilt import ToolNode, tools_condition
 
+from .agent_factory import AgentState, make_tool_agent
 from .tools.graph_tool import render_graph
 
 
-class AgentState(TypedDict):
-    messages: Annotated[list[BaseMessage], add_messages]
+__all__ = ["AgentState", "get_weather", "make_agent_with_weather_tool"]
 
 
 @tool
@@ -22,20 +17,18 @@ def get_weather(city: str):
     return f"The weather in {city} is sunny and 25°C."
 
 
-def make_agent_with_weather_tool(model="gpt-4o-mini") -> StateGraph:
+def make_agent_with_weather_tool(
+    model: str | BaseChatModel = "openai:gpt-4o-mini",
+) -> StateGraph:
+    """Build the weather demo agent for any provider model spec/instance.
+
+    Examples:
+        make_agent_with_weather_tool("openai:gpt-4o-mini")  # default
+        make_agent_with_weather_tool("anthropic:claude-sonnet-4-5")
+        make_agent_with_weather_tool("ollama:llama3.1")
+        make_agent_with_weather_tool(GenericFakeChatModel(messages=iter([...])))
+    """
+    if model == "gpt-4o-mini":  # backward compat: bare legacy default
+        model = "openai:gpt-4o-mini"
     tools = [get_weather, render_graph]
-    tool_node = ToolNode(tools)
-    chat_model = ChatOpenAI(model="gpt-4o-mini", streaming=True).bind_tools(tools)
-
-    def call_model(state: AgentState):
-        response = chat_model.invoke(state["messages"])
-        state["messages"].append(response)
-        return {"messages": [response]}
-
-    workflow = StateGraph(AgentState)
-    workflow.add_node("agent", call_model)
-    workflow.add_node("tools", tool_node)
-    workflow.set_entry_point("agent")
-    workflow.add_conditional_edges("agent", tools_condition)
-    workflow.add_edge("tools", "agent")
-    return workflow.compile()
+    return make_tool_agent(model, tools)

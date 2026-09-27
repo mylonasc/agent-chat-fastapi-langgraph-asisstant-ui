@@ -1,0 +1,50 @@
+from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
+from langchain_core.messages import AIMessage
+
+from agent_chat_minimal.demo_agent.agent_factory import resolve_llm
+from agent_chat_minimal.demo_agent.get_graph import make_agent_with_weather_tool
+
+
+class BindableFake(GenericFakeChatModel):
+    def bind_tools(self, *args, **kwargs):
+        return self
+
+
+def test_fake_model_instance_compiles_and_invokes():
+    fake = BindableFake(messages=iter([AIMessage(content="fake hi")]))
+    graph = make_agent_with_weather_tool(fake)
+    result = graph.invoke({"messages": [{"role": "user", "content": "hi"}]})
+    assert result["messages"]
+
+
+def test_resolve_llm_passes_instance_through():
+    fake = GenericFakeChatModel(messages=iter([AIMessage(content="x")]))
+    assert resolve_llm(fake) is fake
+
+
+def test_legacy_bare_name_maps_to_openai_spec(monkeypatch):
+    seen = {}
+
+    def fake_make_tool_agent(model, tools):
+        seen["model"] = model
+        return object()
+
+    import agent_chat_minimal.demo_agent.get_graph as get_graph
+
+    monkeypatch.setattr(get_graph, "make_tool_agent", fake_make_tool_agent)
+    get_graph.make_agent_with_weather_tool("gpt-4o-mini")
+    assert seen["model"] == "openai:gpt-4o-mini"
+
+
+def test_string_spec_forwarded_to_init_chat_model(monkeypatch):
+    seen = {}
+
+    def fake_init(spec, **kwargs):
+        seen["spec"] = spec
+        return GenericFakeChatModel(messages=iter([AIMessage(content="x")]))
+
+    import langchain.chat_models as chat_models
+
+    monkeypatch.setattr(chat_models, "init_chat_model", fake_init)
+    resolve_llm("anthropic:claude-sonnet-4-5")
+    assert seen["spec"] == "anthropic:claude-sonnet-4-5"
