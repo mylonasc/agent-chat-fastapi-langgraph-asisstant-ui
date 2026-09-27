@@ -1,4 +1,7 @@
 import os
+import logging
+from pathlib import Path
+
 from assistant_stream_ce import RunController, create_run
 from assistant_stream_ce.modules.langgraph import append_langgraph_event
 from assistant_stream_ce.assistant_stream_models import ChatRequest
@@ -7,6 +10,32 @@ from langchain_core.messages import HumanMessage, AIMessage
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException as StarletteHTTPException
+
+
+logger = logging.getLogger(__name__)
+WEB_DIR = Path(os.getenv("MINIMAL_WEB_DIR", Path(__file__).parent / "web"))
+
+
+class SPAStaticFiles(StaticFiles):
+    async def get_response(self, path, scope):
+        reserved_paths = ("assistant", "health", "docs", "openapi.json")
+        if path in reserved_paths or path.startswith(
+            tuple(f"{prefix}/" for prefix in reserved_paths)
+        ):
+            raise StarletteHTTPException(status_code=404)
+
+        try:
+            response = await super().get_response(path, scope)
+        except StarletteHTTPException as exc:
+            if exc.status_code != 404:
+                raise
+            return await super().get_response("index.html", scope)
+
+        if response.status_code == 404:
+            return await super().get_response("index.html", scope)
+        return response
 
 app = FastAPI()
 
@@ -18,13 +47,12 @@ if not OPENAI_API_KEY:
 
 app.add_middleware(
     CORSMiddleware,
+    # The bundled UI is same-origin; permissive CORS remains for split-port development.
     allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-from pathlib import Path
 
 curr_path = Path(__file__).resolve().parent.as_posix()
 import sys
@@ -33,7 +61,7 @@ sys.path.append(curr_path)
 from demo_agent.get_graph import make_agent_with_weather_tool, AgentState
 import uuid
 
-graph = make_agent_with_weather_tool("gpt-4o-mini")
+graph = make_agent_with_weather_tool("gpt-4o-mini") if OPENAI_API_KEY else None
 
 
 @app.get("/health")
@@ -52,6 +80,8 @@ async def chat_endpoint(request: ChatRequest):
                 "instructions": "Add OPENAI_API_KEY=your-key to your .env file and restart the server.",
             },
         )
+
+    assert graph is not None
 
     async def run_callback(controller: RunController):
         # 1. Initialize state from the frontend's current state
@@ -82,3 +112,14 @@ async def chat_endpoint(request: ChatRequest):
 
     stream = create_run(run_callback, state=request.state)
     return DataStreamResponse(stream)
+
+
+# Mount last so API and FastAPI documentation routes always take precedence.
+if WEB_DIR.is_dir() and (WEB_DIR / "index.html").is_file():
+    app.mount("/", SPAStaticFiles(directory=WEB_DIR, html=True), name="web")
+else:
+    logger.warning(
+        "Minimal UI build not found at %s; starting in API-only mode. "
+        "Set MINIMAL_WEB_DIR to a frontend-minimal/out directory.",
+        WEB_DIR,
+    )

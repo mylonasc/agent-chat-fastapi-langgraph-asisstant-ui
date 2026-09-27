@@ -1,0 +1,3 @@
+/dist/
+/src/agent_chat_minimal/web/*
+!/src/agent_chat_minimal/web/.gitkeep

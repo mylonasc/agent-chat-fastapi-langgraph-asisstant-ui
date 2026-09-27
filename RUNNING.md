@@ -14,6 +14,54 @@ This repo contains two flavors of a LangGraph + FastAPI + Assistant UI chat appl
 - **Frontend**: Complete chat UI with thread list, history, multiple chats
 - **Use case**: Production-ready with multi-chat support
 
+## Portable Minimal Wheel (Single Port)
+
+Build the web export and wheel once on a machine with Node and pnpm:
+
+```bash
+packages/agent-chat-minimal/scripts/build_wheel.sh
+```
+
+Installation and runtime require only Python 3.11 or newer:
+
+```bash
+python3 -m venv .venv-minimal
+.venv-minimal/bin/pip install packages/agent-chat-minimal/dist/*.whl
+export OPENAI_API_KEY=sk-...
+.venv-minimal/bin/minimal-chat-serve --host 127.0.0.1 --port 8011
+```
+
+Open <http://localhost:8011/>. The same process serves the static UI,
+`/health`, and `/assistant`. You can also run it as:
+
+```bash
+.venv-minimal/bin/uvicorn agent_chat_minimal.server:app --port 8011
+```
+
+For verification and a Python-only container:
+
+```bash
+python3 -m venv /tmp/agent-chat-minimal-tests
+/tmp/agent-chat-minimal-tests/bin/pip install \
+  "packages/agent-chat-minimal[test]"
+/tmp/agent-chat-minimal-tests/bin/pytest packages/agent-chat-minimal
+packages/agent-chat-minimal/scripts/smoke_test_wheel.sh
+docker build -t agent-chat-minimal packages/agent-chat-minimal
+docker run --rm -p 8011:8011 agent-chat-minimal
+```
+
+If `/assistant` returns 503, set `OPENAI_API_KEY` and restart. Re-run the build
+script to replace stale bundled `web/` files. `MINIMAL_WEB_DIR` can point at an
+alternate static export for testing.
+
+`application/backend/langgraph-server-minimal/` remains the development source
+rather than a shim, and `docker-compose.minimal.yml` remains the split-port
+development flow. Its permissive CORS policy is redundant for the bundled
+same-origin UI but is retained for that split-port workflow.
+
+Deferred follow-ups are packaging the full flavor, supporting
+`create_app(custom_graph)`, and publishing to PyPI.
+
 ## Quick Start with Docker
 
 ### Prerequisites
@@ -127,13 +175,14 @@ Then set `web_rag` tool config with `pdf_parser: "docling"` and `docling_device:
 
 | Variable | Description |
 |----------|-------------|
-| `OPENAI_API_KEY` | Your OpenAI API key (required) |
+| `OPENAI_API_KEY` | OpenAI key required for chat; UI and health work without it |
 | `SERPER_API_KEY` | Serper API key (required for `web_search` in full backend) |
 | `EMBEDDING_PROVIDER` | Full-backend embedding provider (`fastembed` or `openai`) |
 | `EMBEDDING_MODEL` | Optional embedding model override |
 | `RAG_STARTUP_VALIDATION` | Set to `1` to run the network/model-dependent RAG preflight |
 | `NEXT_PUBLIC_API_URL` | Minimal frontend backend URL (optional in Docker) |
 | `NEXT_PUBLIC_API_BASE` | Full frontend backend base URL (optional in Docker) |
+| `MINIMAL_WEB_DIR` | Optional static UI directory override for the minimal backend |
 
 ## Tech Stack
 
