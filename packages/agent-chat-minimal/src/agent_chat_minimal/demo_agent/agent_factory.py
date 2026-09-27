@@ -1,6 +1,6 @@
 """Shared helpers for building provider-agnostic tool agents (#12)."""
 
-from typing import Annotated, TypedDict
+from typing import Annotated, Any, TypedDict
 
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import BaseMessage
@@ -32,8 +32,19 @@ def make_tool_agent(
     model: str | BaseChatModel,
     tools: list,
     system_prompt: str | None = None,
+    checkpointer: Any | None = None,
 ) -> StateGraph:
-    """Build a compiled ``agent <-> tools`` graph for any tool list."""
+    """Build a compiled ``agent <-> tools`` graph for any tool list.
+
+    Args:
+        model: ``provider:name`` spec (see :mod:`docs/providers`) or a chat
+            model instance.
+        tools: LangChain tools bound to the model and served by a ``ToolNode``.
+        system_prompt: Optional system message prepended at invoke time.
+        checkpointer: Optional LangGraph checkpointer (e.g. ``MemorySaver()``).
+            Compiling with one enables per-``thread_id`` persistence: pass
+            ``config={"configurable": {"thread_id": ...}}`` at invoke time.
+    """
     llm = resolve_llm(model).bind_tools(tools)
     tool_node = ToolNode(tools)
 
@@ -53,4 +64,4 @@ def make_tool_agent(
     workflow.set_entry_point("agent")
     workflow.add_conditional_edges("agent", tools_condition)
     workflow.add_edge("tools", "agent")
-    return workflow.compile()
+    return workflow.compile(checkpointer=checkpointer)

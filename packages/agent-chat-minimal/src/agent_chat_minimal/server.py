@@ -1,10 +1,11 @@
 import argparse
+import inspect
 import logging
 import os
 import uuid
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Optional, Protocol, runtime_checkable
 
 import uvicorn
 from assistant_stream_ce import RunController, create_run
@@ -15,7 +16,10 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from langchain_core.messages import HumanMessage
+from pydantic import BaseModel
 from starlette.exceptions import HTTPException as StarletteHTTPException
+
+from .threads import ThreadManager, ThreadMessageStore, ThreadMetadata
 
 
 logger = logging.getLogger(__name__)
@@ -27,7 +31,7 @@ class ChatGraph(Protocol):
     """Minimal contract for a graph servable by ``create_app``.
 
     The graph must accept ``{"messages": [...]}`` as input and support
-    ``astream(input, stream_mode=["messages"], subgraphs=True)`` yielding
+    ``astream(input, config, stream_mode=[...], subgraphs=True)`` yielding
     ``(namespace, event_type, chunk)`` triples consumable by
     ``assistant_stream_ce.modules.langgraph.append_langgraph_event``.
     """
@@ -37,7 +41,14 @@ class ChatGraph(Protocol):
 
 class SPAStaticFiles(StaticFiles):
     async def get_response(self, path, scope):
-        reserved_paths = ("assistant", "agents", "health", "docs", "openapi.json")
+        reserved_paths = (
+            "assistant",
+            "agents",
+            "threads",
+            "health",
+            "docs",
+            "openapi.json",
+        )
         if path in reserved_paths or path.startswith(
             tuple(f"{prefix}/" for prefix in reserved_paths)
         ):
@@ -53,6 +64,27 @@ class SPAStaticFiles(StaticFiles):
         if response.status_code == 404:
             return await super().get_response("index.html", scope)
         return response
+
+
+class ScopedChatRequest(ChatRequest):
+    """Chat request with full-stack thread scoping (same shape as full backend)."""
+
+    thread_id: Optional[str] = None
+    user_id: Optional[str] = "default_user"
+
+
+class CreateThreadBody(BaseModel):
+    localId: str
+    user_id: str = "default_user"
+    title: str = "New Chat"
+
+
+class AppendMessageBody(BaseModel):
+    message: dict[str, Any]
+
+
+class RenameThreadBody(BaseModel):
+    title: str
 
 
 def _legacy_openai_503() -> HTTPException:
@@ -84,23 +116,111 @@ def default_prepare_state(state: dict, request: ChatRequest) -> list:
 def resolve_thread_id(request: ChatRequest) -> str:
     """Derive a persistence thread id from the request (default: "default").
 
-    Looks in ``request.state["thread_id"]`` then ``request.runConfig`` so
-    graphs compiled with a LangGraph checkpointer get stable per-conversation
+    Checks the top-level ``thread_id`` field (full-stack shape), then
+    ``request.state["thread_id"]``, then ``request.runConfig``, so graphs
+    compiled with a LangGraph checkpointer get stable per-conversation
     threads without any client change.
     """
+    top = getattr(request, "thread_id", None)
+    if top and top != "new":
+        return str(top)
     for source in (request.state, request.runConfig):
         if isinstance(source, dict) and source.get("thread_id"):
-            return str(source["thread_id"])
+            thread_id = str(source["thread_id"])
+            if thread_id != "new":
+                return thread_id
     return "default"
+
+
+def _append_tool_update(state: dict[str, Any], payload: Any) -> None:
+    updates = state.get("tool_updates")
+    if not isinstance(updates, list):
+        updates = []
+    updates.append(payload)
+    state["tool_updates"] = updates[-200:]
+
+
+def _append_updates_from_graph_chunk(state: dict[str, Any], chunk: Any) -> None:
+    if not isinstance(chunk, dict):
+        return
+    for node_name, node_payload in chunk.items():
+        if not isinstance(node_payload, dict):
+            continue
+        messages = node_payload.get("messages")
+        if not isinstance(messages, list):
+            continue
+        for msg in messages:
+            msg_type = getattr(msg, "type", None)
+            if node_name == "agent" and msg_type == "ai":
+                for call in getattr(msg, "tool_calls", []) or []:
+                    _append_tool_update(
+                        state,
+                        {
+                            "tool": call.get("name"),
+                            "tool_call_id": call.get("id"),
+                            "status": "requested",
+                        },
+                    )
+            if node_name == "tools" and msg_type == "tool":
+                _append_tool_update(
+                    state,
+                    {
+                        "tool": getattr(msg, "name", None),
+                        "tool_call_id": getattr(msg, "tool_call_id", None),
+                        "status": "completed",
+                    },
+                )
+
+
+def _sanitize_langchain_message_history(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Drop AI messages with tool_calls lacking matching ToolMessages.
+
+    A failed tool invocation can leave history invalid for providers
+    (``INVALID_CHAT_HISTORY``); the full backend applies the same guard.
+    """
+    tool_message_ids = {
+        m.get("tool_call_id")
+        for m in messages
+        if isinstance(m, dict) and m.get("type") == "tool" and m.get("tool_call_id")
+    }
+    sanitized: list[dict[str, Any]] = []
+    dropped = 0
+    for msg in messages:
+        if not isinstance(msg, dict) or msg.get("type") != "ai":
+            sanitized.append(msg)
+            continue
+        tool_calls = msg.get("tool_calls") or []
+        if not tool_calls:
+            sanitized.append(msg)
+            continue
+        call_ids = [tc.get("id") for tc in tool_calls if isinstance(tc, dict)]
+        if call_ids and all(cid in tool_message_ids for cid in call_ids):
+            sanitized.append(msg)
+            continue
+        dropped += 1
+    if dropped:
+        logger.warning(
+            "Dropped %s invalid AI message(s) with unresolved tool_calls", dropped
+        )
+    return sanitized
+
+
+def _default_checkpointer() -> Any:
+    from langgraph.checkpoint.memory import MemorySaver
+
+    return MemorySaver()
 
 
 def create_app(
     graph: ChatGraph | None = None,
-    graph_factory: Callable[[], ChatGraph | None] | None = None,
-    agents: dict[str, Callable[[], ChatGraph | None]] | None = None,
+    graph_factory: Callable[..., ChatGraph | None] | None = None,
+    agents: dict[str, Callable[..., ChatGraph | None]] | None = None,
     default_agent: str = "weather",
     web_dir: Path | None = None,
     prepare_state: Callable[[dict, ChatRequest], list] | None = None,
+    checkpointer: Any | None = "memory",
+    thread_manager: ThreadManager | None = None,
+    message_store: ThreadMessageStore | None = None,
 ) -> FastAPI:
     """Create the FastAPI app serving LangGraph agent(s).
 
@@ -115,23 +235,49 @@ def create_app(
         ``POST /assistant/{agent_id}``, with ``POST /assistant`` aliasing
         ``default_agent``. Pass ``agents={...}`` to override.
 
+    Full-stack threads:
+        ``GET/POST /threads``, ``GET/PATCH/DELETE /threads/{id}``,
+        ``POST /threads/{id}/archive|unarchive`` and
+        ``GET/POST /threads/{id}/messages`` mirror the full backend, so
+        ``frontend-full`` works against either server. ``POST /assistant``
+        accepts the scoped shape (``thread_id``/``user_id`` alongside
+        ``commands``/``state``) and auto-creates missing thread metadata.
+
     Args:
         graph: Already-compiled graph (single-agent mode).
-        graph_factory: Zero-arg factory (single-agent mode, deferred build).
+        graph_factory: Factory building the graph (single-agent mode, deferred
+            build). Receives ``checkpointer=`` when its signature accepts it.
         agents: Mapping of name -> factory (multi-agent mode).
         default_agent: Name aliased by ``POST /assistant``.
         web_dir: Override for the bundled static UI directory.
         prepare_state: ``(state, request) -> message dicts`` reducer hook;
             defaults to :func:`default_prepare_state`.
+        checkpointer: Shared LangGraph checkpointer passed to factories that
+            accept a ``checkpointer`` kwarg. ``"memory"`` (default) builds one
+            ``MemorySaver``; pass an instance, or ``None`` to disable.
+        thread_manager: Override the in-memory thread registry (tests).
+        message_store: Override the assistant-ui message store (tests).
     """
     from .registry import discover_agents
 
     openai_api_key = os.getenv("OPENAI_API_KEY")
     single_mode = graph is not None or graph_factory is not None
 
+    if checkpointer == "memory":
+        checkpointer = _default_checkpointer()
+
+    def call_factory(factory: Callable[..., Any]) -> Any:
+        try:
+            params = inspect.signature(factory).parameters
+        except (TypeError, ValueError):
+            return factory()
+        if checkpointer is not None and "checkpointer" in params:
+            return factory(checkpointer=checkpointer)
+        return factory()
+
     if single_mode:
         if graph is not None:
-            factories: dict[str, Callable[[], Any]] = {
+            factories: dict[str, Callable[..., Any]] = {
                 "default": lambda: graph
             }
         else:
@@ -150,6 +296,9 @@ def create_app(
                 "OPENAI_API_KEY is not set; the /assistant endpoint will return 503."
             )
 
+    threads = thread_manager or ThreadManager()
+    messages = message_store or ThreadMessageStore()
+
     built: dict[str, Any] = {}
     build_errors: dict[str, str] = {}
 
@@ -160,7 +309,7 @@ def create_app(
         if factory is None:
             return None
         try:
-            instance = factory()
+            instance = call_factory(factory)
         except Exception as exc:
             build_errors[name] = str(exc)
             logger.warning("agent factory %r failed: %s", name, exc)
@@ -177,7 +326,7 @@ def create_app(
     if single_mode:
         try:
             assert factories["default"] is not None
-            inst = factories["default"]()
+            inst = call_factory(factories["default"])
             if inst is None:
                 eager_error = "factory returned None"
             else:
@@ -194,6 +343,7 @@ def create_app(
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
+        expose_headers=["x-thread-id", "Content-Disposition", "X-Suggested-Filename"],
     )
 
     @app.get("/health")
@@ -204,7 +354,100 @@ def create_app(
     async def list_agents():
         return {"agents": sorted(factories.keys()), "default": default_agent}
 
-    async def run_assistant(request: ChatRequest, agent_id: str):
+    # --- Threads (full-stack compatible) ---
+
+    @app.get("/threads", response_model=list[ThreadMetadata])
+    async def get_threads(user_id: str = "default_user", include_archived: bool = False):
+        return list(reversed(threads.list_user_threads(user_id, include_archived)))
+
+    @app.post("/threads", response_model=ThreadMetadata)
+    async def create_thread(body: CreateThreadBody):
+        existing = threads.get(body.localId)
+        if existing:
+            return existing
+        return threads.create_thread(body.user_id, title=body.title, thread_id=body.localId)
+
+    @app.get("/threads/{thread_id}", response_model=ThreadMetadata)
+    async def fetch_thread(thread_id: str):
+        thread = threads.get(thread_id)
+        if not thread:
+            raise HTTPException(status_code=404, detail="Thread not found")
+        return thread
+
+    @app.patch("/threads/{thread_id}", response_model=ThreadMetadata)
+    async def rename_thread(thread_id: str, body: RenameThreadBody):
+        thread = threads.get(thread_id)
+        if not thread:
+            raise HTTPException(status_code=404, detail="Thread not found")
+        new_title = (body.title or "").strip()
+        if not new_title:
+            raise HTTPException(status_code=400, detail="title must not be empty")
+        threads.update_title(thread_id, new_title)
+        updated = threads.get(thread_id)
+        if not updated:
+            raise HTTPException(status_code=404, detail="Thread not found")
+        return updated
+
+    @app.post("/threads/{thread_id}/archive", response_model=ThreadMetadata)
+    async def archive_thread(thread_id: str):
+        thread = threads.get(thread_id)
+        if not thread:
+            raise HTTPException(status_code=404, detail="Thread not found")
+        threads.archive(thread_id)
+        updated = threads.get(thread_id)
+        if not updated:
+            raise HTTPException(status_code=404, detail="Thread not found")
+        return updated
+
+    @app.post("/threads/{thread_id}/unarchive", response_model=ThreadMetadata)
+    async def unarchive_thread(thread_id: str):
+        thread = threads.get(thread_id)
+        if not thread:
+            raise HTTPException(status_code=404, detail="Thread not found")
+        threads.unarchive(thread_id)
+        updated = threads.get(thread_id)
+        if not updated:
+            raise HTTPException(status_code=404, detail="Thread not found")
+        return updated
+
+    @app.delete("/threads/{thread_id}")
+    async def delete_thread(thread_id: str):
+        thread = threads.get(thread_id)
+        if not thread:
+            raise HTTPException(status_code=404, detail="Thread not found")
+        threads.delete(thread_id)
+        messages.drop(thread_id)
+        return {"ok": True}
+
+    @app.get("/threads/{thread_id}/messages")
+    async def get_thread_messages(thread_id: str):
+        """Persisted assistant-ui messages, else checkpointer fallback."""
+        persisted = messages.list(thread_id)
+        if persisted:
+            return {"messages": persisted}
+        instance = get_or_build(default_agent)
+        if instance is not None and hasattr(instance, "get_state"):
+            try:
+                import asyncio
+
+                config = {"configurable": {"thread_id": thread_id}}
+                state = await asyncio.to_thread(instance.get_state, config)
+                if state and "messages" in (state.values or {}):
+                    return {
+                        "messages": [
+                            m.model_dump() for m in state.values["messages"]
+                        ]
+                    }
+            except Exception as exc:
+                logger.debug("checkpointer fallback failed: %s", exc)
+        return {"messages": []}
+
+    @app.post("/threads/{thread_id}/messages")
+    async def append_thread_message(thread_id: str, body: AppendMessageBody):
+        messages.append(thread_id, body.message)
+        return {"ok": True}
+
+    async def run_assistant(request: ScopedChatRequest, agent_id: str):
         if agent_id not in factories:
             raise HTTPException(
                 status_code=404,
@@ -243,21 +486,53 @@ def create_app(
                 },
             )
 
+        user_id = request.user_id or "default_user"
+        thread_id = request.thread_id
+        if (not thread_id or thread_id == "new") and isinstance(request.state, dict):
+            thread_id = request.state.get("thread_id")
+        if not thread_id or thread_id == "new":
+            thread_id = str(uuid.uuid4())
+        if not threads.get(thread_id):
+            threads.create_thread(user_id, title="New Chat", thread_id=thread_id)
+        config = {"configurable": {"thread_id": thread_id}}
+
         reducer = prepare_state or default_prepare_state
 
         async def run_callback(controller: RunController):
             if controller.state is None:
                 controller.state = {"messages": []}
+            if "tool_updates" not in controller.state:
+                controller.state["tool_updates"] = []
 
-            controller.state["messages"] = reducer(controller.state, request)
-            thread_id = resolve_thread_id(request)
+            controller.state["messages"] = _sanitize_langchain_message_history(
+                reducer(controller.state, request)
+            )
             input_message = {"messages": list(controller.state["messages"])}
             async for namespace, event_type, chunk in instance.astream(
                 input_message,
-                config={"configurable": {"thread_id": thread_id}},
-                stream_mode=["messages"],
+                config=config,
+                stream_mode=["messages", "updates", "custom"],
                 subgraphs=True,
             ):
+                if event_type == "custom":
+                    _append_tool_update(controller.state, chunk)
+                    continue
+                if event_type == "updates":
+                    _append_updates_from_graph_chunk(controller.state, chunk)
+                if event_type == "messages":
+                    try:
+                        msg = chunk[0]
+                        if getattr(msg, "type", None) == "tool":
+                            _append_tool_update(
+                                controller.state,
+                                {
+                                    "tool": getattr(msg, "name", None),
+                                    "tool_call_id": getattr(msg, "tool_call_id", None),
+                                    "status": "completed",
+                                },
+                            )
+                    except Exception:
+                        pass
                 append_langgraph_event(
                     controller.state, namespace, event_type, chunk
                 )
@@ -266,11 +541,11 @@ def create_app(
         return DataStreamResponse(stream)
 
     @app.post("/assistant")
-    async def chat_endpoint(request: ChatRequest):
+    async def chat_endpoint(request: ScopedChatRequest):
         return await run_assistant(request, default_agent)
 
     @app.post("/assistant/{agent_id}")
-    async def chat_endpoint_for_agent(agent_id: str, request: ChatRequest):
+    async def chat_endpoint_for_agent(agent_id: str, request: ScopedChatRequest):
         return await run_assistant(request, agent_id)
 
     resolved_web_dir = Path(

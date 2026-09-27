@@ -18,16 +18,20 @@ logger = logging.getLogger(__name__)
 ENTRY_POINTS_GROUP = "agent_chat.agents"
 
 
-def _weather_factory() -> Any:
+def _weather_factory(checkpointer: Any = None) -> Any:
     from .demo_agent.get_graph import make_agent_with_weather_tool
 
-    return make_agent_with_weather_tool(os.getenv("MODEL", "openai:gpt-4o-mini"))
+    return make_agent_with_weather_tool(
+        os.getenv("MODEL", "openai:gpt-4o-mini"), checkpointer=checkpointer
+    )
 
 
-def _calculator_factory() -> Any:
+def _calculator_factory(checkpointer: Any = None) -> Any:
     from .demo_agent.calculator import make_calculator_agent
 
-    return make_calculator_agent(os.getenv("MODEL", "openai:gpt-4o-mini"))
+    return make_calculator_agent(
+        os.getenv("MODEL", "openai:gpt-4o-mini"), checkpointer=checkpointer
+    )
 
 
 AGENT_REGISTRY: dict[str, Callable[[], Any]] = {
