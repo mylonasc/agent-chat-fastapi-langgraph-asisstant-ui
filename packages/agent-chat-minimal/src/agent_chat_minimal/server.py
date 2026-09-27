@@ -37,7 +37,7 @@ class ChatGraph(Protocol):
 
 class SPAStaticFiles(StaticFiles):
     async def get_response(self, path, scope):
-        reserved_paths = ("assistant", "health", "docs", "openapi.json")
+        reserved_paths = ("assistant", "agents", "health", "docs", "openapi.json")
         if path in reserved_paths or path.startswith(
             tuple(f"{prefix}/" for prefix in reserved_paths)
         ):
@@ -55,55 +55,106 @@ class SPAStaticFiles(StaticFiles):
         return response
 
 
-def _default_graph_factory() -> Any | None:
-    """Legacy behavior: weather demo if credentials allow, else None."""
-    from .demo_agent.get_graph import make_agent_with_weather_tool
-
-    model = os.getenv("MODEL", "gpt-4o-mini")
-    try:
-        return make_agent_with_weather_tool(model)
-    except Exception as exc:  # e.g. missing credentials at import/startup
-        logger.warning("Default agent failed to build: %s", exc)
-        return None
+def _legacy_openai_503() -> HTTPException:
+    return HTTPException(
+        status_code=503,
+        detail={
+            "error": "OPENAI_API_KEY not configured",
+            "message": "Please set the OPENAI_API_KEY environment variable to use the chat functionality.",
+            "instructions": "Add OPENAI_API_KEY=your-key to your .env file and restart the server.",
+        },
+    )
 
 
 def create_app(
     graph: ChatGraph | None = None,
     graph_factory: Callable[[], ChatGraph | None] | None = None,
+    agents: dict[str, Callable[[], ChatGraph | None]] | None = None,
+    default_agent: str = "weather",
     web_dir: Path | None = None,
 ) -> FastAPI:
-    """Create the FastAPI app serving a LangGraph agent.
+    """Create the FastAPI app serving LangGraph agent(s).
+
+    Single-agent override (takes precedence):
+        ``create_app(graph=my_graph)`` or
+        ``create_app(graph_factory=make_my_agent)`` serves one agent as both
+        ``POST /assistant`` and ``GET /agents == ["default"]``.
+
+    Multi-agent registry (default):
+        ``create_app()`` serves the built-in registry (``weather`` +
+        ``calculator`` plus ``agent_chat.agents`` entry points) at
+        ``POST /assistant/{agent_id}``, with ``POST /assistant`` aliasing
+        ``default_agent``. Pass ``agents={...}`` to override.
 
     Args:
-        graph: Already-compiled graph. Takes precedence over ``graph_factory``.
-        graph_factory: Zero-arg callable building the graph. Deferred so
-            missing credentials fail at startup, not import. When neither
-            ``graph`` nor ``graph_factory`` is given, the legacy weather demo
-            is built when possible, else ``/assistant`` returns 503.
+        graph: Already-compiled graph (single-agent mode).
+        graph_factory: Zero-arg factory (single-agent mode, deferred build).
+        agents: Mapping of name -> factory (multi-agent mode).
+        default_agent: Name aliased by ``POST /assistant``.
         web_dir: Override for the bundled static UI directory.
     """
+    from .registry import discover_agents
+
     openai_api_key = os.getenv("OPENAI_API_KEY")
-    factory_error: str | None = None
-    using_default = graph is None and graph_factory is None
+    single_mode = graph is not None or graph_factory is not None
 
-    if graph is None and graph_factory is not None:
-        try:
-            graph = graph_factory()
-        except Exception as exc:
-            factory_error = str(exc)
-            logger.warning("graph_factory failed: %s", exc)
-            graph = None
-
-    if using_default:
+    if single_mode:
+        if graph is not None:
+            factories: dict[str, Callable[[], Any]] = {
+                "default": lambda: graph
+            }
+        else:
+            assert graph_factory is not None
+            factories = {"default": graph_factory}
+        default_agent = "default"
+        legacy_default = False
+    elif agents is not None:
+        factories = dict(agents)
+        legacy_default = False
+    else:
+        factories = discover_agents()
+        legacy_default = True
         if not openai_api_key:
             logger.warning(
                 "OPENAI_API_KEY is not set; the /assistant endpoint will return 503."
             )
-            graph = None
-        else:
-            graph = _default_graph_factory()
-            if graph is None:
-                factory_error = "default weather agent failed to build"
+
+    built: dict[str, Any] = {}
+    build_errors: dict[str, str] = {}
+
+    def get_or_build(name: str) -> Any | None:
+        if name in built:
+            return built[name]
+        factory = factories.get(name)
+        if factory is None:
+            return None
+        try:
+            instance = factory()
+        except Exception as exc:
+            build_errors[name] = str(exc)
+            logger.warning("agent factory %r failed: %s", name, exc)
+            return None
+        if instance is None:
+            build_errors[name] = "factory returned None"
+            return None
+        built[name] = instance
+        return instance
+
+    # Eagerly build the single-agent override so startup (not first request)
+    # surfaces factory errors; registry mode stays lazy per agent.
+    eager_error: str | None = None
+    if single_mode:
+        try:
+            assert factories["default"] is not None
+            inst = factories["default"]()
+            if inst is None:
+                eager_error = "factory returned None"
+            else:
+                built["default"] = inst
+        except Exception as exc:
+            eager_error = str(exc)
+            logger.warning("graph_factory failed: %s", exc)
+
     app = FastAPI()
     app.add_middleware(
         CORSMiddleware,
@@ -118,24 +169,46 @@ def create_app(
     async def health():
         return {"status": "ok"}
 
-    @app.post("/assistant")
-    async def chat_endpoint(request: ChatRequest):
-        if graph is None:
-            if using_default and not openai_api_key:
+    @app.get("/agents")
+    async def list_agents():
+        return {"agents": sorted(factories.keys()), "default": default_agent}
+
+    async def run_assistant(request: ChatRequest, agent_id: str):
+        if agent_id not in factories:
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "error": "unknown_agent",
+                    "message": f"Unknown agent {agent_id!r}.",
+                    "hint": f"Available: {sorted(factories.keys())}",
+                },
+            )
+        if (
+            legacy_default
+            and agent_id == default_agent
+            and agent_id == "weather"
+            and not openai_api_key
+        ):
+            raise _legacy_openai_503()
+
+        instance = get_or_build(agent_id)
+        if instance is None:
+            err = build_errors.get(agent_id) or eager_error
+            if single_mode:
                 raise HTTPException(
                     status_code=503,
                     detail={
-                        "error": "OPENAI_API_KEY not configured",
-                        "message": "Please set the OPENAI_API_KEY environment variable to use the chat functionality.",
-                        "instructions": "Add OPENAI_API_KEY=your-key to your .env file and restart the server.",
+                        "error": "agent_not_ready",
+                        "message": "No graph was provided or the factory failed.",
+                        "hint": err or "Pass graph= or graph_factory= to create_app().",
                     },
                 )
             raise HTTPException(
                 status_code=503,
                 detail={
                     "error": "agent_not_ready",
-                    "message": "No graph was provided or the factory failed.",
-                    "hint": factory_error or "Pass graph= or graph_factory= to create_app().",
+                    "message": f"Agent {agent_id!r} failed to build.",
+                    "hint": err or "Check provider credentials / MODEL env.",
                 },
             )
 
@@ -156,7 +229,7 @@ def create_app(
                         controller.state["messages"].append(message.model_dump())
 
             input_message = {"messages": list(controller.state["messages"])}
-            async for namespace, event_type, chunk in graph.astream(
+            async for namespace, event_type, chunk in instance.astream(
                 input_message,
                 stream_mode=["messages"],
                 subgraphs=True,
@@ -167,6 +240,14 @@ def create_app(
 
         stream = create_run(run_callback, state=request.state)
         return DataStreamResponse(stream)
+
+    @app.post("/assistant")
+    async def chat_endpoint(request: ChatRequest):
+        return await run_assistant(request, default_agent)
+
+    @app.post("/assistant/{agent_id}")
+    async def chat_endpoint_for_agent(agent_id: str, request: ChatRequest):
+        return await run_assistant(request, agent_id)
 
     resolved_web_dir = Path(
         web_dir or os.getenv("MINIMAL_WEB_DIR", DEFAULT_WEB_DIR)
@@ -194,5 +275,35 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description="Serve the minimal chat application")
     parser.add_argument("--host", default="0.0.0.0")
     parser.add_argument("--port", type=int, default=8011)
+    parser.add_argument(
+        "--model",
+        default=None,
+        help="Model spec, e.g. openai:gpt-4o-mini (sets MODEL env)",
+    )
+    parser.add_argument(
+        "--agent",
+        default=None,
+        help="Default agent id for POST /assistant (sets DEFAULT_AGENT env)",
+    )
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="Build the default agent graph and exit (smoke check)",
+    )
     args = parser.parse_args(argv)
-    uvicorn.run(create_app(), host=args.host, port=args.port)
+    if args.model:
+        os.environ["MODEL"] = args.model
+    default_agent = args.agent or os.getenv("DEFAULT_AGENT", "weather")
+    if args.check:
+        from .registry import discover_agents
+
+        factories = discover_agents()
+        factory = factories.get(default_agent)
+        if factory is None:
+            raise SystemExit(f"unknown agent {default_agent!r}")
+        factory()
+        print(f"agent {default_agent!r} built OK")
+        return
+    uvicorn.run(
+        create_app(default_agent=default_agent), host=args.host, port=args.port
+    )

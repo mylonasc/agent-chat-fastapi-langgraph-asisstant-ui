@@ -27,6 +27,10 @@ test = [
 [project.scripts]
 minimal-chat-serve = "agent_chat_minimal.server:main"
 
+# Third-party agents register here, e.g.
+# [project.entry-points."agent_chat.agents"]
+# my_agent = "my_package.my_module:make_my_agent"
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/agent_chat_minimal"]
 
