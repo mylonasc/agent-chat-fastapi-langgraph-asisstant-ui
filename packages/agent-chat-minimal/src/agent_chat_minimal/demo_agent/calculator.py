@@ -44,6 +44,9 @@ CALCULATOR_SYSTEM_PROMPT = (
 
 def make_calculator_agent(
     model: str | BaseChatModel = "openai:gpt-4o-mini",
+    checkpointer=None,
 ) -> StateGraph:
     """Build the calculator agent for any provider model spec/instance."""
-    return make_tool_agent(model, list(CALCULATOR_TOOLS), CALCULATOR_SYSTEM_PROMPT)
+    return make_tool_agent(
+        model, list(CALCULATOR_TOOLS), CALCULATOR_SYSTEM_PROMPT, checkpointer
+    )

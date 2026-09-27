@@ -19,6 +19,7 @@ def get_weather(city: str):
 
 def make_agent_with_weather_tool(
     model: str | BaseChatModel = "openai:gpt-4o-mini",
+    checkpointer=None,
 ) -> StateGraph:
     """Build the weather demo agent for any provider model spec/instance.
 
@@ -31,4 +32,4 @@ def make_agent_with_weather_tool(
     if model == "gpt-4o-mini":  # backward compat: bare legacy default
         model = "openai:gpt-4o-mini"
     tools = [get_weather, render_graph]
-    return make_tool_agent(model, tools)
+    return make_tool_agent(model, tools, checkpointer=checkpointer)

@@ -25,7 +25,7 @@ def test_resolve_llm_passes_instance_through():
 def test_legacy_bare_name_maps_to_openai_spec(monkeypatch):
     seen = {}
 
-    def fake_make_tool_agent(model, tools):
+    def fake_make_tool_agent(model, tools, checkpointer=None):
         seen["model"] = model
         return object()
 
