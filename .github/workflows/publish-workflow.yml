@@ -1,15 +1,17 @@
 name: publish-workflow.yml
 
-# Publishes packages/agent-chat-minimal to PyPI via PyPI Trusted Publishing
+# Publishes packages/agent-chat-minimal to PyPI as
+# `agent-chat-fastapi-langgraph-assistant-ui` via PyPI Trusted Publishing
 # (OIDC) - no API token is stored in GitHub. The repo must be registered as a
-# trusted publisher for the `agent-chat-minimal` PyPI project with workflow
-# filename `publish-workflow.yml`.
+# trusted publisher for the `agent-chat-fastapi-langgraph-assistant-ui` PyPI
+# project with workflow filename `publish-workflow.yml`.
 #
 # Release flow:
 #   1. (Maintainer) bump `version` in packages/agent-chat-minimal/pyproject.toml
 #      (and `__version__` in src/agent_chat_minimal/__init__.py to match).
-#   2. Publish a GitHub Release, ideally tagged `agent-chat-minimal-vX.Y.Z`
-#      matching the bumped version - the workflow fails fast on mismatch.
+#   2. Publish a GitHub Release, ideally tagged
+#      `agent-chat-fastapi-langgraph-assistant-ui-vX.Y.Z` matching the bumped
+#      version - the workflow fails fast on mismatch.
 #   3. This workflow rebuilds the frontend static export (Node/pnpm are
 #      CI-only; people installing from PyPI need Python only), runs the
 #      offline serving tests, builds the sdist + wheel, and uploads them.
@@ -78,13 +80,13 @@ jobs:
           tag="${{ github.event.release.tag_name }}"
           echo "package version: $version"
           echo "release tag: $tag"
-          if [[ "$tag" == agent-chat-minimal-v* ]]; then
-            if [[ "${tag#agent-chat-minimal-v}" != "$version" ]]; then
+          if [[ "$tag" == agent-chat-fastapi-langgraph-assistant-ui-v* ]]; then
+            if [[ "${tag#agent-chat-fastapi-langgraph-assistant-ui-v}" != "$version" ]]; then
               echo "::error::Release tag $tag does not match pyproject version $version"
               exit 1
             fi
           else
-            echo "Tag does not follow agent-chat-minimal-vX.Y.Z; skipping strict check."
+            echo "Tag does not follow agent-chat-fastapi-langgraph-assistant-ui-vX.Y.Z; skipping strict check."
           fi
 
       - name: Install package with test extras
