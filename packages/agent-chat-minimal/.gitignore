@@ -1,3 +1,5 @@
 /dist/
 /src/agent_chat_minimal/web/*
 !/src/agent_chat_minimal/web/.gitkeep
+/src/agent_chat_minimal/web_full/*
+!/src/agent_chat_minimal/web_full/.gitkeep
