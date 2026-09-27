@@ -2,7 +2,9 @@ import argparse
 import logging
 import os
 import uuid
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any, Protocol, runtime_checkable
 
 import uvicorn
 from assistant_stream_ce import RunController, create_run
@@ -15,11 +17,22 @@ from fastapi.staticfiles import StaticFiles
 from langchain_core.messages import HumanMessage
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from .demo_agent.get_graph import make_agent_with_weather_tool
-
 
 logger = logging.getLogger(__name__)
 DEFAULT_WEB_DIR = Path(__file__).parent / "web"
+
+
+@runtime_checkable
+class ChatGraph(Protocol):
+    """Minimal contract for a graph servable by ``create_app``.
+
+    The graph must accept ``{"messages": [...]}`` as input and support
+    ``astream(input, stream_mode=["messages"], subgraphs=True)`` yielding
+    ``(namespace, event_type, chunk)`` triples consumable by
+    ``assistant_stream_ce.modules.langgraph.append_langgraph_event``.
+    """
+
+    def astream(self, *args: Any, **kwargs: Any) -> Any: ...
 
 
 class SPAStaticFiles(StaticFiles):
@@ -42,14 +55,55 @@ class SPAStaticFiles(StaticFiles):
         return response
 
 
-def create_app(web_dir: Path | None = None) -> FastAPI:
-    openai_api_key = os.getenv("OPENAI_API_KEY")
-    if not openai_api_key:
-        logger.warning(
-            "OPENAI_API_KEY is not set; the /assistant endpoint will return 503."
-        )
+def _default_graph_factory() -> Any | None:
+    """Legacy behavior: weather demo if credentials allow, else None."""
+    from .demo_agent.get_graph import make_agent_with_weather_tool
 
-    graph = make_agent_with_weather_tool("gpt-4o-mini") if openai_api_key else None
+    model = os.getenv("MODEL", "gpt-4o-mini")
+    try:
+        return make_agent_with_weather_tool(model)
+    except Exception as exc:  # e.g. missing credentials at import/startup
+        logger.warning("Default agent failed to build: %s", exc)
+        return None
+
+
+def create_app(
+    graph: ChatGraph | None = None,
+    graph_factory: Callable[[], ChatGraph | None] | None = None,
+    web_dir: Path | None = None,
+) -> FastAPI:
+    """Create the FastAPI app serving a LangGraph agent.
+
+    Args:
+        graph: Already-compiled graph. Takes precedence over ``graph_factory``.
+        graph_factory: Zero-arg callable building the graph. Deferred so
+            missing credentials fail at startup, not import. When neither
+            ``graph`` nor ``graph_factory`` is given, the legacy weather demo
+            is built when possible, else ``/assistant`` returns 503.
+        web_dir: Override for the bundled static UI directory.
+    """
+    openai_api_key = os.getenv("OPENAI_API_KEY")
+    factory_error: str | None = None
+    using_default = graph is None and graph_factory is None
+
+    if graph is None and graph_factory is not None:
+        try:
+            graph = graph_factory()
+        except Exception as exc:
+            factory_error = str(exc)
+            logger.warning("graph_factory failed: %s", exc)
+            graph = None
+
+    if using_default:
+        if not openai_api_key:
+            logger.warning(
+                "OPENAI_API_KEY is not set; the /assistant endpoint will return 503."
+            )
+            graph = None
+        else:
+            graph = _default_graph_factory()
+            if graph is None:
+                factory_error = "default weather agent failed to build"
     app = FastAPI()
     app.add_middleware(
         CORSMiddleware,
@@ -66,17 +120,24 @@ def create_app(web_dir: Path | None = None) -> FastAPI:
 
     @app.post("/assistant")
     async def chat_endpoint(request: ChatRequest):
-        if not openai_api_key:
+        if graph is None:
+            if using_default and not openai_api_key:
+                raise HTTPException(
+                    status_code=503,
+                    detail={
+                        "error": "OPENAI_API_KEY not configured",
+                        "message": "Please set the OPENAI_API_KEY environment variable to use the chat functionality.",
+                        "instructions": "Add OPENAI_API_KEY=your-key to your .env file and restart the server.",
+                    },
+                )
             raise HTTPException(
                 status_code=503,
                 detail={
-                    "error": "OPENAI_API_KEY not configured",
-                    "message": "Please set the OPENAI_API_KEY environment variable to use the chat functionality.",
-                    "instructions": "Add OPENAI_API_KEY=your-key to your .env file and restart the server.",
+                    "error": "agent_not_ready",
+                    "message": "No graph was provided or the factory failed.",
+                    "hint": factory_error or "Pass graph= or graph_factory= to create_app().",
                 },
             )
-
-        assert graph is not None
 
         async def run_callback(controller: RunController):
             if controller.state is None:
