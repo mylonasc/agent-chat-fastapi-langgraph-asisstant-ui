@@ -27,9 +27,14 @@ Installation and runtime require only Python 3.11 or newer:
 ```bash
 python3 -m venv .venv-minimal
 .venv-minimal/bin/pip install packages/agent-chat-minimal/dist/*.whl
-export OPENAI_API_KEY=sk-...
 .venv-minimal/bin/minimal-chat-serve --host 127.0.0.1 --port 8011
 ```
+
+No API key is needed: the packaged app serves its local demo agent, the
+static UI, `/health`, and `/assistant` with zero configuration. To use a
+custom agent instead, see "Creating a compatible agent" in
+`packages/agent-chat-minimal/README.md` (`create_app(graph_factory=...)` or
+`MINIMAL_AGENT_FACTORY`).
 
 Open <http://localhost:8011/>. The same process serves the static UI,
 `/health`, and `/assistant`. You can also run it as:
@@ -50,17 +55,15 @@ docker build -t agent-chat-minimal packages/agent-chat-minimal
 docker run --rm -p 8011:8011 agent-chat-minimal
 ```
 
-If `/assistant` returns 503, set `OPENAI_API_KEY` and restart. Re-run the build
-script to replace stale bundled `web/` files. `MINIMAL_WEB_DIR` can point at an
-alternate static export for testing.
+Re-run the build script to replace stale bundled `web/` files.
+`MINIMAL_WEB_DIR` can point at an alternate static export for testing.
 
 `application/backend/langgraph-server-minimal/` remains the development source
 rather than a shim, and `docker-compose.minimal.yml` remains the split-port
 development flow. Its permissive CORS policy is redundant for the bundled
 same-origin UI but is retained for that split-port workflow.
 
-Deferred follow-ups are packaging the full flavor, supporting
-`create_app(custom_graph)`, and publishing to PyPI.
+Deferred follow-ups are packaging the full flavor.
 
 ## Quick Start with Docker
 
@@ -175,7 +178,7 @@ Then set `web_rag` tool config with `pdf_parser: "docling"` and `docling_device:
 
 | Variable | Description |
 |----------|-------------|
-| `OPENAI_API_KEY` | OpenAI key required for chat; UI and health work without it |
+| `OPENAI_API_KEY` | OpenAI key (full backend chat; optional OpenAI demo agent for the packaged app — see `MINIMAL_AGENT_FACTORY` — otherwise not needed) |
 | `SERPER_API_KEY` | Serper API key (required for `web_search` in full backend) |
 | `EMBEDDING_PROVIDER` | Full-backend embedding provider (`fastembed` or `openai`) |
 | `EMBEDDING_MODEL` | Optional embedding model override |
@@ -183,9 +186,11 @@ Then set `web_rag` tool config with `pdf_parser: "docling"` and `docling_device:
 | `NEXT_PUBLIC_API_URL` | Minimal frontend backend URL (optional in Docker) |
 | `NEXT_PUBLIC_API_BASE` | Full frontend backend base URL (optional in Docker) |
 | `MINIMAL_WEB_DIR` | Optional static UI directory override for the minimal backend |
+| `MINIMAL_AGENT_FACTORY` | Optional `package.module:factory` for a custom minimal-backend agent |
 
 ## Tech Stack
 
 - **Backend**: FastAPI, LangGraph, Assistant Stream CE
 - **Frontend**: Next.js 16, Assistant UI, Tailwind CSS
-- **LLM**: OpenAI (GPT-4o-mini by default)
+- **LLM**: OpenAI (full backend; GPT-4o-mini by default). The packaged
+  minimal app serves a local key-free demo agent by default.

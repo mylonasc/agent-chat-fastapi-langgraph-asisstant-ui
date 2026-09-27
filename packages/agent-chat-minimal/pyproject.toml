@@ -29,6 +29,9 @@ minimal-chat-serve = "agent_chat_minimal.server:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/agent_chat_minimal"]
+# The placeholder below would otherwise be added twice: once via `packages`
+# and once via `force-include`, which aborts the build.
+exclude = ["src/agent_chat_minimal/web/.gitkeep"]
 
 [tool.hatch.build.targets.wheel.force-include]
 "src/agent_chat_minimal/web" = "agent_chat_minimal/web"

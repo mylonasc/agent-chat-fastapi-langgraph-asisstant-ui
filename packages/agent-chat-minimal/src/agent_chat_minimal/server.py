@@ -1,21 +1,23 @@
 import argparse
+import importlib
 import logging
 import os
 import uuid
 from pathlib import Path
+from typing import Callable
 
 import uvicorn
 from assistant_stream_ce import RunController, create_run
 from assistant_stream_ce.assistant_stream_models import ChatRequest
 from assistant_stream_ce.modules.langgraph import append_langgraph_event
 from assistant_stream_ce.serialization import DataStreamResponse
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from langchain_core.messages import HumanMessage
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from .demo_agent.get_graph import make_agent_with_weather_tool
+from .demo_agent.local_agent import make_local_agent
 
 
 logger = logging.getLogger(__name__)
@@ -42,14 +44,62 @@ class SPAStaticFiles(StaticFiles):
         return response
 
 
-def create_app(web_dir: Path | None = None) -> FastAPI:
-    openai_api_key = os.getenv("OPENAI_API_KEY")
-    if not openai_api_key:
-        logger.warning(
-            "OPENAI_API_KEY is not set; the /assistant endpoint will return 503."
+def _load_factory(path: str) -> Callable[[], object]:
+    """Import a ``package.module:factory`` (or ``package.module.factory``) path."""
+    module_name, _, attr = path.partition(":")
+    if not attr:
+        module_name, _, attr = path.rpartition(".")
+    if not module_name or not attr:
+        raise ValueError(
+            f"Invalid MINIMAL_AGENT_FACTORY {path!r}: "
+            "expected 'package.module:factory'."
         )
+    try:
+        module = importlib.import_module(module_name)
+    except ImportError as exc:
+        raise ImportError(
+            f"Could not import module {module_name!r} "
+            f"from MINIMAL_AGENT_FACTORY={path!r}."
+        ) from exc
+    try:
+        factory = getattr(module, attr)
+    except AttributeError as exc:
+        raise ImportError(
+            f"Module {module_name!r} has no attribute {attr!r} "
+            f"(from MINIMAL_AGENT_FACTORY={path!r})."
+        ) from exc
+    if not callable(factory):
+        raise TypeError(
+            f"MINIMAL_AGENT_FACTORY={path!r} is not callable. "
+            "Point it at a zero-argument function returning a compiled graph."
+        )
+    return factory
 
-    graph = make_agent_with_weather_tool("gpt-4o-mini") if openai_api_key else None
+
+def _default_graph_factory() -> Callable[[], object]:
+    configured = os.getenv("MINIMAL_AGENT_FACTORY")
+    if configured:
+        logger.info("Using custom agent factory %s", configured)
+        return _load_factory(configured)
+    return make_local_agent
+
+
+def create_app(
+    web_dir: Path | None = None,
+    graph_factory: Callable[[], object] | None = None,
+) -> FastAPI:
+    """Create the FastAPI app serving the bundled UI and ``/assistant``.
+
+    Args:
+        web_dir: Directory with the prebuilt static UI. Defaults to the
+            bundled ``web/`` payload (or ``MINIMAL_WEB_DIR``).
+        graph_factory: Zero-argument callable returning a compiled LangGraph
+            graph. Defaults to the key-free local demo agent, or to
+            ``MINIMAL_AGENT_FACTORY`` when that env var is set. See the
+            package README section "Creating a compatible agent".
+    """
+    factory = graph_factory or _default_graph_factory()
+    graph = factory()
     app = FastAPI()
     app.add_middleware(
         CORSMiddleware,
@@ -66,18 +116,6 @@ def create_app(web_dir: Path | None = None) -> FastAPI:
 
     @app.post("/assistant")
     async def chat_endpoint(request: ChatRequest):
-        if not openai_api_key:
-            raise HTTPException(
-                status_code=503,
-                detail={
-                    "error": "OPENAI_API_KEY not configured",
-                    "message": "Please set the OPENAI_API_KEY environment variable to use the chat functionality.",
-                    "instructions": "Add OPENAI_API_KEY=your-key to your .env file and restart the server.",
-                },
-            )
-
-        assert graph is not None
-
         async def run_callback(controller: RunController):
             if controller.state is None:
                 controller.state = {"messages": []}
