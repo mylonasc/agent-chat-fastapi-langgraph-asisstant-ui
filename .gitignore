@@ -68,6 +68,7 @@ htmlcov/
 .tox/
 playwright-report/
 test-results/
+/e2e UI testing/screenshots/
 
 # Ruff
 .ruff_cache/

@@ -1,0 +1,18 @@
+{
+  "name": "agent-chat-message-order-e2e",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.20.0",
+  "scripts": {
+    "install:browsers": "playwright install chromium",
+    "test": "node scripts/run-tests.mjs",
+    "test:full": "node scripts/run-tests.mjs --project=full-ui",
+    "test:minimal": "node scripts/run-tests.mjs --project=minimal-ui",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.58.2",
+    "@types/node": "^24.10.1",
+    "typescript": "^5.9.3"
+  }
+}
