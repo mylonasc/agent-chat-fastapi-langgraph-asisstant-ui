@@ -14,7 +14,14 @@ The script runs the frozen pnpm install and static export, stages `out/` as
 package data, and writes the wheel under `packages/agent-chat-minimal/dist/`.
 Generated `web/` content and `dist/` are intentionally gitignored.
 
-Install and serve the local wheel with:
+Install from PyPI (Python 3.11+, no Node required) and serve with:
+
+```bash
+pip install agent-chat-fastapi-langgraph-assistant-ui
+minimal-chat-serve --port 8011
+```
+
+Or install and serve the locally built wheel with:
 
 ```bash
 python -m pip install packages/agent-chat-minimal/dist/*.whl
