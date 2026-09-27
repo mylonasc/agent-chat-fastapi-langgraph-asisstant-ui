@@ -66,12 +66,41 @@ def _legacy_openai_503() -> HTTPException:
     )
 
 
+def default_prepare_state(state: dict, request: ChatRequest) -> list:
+    """Fold ``add-message`` commands into message dicts (the default reducer)."""
+    messages = list(state.get("messages", []))
+    for command in request.commands:
+        if command.type == "add-message":
+            text = " ".join(
+                part.text for part in command.message.parts if part.type == "text"
+            )
+            if text:
+                message_id = getattr(command.message, "id", str(uuid.uuid4()))
+                message = HumanMessage(content=text, id=message_id)
+                messages.append(message.model_dump())
+    return messages
+
+
+def resolve_thread_id(request: ChatRequest) -> str:
+    """Derive a persistence thread id from the request (default: "default").
+
+    Looks in ``request.state["thread_id"]`` then ``request.runConfig`` so
+    graphs compiled with a LangGraph checkpointer get stable per-conversation
+    threads without any client change.
+    """
+    for source in (request.state, request.runConfig):
+        if isinstance(source, dict) and source.get("thread_id"):
+            return str(source["thread_id"])
+    return "default"
+
+
 def create_app(
     graph: ChatGraph | None = None,
     graph_factory: Callable[[], ChatGraph | None] | None = None,
     agents: dict[str, Callable[[], ChatGraph | None]] | None = None,
     default_agent: str = "weather",
     web_dir: Path | None = None,
+    prepare_state: Callable[[dict, ChatRequest], list] | None = None,
 ) -> FastAPI:
     """Create the FastAPI app serving LangGraph agent(s).
 
@@ -92,6 +121,8 @@ def create_app(
         agents: Mapping of name -> factory (multi-agent mode).
         default_agent: Name aliased by ``POST /assistant``.
         web_dir: Override for the bundled static UI directory.
+        prepare_state: ``(state, request) -> message dicts`` reducer hook;
+            defaults to :func:`default_prepare_state`.
     """
     from .registry import discover_agents
 
@@ -212,25 +243,18 @@ def create_app(
                 },
             )
 
+        reducer = prepare_state or default_prepare_state
+
         async def run_callback(controller: RunController):
             if controller.state is None:
                 controller.state = {"messages": []}
 
-            for command in request.commands:
-                if command.type == "add-message":
-                    text = " ".join(
-                        part.text
-                        for part in command.message.parts
-                        if part.type == "text"
-                    )
-                    if text:
-                        message_id = getattr(command.message, "id", str(uuid.uuid4()))
-                        message = HumanMessage(content=text, id=message_id)
-                        controller.state["messages"].append(message.model_dump())
-
+            controller.state["messages"] = reducer(controller.state, request)
+            thread_id = resolve_thread_id(request)
             input_message = {"messages": list(controller.state["messages"])}
             async for namespace, event_type, chunk in instance.astream(
                 input_message,
+                config={"configurable": {"thread_id": thread_id}},
                 stream_mode=["messages"],
                 subgraphs=True,
             ):
@@ -272,9 +296,12 @@ app = create_app()
 
 
 def main(argv=None):
+    from .config import Settings
+
+    env = Settings.from_env()
     parser = argparse.ArgumentParser(description="Serve the minimal chat application")
-    parser.add_argument("--host", default="0.0.0.0")
-    parser.add_argument("--port", type=int, default=8011)
+    parser.add_argument("--host", default=env.host)
+    parser.add_argument("--port", type=int, default=env.port)
     parser.add_argument(
         "--model",
         default=None,
@@ -293,7 +320,7 @@ def main(argv=None):
     args = parser.parse_args(argv)
     if args.model:
         os.environ["MODEL"] = args.model
-    default_agent = args.agent or os.getenv("DEFAULT_AGENT", "weather")
+    default_agent = args.agent or os.getenv("DEFAULT_AGENT", env.default_agent)
     if args.check:
         from .registry import discover_agents
 

@@ -32,6 +32,42 @@ Open <http://localhost:8011/>. Set `OPENAI_API_KEY` to enable `/assistant`;
 without it, the UI and `/health` still work and `/assistant` returns 503.
 `MINIMAL_WEB_DIR` may override the bundled web directory.
 
+## Arbitrary agents & providers
+
+```python
+from agent_chat_minimal import create_app
+from my_agent import make_my_agent  # any compiled graph over {"messages": [...]}
+
+app = create_app(graph=make_my_agent("anthropic:claude-sonnet-4-5"))
+# or deferred: app = create_app(graph_factory=make_my_agent)
+# or multi-agent: app = create_app(agents={"mine": make_my_agent})
+```
+
+- Models are `provider:name` specs via `init_chat_model`
+  (`openai:gpt-4o-mini`, `anthropic:claude-sonnet-4-5`, `ollama:llama3.1`).
+  Factories also accept a chat-model instance (handy for fake-model tests).
+- `GET /agents` lists the registry (`weather`, `calculator`, plus
+  `agent_chat.agents` entry points); `POST /assistant/{agent_id}` selects one,
+  `POST /assistant` aliases the default.
+- `create_app(..., prepare_state=fn)` overrides the message reducer;
+  `state.thread_id` / `runConfig.thread_id` is forwarded as LangGraph
+  `configurable.thread_id` for checkpointer-backed graphs.
+
+## Configuration
+
+```text
+HOST=0.0.0.0                # uvicorn bind host
+PORT=8011                   # uvicorn bind port
+MODEL=openai:gpt-4o-mini    # provider:model spec
+DEFAULT_AGENT=weather       # registry id aliased by POST /assistant
+MINIMAL_WEB_DIR=            # override bundled web/ (empty = bundled)
+OPENAI_API_KEY=             # credential for the default openai model
+ANTHROPIC_API_KEY=          # credential when MODEL uses anthropic:
+```
+
+CLI mirrors it: `minimal-chat-serve --model ollama:llama3.1 --agent calculator`,
+plus `--check` to build the default graph and exit without booting uvicorn.
+
 Run the offline serving tests and clean-venv smoke check from the repository
 root:
 
