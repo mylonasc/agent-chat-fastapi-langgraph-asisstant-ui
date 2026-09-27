@@ -101,6 +101,21 @@ def _legacy_openai_503() -> HTTPException:
     )
 
 
+def _next_ui_message_id(messages: list) -> str:
+    """Match assistant-ui's index after joining AI/tool/AI sequences."""
+    count = 0
+    assistant_group_open = False
+    for message in messages:
+        message_type = message.get("type") if isinstance(message, dict) else None
+        if message_type in {"human", "system"}:
+            count += 1
+            assistant_group_open = False
+        elif message_type == "ai" and not assistant_group_open:
+            count += 1
+            assistant_group_open = True
+    return str(count)
+
+
 def default_prepare_state(state: dict, request: ChatRequest) -> list:
     """Fold ``add-message`` commands into message dicts (the default reducer)."""
     messages = list(state.get("messages", []))
@@ -110,7 +125,9 @@ def default_prepare_state(state: dict, request: ChatRequest) -> list:
                 part.text for part in command.message.parts if part.type == "text"
             )
             if text:
-                message_id = getattr(command.message, "id", str(uuid.uuid4()))
+                message_id = getattr(command.message, "id", None)
+                if not message_id:
+                    message_id = _next_ui_message_id(messages)
                 message = HumanMessage(content=text, id=message_id)
                 messages.append(message.model_dump())
     return messages

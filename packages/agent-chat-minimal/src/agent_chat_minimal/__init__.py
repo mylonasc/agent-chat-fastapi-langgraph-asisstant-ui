@@ -28,7 +28,7 @@ from .server import (
 )
 from .threads import ThreadManager, ThreadMessageStore, ThreadMetadata
 
-__version__ = "0.3.3"
+__version__ = "0.3.4"
 
 __all__ = [
     "__version__",

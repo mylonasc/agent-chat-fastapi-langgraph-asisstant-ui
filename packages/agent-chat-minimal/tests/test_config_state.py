@@ -1,7 +1,7 @@
 from fastapi.testclient import TestClient
 from langchain_core.messages.ai import AIMessageChunk
 
-from agent_chat_minimal import create_app, resolve_thread_id
+from agent_chat_minimal import ScopedChatRequest, create_app, resolve_thread_id
 from agent_chat_minimal.config import Settings
 from agent_chat_minimal.server import default_prepare_state
 
@@ -60,6 +60,23 @@ def test_default_prepare_state_folds_commands():
         )(),
     )
     assert msgs and msgs[0]["content"] == "hi"
+    assert msgs[0]["id"] == "m1"
+
+
+def test_default_prepare_state_matches_ui_fallback_message_ids():
+    state = {
+        "messages": [
+            {"type": "human", "id": "0", "content": "first"},
+            {"type": "ai", "id": "tool-call", "content": ""},
+            {"type": "tool", "tool_call_id": "call-1", "content": "2"},
+            {"type": "ai", "id": "final", "content": "done"},
+        ]
+    }
+    request = ScopedChatRequest.model_validate(_cmd("second"))
+
+    messages = default_prepare_state(state, request)
+
+    assert messages[-1]["id"] == "2"
 
 
 def test_custom_prepare_state_hook_used(monkeypatch):

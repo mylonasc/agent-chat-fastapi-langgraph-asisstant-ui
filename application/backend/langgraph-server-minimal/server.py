@@ -59,9 +59,23 @@ import sys
 
 sys.path.append(curr_path)
 from demo_agent.get_graph import make_agent_with_weather_tool, AgentState
-import uuid
 
 graph = make_agent_with_weather_tool("gpt-4o-mini") if OPENAI_API_KEY else None
+
+
+def _next_ui_message_id(messages: list) -> str:
+    """Match assistant-ui's index after joining AI/tool/AI sequences."""
+    count = 0
+    assistant_group_open = False
+    for message in messages:
+        message_type = message.get("type") if isinstance(message, dict) else None
+        if message_type in {"human", "system"}:
+            count += 1
+            assistant_group_open = False
+        elif message_type == "ai" and not assistant_group_open:
+            count += 1
+            assistant_group_open = True
+    return str(count)
 
 
 @app.get("/health")
@@ -96,7 +110,9 @@ async def chat_endpoint(request: ChatRequest):
                 )
                 if text:
                     # Explicitly use the LangChain format the frontend expects
-                    msg_id = getattr(command.message, "id", str(uuid.uuid4()))
+                    msg_id = getattr(command.message, "id", None)
+                    if not msg_id:
+                        msg_id = _next_ui_message_id(controller.state["messages"])
                     _msg = HumanMessage(content=text, id=msg_id)
                     controller.state["messages"].append(_msg.model_dump())
 
