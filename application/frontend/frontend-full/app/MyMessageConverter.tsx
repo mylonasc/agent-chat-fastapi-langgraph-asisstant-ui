@@ -1,16 +1,16 @@
-import { 
-    AssistantTransportConnectionMetadata,
-    unstable_createMessageConverter as createMessageConverter, 
-
-
- } from '@assistant-ui/react'
+import {
+  AssistantTransportConnectionMetadata,
+  unstable_createMessageConverter as createMessageConverter,
+} from "@assistant-ui/react";
 
 import {
   convertLangChainMessages,
   LangChainMessage,
 } from "@assistant-ui/react-langgraph";
 
-const LangChainMessageConverter = createMessageConverter(convertLangChainMessages);
+const LangChainMessageConverter = createMessageConverter(
+  convertLangChainMessages,
+);
 
 type State = {
   messages: LangChainMessage[];
@@ -20,32 +20,35 @@ type State = {
 
 export const converter = (
   state: State | undefined,
-  connectionMetadata: AssistantTransportConnectionMetadata
+  connectionMetadata: AssistantTransportConnectionMetadata,
 ) => {
   const serverMessages = state?.messages ?? [];
   const isSending = connectionMetadata.isSending;
 
   const pendingHumanMessages = connectionMetadata.pendingCommands
-  .filter((cmd) => cmd.type === "add-message")
-  .map((cmd) => ({
-    type: "human" as const,
-    content: cmd.message.parts
-      .map((p) => (p.type === "text" ? p.text : ""))
-      .join(""),
-  }));
+    .filter((cmd) => cmd.type === "add-message")
+    .map((cmd) => ({
+      type: "human" as const,
+      content: cmd.message.parts
+        .map((p) => (p.type === "text" ? p.text : ""))
+        .join(""),
+    }));
 
   const hasHumanInServer = serverMessages.some((m: any) => m.type === "human");
   const allMessages =
     isSending && !hasHumanInServer
       ? [...pendingHumanMessages, ...serverMessages]
       : serverMessages;
+  const threadMessages = LangChainMessageConverter.toThreadMessages(
+    allMessages,
+  ).map((message, index) => ({ ...message, id: String(index) }));
 
   return {
-    messages: LangChainMessageConverter.toThreadMessages(allMessages),
+    // Stable logical IDs keep incremental repository updates in transcript order.
+    messages: threadMessages,
     isRunning: isSending,
   };
 };
-
 
 // export const converter = (state: State, connectionMetadata: AssistantTransportConnectionMetadata) => {
 //   const serverMessages = state.messages || [];
@@ -56,9 +59,9 @@ export const converter = (
 //     .map((cmd) => ({
 //       id: cmd.message.id,
 //       type: "human" as const,
-//       content: [{ 
-//         type: "text" as const, 
-//         text: cmd.message.parts.map(p => p.type === 'text' ? p.text : '').join("") 
+//       content: [{
+//         type: "text" as const,
+//         text: cmd.message.parts.map(p => p.type === 'text' ? p.text : '').join("")
 //       }],
 //     }));
 
