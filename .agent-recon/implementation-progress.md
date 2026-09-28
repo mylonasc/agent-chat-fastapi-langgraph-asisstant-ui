@@ -145,6 +145,10 @@ Branch: `feature/puir-09-unified-frontend` (stacked on
 - Scaffold: `application/frontend/frontend/` copied from `frontend-full`
   (the superset), server-only `app/api/chat/route.ts` pruned, `basePath`
   support removed, package renamed to `agent-chat-ui`.
+- Shared components merged: `ToolFallback` combines running + cancelled
+  states; `attachment` takes v4-correct important modifiers;
+  `tooltip-icon-button` was identical; `markdown-text`/`ui/*` keep the
+  newer full variants (minimal's align selectors were invalid).
 - Dependency union: newer `@assistant-ui/react`/`next`, plus `d3`/`@types/d3`
   for the graph tool; dropped minimal-only `zod` (dead import),
   `assistant-ui` CLI, and `tailwindcss-animate` (unused). Fresh lockfile;
