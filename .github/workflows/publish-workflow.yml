@@ -12,10 +12,11 @@ name: publish-workflow.yml
 #   2. Publish a GitHub Release, ideally tagged
 #      `agent-chat-fastapi-langgraph-assistant-ui-vX.Y.Z` matching the bumped
 #      version - the workflow fails fast on mismatch.
-#   3. This workflow rebuilds both frontend static exports - minimal (/) and
-#      full (/full) - (Node/pnpm are CI-only; people installing from PyPI
-#      need Python only), runs the offline serving tests, builds the sdist +
-#      wheel, and uploads them.
+#   3. This workflow rebuilds the unified frontend static export (one build,
+#      minimal/full presets selected at runtime via /api/config) -
+#      (Node/pnpm are CI-only; people installing from PyPI need Python
+#      only), runs the offline serving tests, builds the sdist + wheel,
+#      and uploads them.
 #
 # If the PyPI trusted publisher entry restricts publishing to a GitHub
 # Environment, add `environment: <name>` to the `publish` job below.
@@ -52,7 +53,7 @@ jobs:
         with:
           node-version: "22"
           cache: pnpm
-          cache-dependency-path: application/frontend/frontend-minimal/pnpm-lock.yaml
+          cache-dependency-path: application/frontend/frontend/pnpm-lock.yaml
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -60,26 +61,18 @@ jobs:
           python-version: "3.11"
 
       - name: Install frontend dependencies
-        run: |
-          pnpm --dir application/frontend/frontend-minimal install --frozen-lockfile
-          pnpm --dir application/frontend/frontend-full install --frozen-lockfile
+        run: pnpm --dir application/frontend/frontend install --frozen-lockfile
 
-      - name: Build frontend static exports
-        run: |
-          pnpm --dir application/frontend/frontend-minimal build
-          NEXT_PUBLIC_API_BASE="" FULL_UI_BASE_PATH=/full pnpm --dir application/frontend/frontend-full build
+      - name: Build frontend static export
+        run: NEXT_PUBLIC_API_BASE="" pnpm --dir application/frontend/frontend build
 
-      - name: Stage prebuilt UIs as package data
+      - name: Stage prebuilt UI as package data
         run: |
           set -euo pipefail
           web="packages/agent-chat-minimal/src/agent_chat_minimal/web"
           rm -rf "$web"
-          cp -R application/frontend/frontend-minimal/out "$web"
+          cp -R application/frontend/frontend/out "$web"
           test -f "$web/index.html"
-          web_full="packages/agent-chat-minimal/src/agent_chat_minimal/web_full"
-          rm -rf "$web_full"
-          cp -R application/frontend/frontend-full/out "$web_full"
-          test -f "$web_full/index.html"
 
       - name: Check release tag matches package version
         if: github.event_name == 'release'
@@ -128,15 +121,15 @@ jobs:
 
           with tarfile.open(sdists[0]) as tar:
               names = tar.getnames()
-              assert any(name.endswith("/src/agent_chat_minimal/web/index.html") for name in names), "sdist is missing the bundled minimal UI"
-              assert any(name.endswith("/src/agent_chat_minimal/web_full/index.html") for name in names), "sdist is missing the bundled full UI"
+              assert any(name.endswith("/src/agent_chat_minimal/web/index.html") for name in names), "sdist is missing the bundled UI"
+              assert not any("/web_full/" in name for name in names), "sdist must not bundle the removed web_full UI"
 
           with zipfile.ZipFile(wheels[0]) as whl:
               names = whl.namelist()
-              assert "agent_chat_minimal/web/index.html" in names, "wheel is missing the bundled minimal UI"
-              assert "agent_chat_minimal/web_full/index.html" in names, "wheel is missing the bundled full UI"
+              assert "agent_chat_minimal/web/index.html" in names, "wheel is missing the bundled UI"
+              assert not any(name.startswith("agent_chat_minimal/web_full/") for name in names), "wheel must not bundle the removed web_full UI"
 
-          print("distributions verified: sdist and wheel bundle both UIs")
+          print("distributions verified: sdist and wheel bundle the unified UI")
           EOF
 
       - name: Publish to PyPI

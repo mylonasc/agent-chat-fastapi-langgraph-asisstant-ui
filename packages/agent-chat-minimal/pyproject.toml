@@ -53,16 +53,14 @@ exclude = ["**/.gitkeep"]
 
 [tool.hatch.build.targets.wheel.force-include]
 "src/agent_chat_minimal/web" = "agent_chat_minimal/web"
-"src/agent_chat_minimal/web_full" = "agent_chat_minimal/web_full"
 
-# The sdist file list comes from git, where the staged prebuilt UIs are
-# ignored - so they must be force-included here (staged from
-# application/frontend/{frontend-minimal,frontend-full}/out before building).
+# The sdist file list comes from git, where the staged prebuilt UI is
+# ignored - so it must be force-included here (staged from
+# application/frontend/frontend/out before building).
 # python -m build builds the wheel from the sdist, so without this the PyPI
-# wheel would ship without the UIs.
+# wheel would ship without the UI.
 [tool.hatch.build.targets.sdist]
 artifacts = ["src/agent_chat_minimal/migrations/**/*.py"]
 
 [tool.hatch.build.targets.sdist.force-include]
 "src/agent_chat_minimal/web" = "src/agent_chat_minimal/web"
-"src/agent_chat_minimal/web_full" = "src/agent_chat_minimal/web_full"

@@ -11,7 +11,7 @@ PORT=8011                   # uvicorn bind port
 MODEL=openai:gpt-4o-mini    # provider:model spec (see providers.md)
 DEFAULT_AGENT=weather       # registry id aliased by POST /assistant
 MINIMAL_WEB_DIR=            # override bundled web/ (empty = bundled)
-FULL_WEB_DIR=               # override bundled web_full/ (empty = bundled)
+FULL_WEB_DIR=               # deprecated mount hook (no bundle ships)
 UI_PRESET=minimal           # runtime UI preset: minimal or full
 API_BASE=                   # same-origin default; absolute http(s) URL for split-port dev
 IDENTITY_MODE=anonymous     # anonymous or delegated (custom principal resolver)
@@ -86,6 +86,7 @@ error when credentials are missing.
 | `web_dir=`       | Override the bundled UI directory                  |
 | `prepare_state=` | `(state, request) -> message dicts` reducer        |
 | `checkpointer=`  | Shared checkpointer (`"memory"` default, see below)|
+| `web_full_dir=`  | Deprecated mount hook (no bundle ships; `/full` is gone) |
 | `repositories=`  | Bundle with `sessions`/`transcripts`/`feedback` (memory default; pass SQLite for durability) |
 | `session_service=`/`transcript_service=` | Override application services (tests) |
 | `principal_resolver=` | Request → trusted principal (default: `x-agent-chat-subject` header, `default_user` fallback) |

@@ -159,6 +159,16 @@ Branch: `feature/puir-09-unified-frontend` (stacked on
   chrome). `app/page.tsx` gates first paint on the runtime manifest and
   composes the preset from `config.ui_preset` (newer assistant-ui needs
   explicit `headers` in transport options). `tsc` + export verified.
+- Repackaging: `stage_ui.sh`/`build_wheel.sh`/publish workflow build and
+  stage only `frontend/`; `web_full/` deleted from the package, its
+  hatch includes and `.gitignore` entries removed; `/full/` now 404s
+  (mount hook stays for explicit `FULL_WEB_DIR` overrides and existing
+  tests, warning only when configured). Smoke test asserts `/` HTML,
+  `/api/config` v1, `/assistant` 503, and `/full/` 404. Docs updated
+  (package README, `threads`, `configuration`, `RUNNING.md`).
+- Verified: unified bundle staged over the old minimal output; `/`
+  serves the preset shell under both presets, `/api/config` reflects
+  `UI_PRESET`, 95 package tests pass.
 
 ## Tracker
 

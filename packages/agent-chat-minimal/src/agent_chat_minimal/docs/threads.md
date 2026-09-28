@@ -52,17 +52,18 @@ curl -X POST localhost:8011/assistant -H 'Content-Type: application/json' \
 curl localhost:8011/threads/trip/messages
 ```
 
-## Frontend-full compatibility
+## Bundled UI presets
 
-## Bundled full UI
-
-The wheel ships the full frontend (thread sidebar) at `/full/` — no separate
-Next.js server needed. It is built with `NEXT_PUBLIC_API_BASE=""` so it talks
-to the same origin (`/assistant`, `/threads`). The minimal single-prompt chat
-stays at `/`. To serve a custom full build instead:
+The wheel ships one unified frontend at `/` — no separate Next.js server
+needed. It is built with `NEXT_PUBLIC_API_BASE=""` so it talks to the same
+origin (`/assistant`, `/threads`, `/api/config`). The runtime preset from
+`GET /api/config` selects the minimal single-prompt chat or the full thread
+sidebar; the legacy `/full/` mount is gone (an explicit `FULL_WEB_DIR`
+override still mounts if provided, but no bundle ships for it). To serve a
+custom build instead:
 
 ```bash
-FULL_WEB_DIR=/path/to/frontend-full/out minimal-chat-serve
+MINIMAL_WEB_DIR=/path/to/frontend/out minimal-chat-serve
 ```
 
 Pointing an external full frontend at the portable server also works

@@ -61,11 +61,17 @@ def mount_static_ui(app: FastAPI, settings: Settings) -> None:
             name="web-full",
         )
     else:
-        logger.warning(
-            "Full UI build not found at %s; /full is disabled. "
-            "Set FULL_WEB_DIR to a frontend-full/out directory.",
-            resolved_full_dir,
-        )
+        # No full bundle ships anymore (/full was removed); the mount hook
+        # stays for explicit FULL_WEB_DIR overrides. Only warn when one was
+        # configured, to keep default startup logs clean.
+        if settings.web_full_dir:
+            logger.warning(
+                "Full UI build not found at %s; /full is disabled. "
+                "Set FULL_WEB_DIR to a static export directory.",
+                resolved_full_dir,
+            )
+        else:
+            logger.debug("No FULL_WEB_DIR override; /full is not served.")
 
     resolved_web_dir = Path(settings.web_dir or DEFAULT_WEB_DIR).resolve()
     if resolved_web_dir.is_dir() and (resolved_web_dir / "index.html").is_file():
