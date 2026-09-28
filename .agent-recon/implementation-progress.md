@@ -89,6 +89,28 @@ capabilities from the canonical composition root.
 
 ## In Progress
 
+### PUIR-14: Artifact and release hardening
+
+Branch: `feature/puir-14-artifact-hardening` (continued by PUIR-15 stack).
+
+- shared staging now builds wheel and sdist; each archive clean-installs and
+  serves UI/configuration without Node on `PATH`;
+- package version and release-tag validation use `agent_chat_minimal.__version__`;
+  provider extras are explicit and documented;
+- pull requests affecting package/frontend sources run the exact artifact
+  build, archive check, and clean-install smoke suite before publication.
+
+### PUIR-15: Non-RAG development migration
+
+Branch: `feature/puir-15-migration-docs`.
+
+- minimal development `server:app` is now a compatibility shim over
+  `agent_chat_minimal.create_default_app`; its Docker image installs the local
+  package, removing the duplicate non-RAG routing/transport implementation;
+- migration guidance defines the packaged canonical server, preset/persistence
+  configuration, legacy RAG boundary, and `/full`/`FULL_WEB_DIR` deprecation;
+- package docs no longer direct users to `/full/` and list all shipped guides.
+
 ### PUIR-12: End-to-end message feedback
 
 Branch: `feature/puir-12-message-feedback` (stacked on PUIR-11).
