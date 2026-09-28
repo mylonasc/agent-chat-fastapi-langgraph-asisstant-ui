@@ -36,7 +36,8 @@ test("full chat has a stable, accessible DOM", async ({ page }) => {
   await expect(page.getByRole("heading", { level: 1, name: "Hello there!" })).toBeVisible();
   await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
   await expect(page.getByLabel("Message input")).toBeVisible();
-  await expect(page.getByRole("link", { name: "Admin" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Admin" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Add Attachment" })).toHaveCount(0);
   await expect(page.getByText("Hello there!", { exact: true })).toBeVisible();
 
   await expectNoHorizontalOverflow(page);

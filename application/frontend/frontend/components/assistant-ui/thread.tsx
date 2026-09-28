@@ -52,6 +52,7 @@ import {
 import { cn } from "@/lib/utils";
 
 export const Thread: FC = () => {
+  const { config } = useApiClient();
   return (
     <LazyMotion features={domAnimation}>
       <MotionConfig reducedMotion="user">
@@ -64,10 +65,12 @@ export const Thread: FC = () => {
           <div className="flex items-center justify-between border-b px-4 py-2">
             <ChatTitle />
             <div className="flex items-center gap-2">
-              <Button asChild variant="outline" size="sm">
-                <Link href="/admin">Admin</Link>
-              </Button>
-              <ShareButton />
+              {config.tools.admin.enabled && (
+                <Button asChild variant="outline" size="sm">
+                  <Link href="/admin">Admin</Link>
+                </Button>
+              )}
+              {config.tools.sharing.enabled && <ShareButton />}
             </div>
           </div>
 
@@ -352,34 +355,45 @@ const ThreadSuggestions: FC<{ disabled?: boolean }> = ({ disabled }) => {
 
 const Composer: FC = () => {
   const { canSend, isInitializing } = useEnsureThreadInitialized();
+  const { config } = useApiClient();
+  const attachmentsEnabled = config.tools.attachments.enabled;
+  const contents = (
+    <>
+      {attachmentsEnabled && <ComposerAttachments />}
+      <ComposerPrimitive.Input
+        placeholder={canSend ? "Send a message..." : (isInitializing ? "Initializing chat..." : "Preparing chat...")}
+        className="aui-composer-input mb-1 max-h-32 min-h-16 w-full resize-none bg-transparent px-3.5 pt-1.5 pb-3 text-base outline-none placeholder:text-muted-foreground focus-visible:ring-0"
+        rows={1}
+        autoFocus
+        aria-label="Message input"
+      />
+      <ComposerAction canSend={canSend} attachmentsEnabled={attachmentsEnabled} />
+    </>
+  );
 
   return (
     <div className="aui-composer-wrapper sticky bottom-0 mx-auto flex w-full max-w-[var(--thread-max-width)] flex-col gap-4 overflow-visible rounded-t-3xl bg-background pb-4 md:pb-6">
       <ThreadScrollToBottom />
 
       <ComposerPrimitive.Root className="aui-composer-root relative flex w-full flex-col">
-        <ComposerPrimitive.AttachmentDropzone className="aui-composer-attachment-dropzone group/input-group flex w-full flex-col rounded-3xl border border-input bg-background px-1 pt-2 shadow-xs transition-[color,box-shadow] outline-none has-[textarea:focus-visible]:border-ring has-[textarea:focus-visible]:ring-[3px] has-[textarea:focus-visible]:ring-ring/50 data-[dragging=true]:border-dashed data-[dragging=true]:border-ring data-[dragging=true]:bg-accent/50 dark:bg-background">
-          <ComposerAttachments />
-          <ComposerPrimitive.Input
-            placeholder={canSend ? "Send a message..." : (isInitializing ? "Initializing chat..." : "Preparing chat...")}
-            className="aui-composer-input mb-1 max-h-32 min-h-16 w-full resize-none bg-transparent px-3.5 pt-1.5 pb-3 text-base outline-none placeholder:text-muted-foreground focus-visible:ring-0"
-            rows={1}
-            autoFocus
-            aria-label="Message input"
-            // Optional: you can also block typing if you want:
-            // disabled={!canSend}
-          />
-          <ComposerAction canSend={canSend} />
-        </ComposerPrimitive.AttachmentDropzone>
+        {attachmentsEnabled ? (
+          <ComposerPrimitive.AttachmentDropzone className="aui-composer-attachment-dropzone group/input-group flex w-full flex-col rounded-3xl border border-input bg-background px-1 pt-2 shadow-xs transition-[color,box-shadow] outline-none has-[textarea:focus-visible]:border-ring has-[textarea:focus-visible]:ring-[3px] has-[textarea:focus-visible]:ring-ring/50 data-[dragging=true]:border-dashed data-[dragging=true]:border-ring data-[dragging=true]:bg-accent/50 dark:bg-background">
+            {contents}
+          </ComposerPrimitive.AttachmentDropzone>
+        ) : (
+          <div className="flex w-full flex-col rounded-3xl border border-input bg-background px-1 pt-2 shadow-xs dark:bg-background">
+            {contents}
+          </div>
+        )}
       </ComposerPrimitive.Root>
     </div>
   );
 };
 
-const ComposerAction: FC<{ canSend: boolean }> = ({ canSend }) => {
+const ComposerAction: FC<{ canSend: boolean; attachmentsEnabled: boolean }> = ({ canSend, attachmentsEnabled }) => {
   return (
     <div className="aui-composer-action-wrapper relative mx-1 mt-2 mb-2 flex items-center justify-between">
-      <ComposerAddAttachment />
+      {attachmentsEnabled && <ComposerAddAttachment />}
 
       <ThreadPrimitive.If running={false}>
         <ComposerPrimitive.Send asChild>
