@@ -12,13 +12,9 @@ import {
 import { useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { useRuntimeConfig } from "@/hooks/use-runtime-config";
 
 type JsonObj = Record<string, unknown>;
-
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE ??
-  process.env.NEXT_PUBLIC_API_URL?.replace(/\/assistant$/, "") ??
-  "http://localhost:8010";
 
 type SourceItem = {
   url: string;
@@ -220,6 +216,9 @@ function SourceIndexingPanel({
   }, [fromRetrievalSources.length, fromSearchSources.length, liveJobSources.length, sources.length]);
 
   const userId = String(args.user_id ?? result.user_id ?? "default_user");
+  const { config, apiBase } = useRuntimeConfig();
+  const ragCapability = config.tools.web_rag;
+  const statusPath = ragCapability.status_path ?? "/tools/web_rag/status";
 
   const effectiveTotal =
     effectiveJobTotal || total || mergedSources.length || indexedSourceCount || 0;
@@ -255,11 +254,15 @@ function SourceIndexingPanel({
     if (!pollForLiveJob && !fetchStatusOnly) {
       return;
     }
+    // Capability-gated: the packaged backend does not serve RAG.
+    if (!ragCapability.enabled) {
+      return;
+    }
 
     const run = async () => {
       try {
         const statusRes = await fetch(
-          `${API_BASE}/tools/web_rag/status?user_id=${encodeURIComponent(userId)}`,
+          `${apiBase}${statusPath}?user_id=${encodeURIComponent(userId)}`,
           { cache: "no-store" }
         );
 
@@ -316,7 +319,7 @@ function SourceIndexingPanel({
       cancelled = true;
       window.clearInterval(pollId);
     };
-  }, [jobId, retrievalSources.length, searchResults.length, sources.length, status, statusType, userId]);
+  }, [jobId, retrievalSources.length, searchResults.length, sources.length, status, statusType, userId, ragCapability.enabled, statusPath, apiBase]);
 
   const callDocumentCount = useMemo(() => {
     if (sources.length) {

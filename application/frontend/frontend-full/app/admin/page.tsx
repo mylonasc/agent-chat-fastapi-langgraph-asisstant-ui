@@ -3,10 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE ??
-  process.env.NEXT_PUBLIC_API_URL?.replace(/\/assistant$/, "") ??
-  "http://localhost:8010";
+import { useRuntimeConfig } from "@/hooks/use-runtime-config";
 
 type StatusResponse = {
   index?: Record<string, unknown>;
@@ -28,28 +25,30 @@ export default function AdminPage() {
   const [searchResult, setSearchResult] = useState<any>(null);
   const [overview, setOverview] = useState<ToolsOverview | null>(null);
   const [loading, setLoading] = useState(false);
+  const { config, loaded, apiBase } = useRuntimeConfig();
+  const ragEnabled = config.tools.web_rag.enabled;
 
   const chunksUrl = useMemo(
-    () => `${API_BASE}/tools/web_rag/chunks?user_id=${encodeURIComponent(userId)}&limit=20`,
-    [userId]
+    () => `${apiBase}/tools/web_rag/chunks?user_id=${encodeURIComponent(userId)}&limit=20`,
+    [apiBase, userId]
   );
   const rawUrl = useMemo(
-    () => `${API_BASE}/tools/web_rag/raw?user_id=${encodeURIComponent(userId)}&limit=10`,
-    [userId]
+    () => `${apiBase}/tools/web_rag/raw?user_id=${encodeURIComponent(userId)}&limit=10`,
+    [apiBase, userId]
   );
 
   const refresh = async () => {
     setLoading(true);
     try {
       const [s, c, r] = await Promise.all([
-        fetch(`${API_BASE}/tools/web_rag/status?user_id=${encodeURIComponent(userId)}`, {
+        fetch(`${apiBase}/tools/web_rag/status?user_id=${encodeURIComponent(userId)}`, {
           cache: "no-store",
         }).then((x) => x.json()),
         fetch(chunksUrl, { cache: "no-store" }).then((x) => x.json()),
         fetch(rawUrl, { cache: "no-store" }).then((x) => x.json()),
       ]);
       const o = await fetch(
-        `${API_BASE}/tools/overview?user_id=${encodeURIComponent(userId)}`,
+        `${apiBase}/tools/overview?user_id=${encodeURIComponent(userId)}`,
         { cache: "no-store" }
       ).then((x) => x.json());
       setStatus(s);
@@ -62,13 +61,15 @@ export default function AdminPage() {
   };
 
   useEffect(() => {
+    // Capability-gated: no polling when the backend does not serve RAG.
+    if (!loaded || !ragEnabled) return;
     void refresh();
     const id = window.setInterval(() => void refresh(), 2000);
     return () => window.clearInterval(id);
-  }, [userId, chunksUrl, rawUrl]);
+  }, [loaded, ragEnabled, userId, chunksUrl, rawUrl]);
 
   const runTestSearch = async () => {
-    const res = await fetch(`${API_BASE}/tools/web_rag/test-search`, {
+    const res = await fetch(`${apiBase}/tools/web_rag/test-search`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ user_id: userId, query, k: 5 }),
@@ -85,6 +86,14 @@ export default function AdminPage() {
         </Link>
       </header>
 
+      {loaded && !ragEnabled && (
+        <section className="rounded border border-dashed p-3 text-xs text-muted-foreground">
+          The Web RAG capability is disabled on this backend (see{" "}
+          <code>/api/config</code>). Point this UI at the full backend to
+          manage the index.
+        </section>
+      )}
+
       <section className="flex flex-wrap items-end gap-2">
         <label className="flex flex-col gap-1">
           <span className="text-xs text-muted-foreground">User ID</span>
@@ -99,7 +108,7 @@ export default function AdminPage() {
         </button>
         <a
           className="rounded border px-3 py-1"
-          href={`${API_BASE}/tools/web_rag/download/chunks?user_id=${encodeURIComponent(userId)}`}
+          href={`${apiBase}/tools/web_rag/download/chunks?user_id=${encodeURIComponent(userId)}`}
           target="_blank"
           rel="noreferrer"
         >
@@ -107,7 +116,7 @@ export default function AdminPage() {
         </a>
         <a
           className="rounded border px-3 py-1"
-          href={`${API_BASE}/tools/web_rag/download/raw?user_id=${encodeURIComponent(userId)}`}
+          href={`${apiBase}/tools/web_rag/download/raw?user_id=${encodeURIComponent(userId)}`}
           target="_blank"
           rel="noreferrer"
         >

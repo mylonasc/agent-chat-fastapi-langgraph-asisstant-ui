@@ -10,11 +10,7 @@ import {
 } from "@assistant-ui/react";
 
 import { converter } from "./MyMessageConverter";
-
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE ??
-  process.env.NEXT_PUBLIC_API_URL?.replace(/\/assistant$/, "") ??
-  "http://localhost:8010";
+import { useRuntimeConfig } from "@/hooks/use-runtime-config";
 
 // ------------------------------------------------------------------
 // RUNTIME HOOK
@@ -22,10 +18,11 @@ const API_BASE =
 function usePerThreadTransportRuntime() {
   const item = useThreadListItem();
   const backendThreadId = item.remoteId ?? item.id;
+  const { apiBase } = useRuntimeConfig();
 
   // Memoize config to prevent runtime recreation on re-renders
   const runtimeConfig = useMemo(() => ({
-    api: `${API_BASE}/assistant`,
+    api: `${apiBase}/assistant`,
     headers: {},
     converter,
     initialState: {
@@ -33,7 +30,7 @@ function usePerThreadTransportRuntime() {
       thread_id: backendThreadId,
       user_id: "default_user",
     },
-  }), [backendThreadId]);
+  }), [backendThreadId, apiBase]);
 
   const runtime = useAssistantTransportRuntime(runtimeConfig);
 
@@ -48,7 +45,7 @@ function usePerThreadTransportRuntime() {
 
     const fetchAndImport = async () => {
       try {
-        const res = await fetch(`${API_BASE}/threads/${item.remoteId}/messages`, {
+        const res = await fetch(`${apiBase}/threads/${item.remoteId}/messages`, {
           cache: "no-store",
         });
         const data = await res.json();
@@ -84,10 +81,11 @@ function usePerThreadTransportRuntime() {
 // PROVIDER
 // ------------------------------------------------------------------
 function ProviderInner({ children }: { children: ReactNode }) {
+  const { apiBase } = useRuntimeConfig();
   const adapter = useMemo(() => ({
       async list() {
         try {
-          const res = await fetch(`${API_BASE}/threads?user_id=default_user`, {
+          const res = await fetch(`${apiBase}/threads?user_id=default_user`, {
             cache: "no-store",
           });
           const data = await res.json();
@@ -101,7 +99,7 @@ function ProviderInner({ children }: { children: ReactNode }) {
         } catch (e) { return { threads: [] }; }
       },
       async fetch(threadId: string) {
-        const res = await fetch(`${API_BASE}/threads/${threadId}`, { cache: "no-store" });
+        const res = await fetch(`${apiBase}/threads/${threadId}`, { cache: "no-store" });
         const data = await res.json();
         return {
           remoteId: data.id,
@@ -110,7 +108,7 @@ function ProviderInner({ children }: { children: ReactNode }) {
         };
       },
       async initialize(localId: string) {
-        const res = await fetch(`${API_BASE}/threads`, {
+        const res = await fetch(`${apiBase}/threads`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ localId, user_id: "default_user", title: "New Chat" }),
@@ -122,7 +120,7 @@ function ProviderInner({ children }: { children: ReactNode }) {
         return new ReadableStream<AssistantStreamChunk>();
       },
       async rename(threadId: string, newTitle: string) {
-        const res = await fetch(`${API_BASE}/threads/${threadId}`, {
+        const res = await fetch(`${apiBase}/threads/${threadId}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ title: newTitle }),
@@ -130,24 +128,24 @@ function ProviderInner({ children }: { children: ReactNode }) {
         if (!res.ok) throw new Error("Failed to rename thread");
       },
       async archive(threadId: string) {
-        const res = await fetch(`${API_BASE}/threads/${threadId}/archive`, {
+        const res = await fetch(`${apiBase}/threads/${threadId}/archive`, {
           method: "POST",
         });
         if (!res.ok) throw new Error("Failed to archive thread");
       },
       async unarchive(threadId: string) {
-        const res = await fetch(`${API_BASE}/threads/${threadId}/unarchive`, {
+        const res = await fetch(`${apiBase}/threads/${threadId}/unarchive`, {
           method: "POST",
         });
         if (!res.ok) throw new Error("Failed to unarchive thread");
       },
       async delete(threadId: string) {
-        const res = await fetch(`${API_BASE}/threads/${threadId}`, {
+        const res = await fetch(`${apiBase}/threads/${threadId}`, {
           method: "DELETE",
         });
         if (!res.ok) throw new Error("Failed to delete thread");
       },
-    }), []);
+    }), [apiBase]);
 
   const runtime = useRemoteThreadListRuntime({
     adapter: adapter as any, 

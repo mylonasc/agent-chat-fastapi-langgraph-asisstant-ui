@@ -115,6 +115,18 @@ Implemented (backend-first slice; component wiring stays PUIR-09/PUIR-13):
 - wiring (this branch): `hooks/use-runtime-config.ts` loads the manifest
   once per page and derives the effective API base (runtime wins, then
   build-time); `tsc --noEmit` clean.
+- capability-gated polling: the thread indexing panel and the source
+  widget skip `/tools/web_rag/status` polling when the manifest reports
+  `web_rag.enabled: false` (no more 501 spam against the packaged app);
+  the admin page shows a disabled-capability notice instead of polling.
+- `MyRuntimeProvider` (thread list adapter, per-thread transport, message
+  hydration) and all admin calls use the hook's `apiBase`; pre-load
+  behavior is byte-identical to the old build-time constant.
+- repo hygiene notes: root `.gitignore` `lib/` (a Python rule) also
+  covers frontend `lib/`, so new frontend lib files need `git add -f`
+  (same as the existing tracked `utils.ts`); repo eslint config crashes
+  even on untouched files (pre-existing), `tsc --noEmit` + prettier are
+  the working gates.
 
 ## Test Environment
 
