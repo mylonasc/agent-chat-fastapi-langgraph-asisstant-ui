@@ -57,7 +57,6 @@ def test_thread_messages_persist_and_clear_on_delete():
     client = _client()
     client.post("/threads", json={"localId": "t1"})
     assert client.get("/threads/t1/messages").json() == {"messages": []}
-
     msg = {"id": "m1", "role": "user", "parts": [{"type": "text", "text": "hi"}]}
     assert client.post("/threads/t1/messages", json={"message": msg}).json() == {
         "ok": True
@@ -68,6 +67,34 @@ def test_thread_messages_persist_and_clear_on_delete():
     client.post("/threads", json={"localId": "t1"})
     assert client.get("/threads/t1/messages").json() == {"messages": []}
 
+
+def test_message_feedback_is_owned_idempotent_and_retractable():
+    client = _client()
+    headers = {"x-agent-chat-subject": "feedback-owner"}
+    client.post("/threads", json={"localId": "t1"}, headers=headers)
+    client.post(
+        "/threads/t1/messages",
+        json={"message": {"id": "m1", "role": "assistant", "content": []}},
+        headers=headers,
+    )
+    body = {"rating": "positive", "comment": "Useful", "metadata": {"ui": True}}
+    first = client.put("/threads/t1/messages/m1/feedback", json=body, headers=headers)
+    assert first.status_code == 200
+    retry = client.put("/threads/t1/messages/m1/feedback", json=body, headers=headers)
+    assert retry.json()["id"] == first.json()["id"]
+    changed = client.put(
+        "/threads/t1/messages/m1/feedback",
+        json={"rating": "negative"},
+        headers=headers,
+    )
+    assert changed.json()["rating"] == "negative"
+    assert client.get("/threads/t1/messages/m1/feedback", headers=headers).status_code == 200
+    assert client.get(
+        "/threads/t1/messages/m1/feedback",
+        headers={"x-agent-chat-subject": "other"},
+    ).status_code == 403
+    assert client.delete("/threads/t1/messages/m1/feedback", headers=headers).json() == {"ok": True}
+    assert client.get("/threads/t1/messages/m1/feedback", headers=headers).status_code == 404
 
 def test_checkpointer_fallback_for_thread_messages():
     class StatefulGraph(ToyGraph):

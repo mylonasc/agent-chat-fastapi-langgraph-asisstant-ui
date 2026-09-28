@@ -89,6 +89,15 @@ capabilities from the canonical composition root.
 
 ## In Progress
 
+### PUIR-12: End-to-end message feedback
+
+Branch: `feature/puir-12-message-feedback` (stacked on PUIR-11).
+
+- began backend delivery: owned `GET`/idempotent `PUT`/`DELETE` feedback routes
+  now expose the existing feedback service and durable repositories for a
+  thread message; API tests cover retry, update, ownership, and retraction;
+- frontend controls and restart/browser feedback coverage remain next.
+
 ### PUIR-11: Durable transcript synchronization
 
 Branch: `feature/puir-11-durable-transcripts` (stacked on #43).
