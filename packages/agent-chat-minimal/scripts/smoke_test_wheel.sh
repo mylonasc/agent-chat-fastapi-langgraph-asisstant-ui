@@ -50,4 +50,4 @@ test "$("$curl_bin" -s -o /dev/null -w '%{http_code}' \
   -X POST "http://127.0.0.1:$port/assistant" \
   -H 'content-type: application/json' \
   -d '{"state":{"messages":[]},"commands":[]}')" = "503"
-echo "artifact smoke test passed: $(basename "$artifact")"
+echo "artifact smoke test passed: ${artifact##*/}"
