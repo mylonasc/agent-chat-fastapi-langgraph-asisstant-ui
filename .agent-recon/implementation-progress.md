@@ -96,7 +96,12 @@ Branch: `feature/puir-12-message-feedback` (stacked on PUIR-11).
 - began backend delivery: owned `GET`/idempotent `PUT`/`DELETE` feedback routes
   now expose the existing feedback service and durable repositories for a
   thread message; API tests cover retry, update, ownership, and retraction;
-- frontend controls and restart/browser feedback coverage remain next.
+- accessible assistant-message helpful/not-helpful controls use the typed API
+  client, optimistic state, explicit retry after a transcript-not-yet-written
+  404, and screen-reader error feedback; mutations emit structured server logs;
+- opt-in managed Ollama E2E starts/stops its own durable server (no slow
+  background-process timeout), persists a real turn, and verifies successful
+  feedback mutation after the immediate-rating recovery path.
 
 ### PUIR-11: Durable transcript synchronization
 

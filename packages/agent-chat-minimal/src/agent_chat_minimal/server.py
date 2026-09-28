@@ -721,6 +721,12 @@ def _build_app(
             )
         except (NotFoundError, ForbiddenError, ConflictError) as exc:
             raise _service_error_to_http(exc) from exc
+        logger.info(
+            "feedback upserted thread_id=%s message_id=%s rating=%s",
+            thread_id,
+            message_id,
+            item.rating.value,
+        )
         return _feedback_payload(item)
 
     @app.delete("/threads/{thread_id}/messages/{message_id}/feedback")
@@ -733,6 +739,7 @@ def _build_app(
             raise _service_error_to_http(exc) from exc
         if not deleted:
             raise HTTPException(status_code=404, detail=f"feedback for {message_id!r} was not found")
+        logger.info("feedback deleted thread_id=%s message_id=%s", thread_id, message_id)
         return {"ok": True}
 
     async def run_assistant(
