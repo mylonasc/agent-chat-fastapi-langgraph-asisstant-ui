@@ -390,7 +390,11 @@ def _build_app(
         except (TypeError, ValueError):
             return factory()
         if checkpointer is not None and "checkpointer" in params:
-            return factory(checkpointer=checkpointer)
+            # Durable composition defers opening SQLite until FastAPI lifespan.
+            # Resolve its proxy only when the lazy registry factory is built,
+            # so LangGraph receives the actual BaseCheckpointSaver.
+            factory_checkpointer = getattr(checkpointer, "checkpointer", checkpointer)
+            return factory(checkpointer=factory_checkpointer)
         return factory()
 
     if single_mode:
