@@ -7,14 +7,25 @@ server. Single-prompt clients can ignore this page entirely.
 ## Concepts
 
 - **Thread**: a conversation id. Metadata (title, owner, archived) is kept by
-  `ThreadManager`; content lives in two places:
-  - assistant-ui message objects, stored verbatim per thread (tool UI parts
-    rehydrate on reload);
+  the session service (in-memory or SQLite repositories); content lives in
+  two places:
+  - assistant-ui message objects, stored verbatim per thread as transcript
+    payloads (tool UI parts rehydrate on reload);
   - LangGraph checkpointer state keyed by `thread_id` (graph-side memory).
 - **Scoped request**: `POST /assistant` accepts `thread_id`/`user_id`
   top-level fields (plus the classic `commands`/`state`). Missing ids are
-  auto-generated and their metadata auto-created — the same behavior as the
+  auto-generated and their sessions auto-created — the same behavior as the
   full backend.
+
+## Identity
+
+Ownership comes from the resolved principal, never from client-supplied ids.
+Send `x-agent-chat-subject: <subject>` to act as that subject; requests
+without the header act as `default_user`. Legacy `user_id` query/body fields
+are still accepted but must equal the principal — a mismatch is rejected with
+403, and `POST /assistant` ignores the body `user_id` entirely. Inject a
+custom resolver via `create_app(principal_resolver=...)` for real
+authentication (JWT/OAuth/proxy).
 
 ## Endpoints
 
@@ -23,7 +34,7 @@ GET    /threads[?user_id=&include_archived=]
 POST   /threads                       {localId, user_id?, title?}
 GET    /threads/{id}                  PATCH /threads/{id} {title}
 POST   /threads/{id}/archive|unarchive
-DELETE /threads/{id}                  (also drops stored messages)
+DELETE /threads/{id}                  (also drops transcript, feedback, checkpoints)
 GET    /threads/{id}/messages         (persisted UI messages, else checkpointer fallback)
 POST   /threads/{id}/messages         {message}  (history.append hook)
 POST   /assistant  POST /assistant/{agent_id}    (scoped shape supported)
@@ -63,10 +74,16 @@ entries like the full backend.
 
 ## Persistence notes
 
-- Default storage is in-memory (`MemorySaver` + dicts): restarts lose it —
-  identical to the full backend's default. Restart-safe backends plug in via
-  `create_app(checkpointer=<saver>)`.
-- History larger than the 500-message store cap (or 200 tool updates) is
-  trimmed oldest-first.
+- Default storage is in-memory (repositories + `MemorySaver` checkpointer):
+  restarts lose it — identical to the full backend's default. Restart-safe
+  backends plug in via `create_app(repositories=<SQLiteRepositories>,
+  checkpoint_deleter=<checkpoints>)` plus `checkpointer=<saver>` for the
+  graph factories (see [persistence.md](persistence.md)).
+- Cross-principal access is rejected (403); unknown sessions return 404,
+  except `GET .../messages`, which keeps the legacy checkpointer-hydration
+  fallback for ids with graph state but no session yet.
+- Writing messages to an archived session, or renaming one, returns 409.
+  `POST .../messages` for an unknown session returns 404 (orphan writes are
+  no longer silently kept).
 - AI messages with `tool_calls` but no matching `ToolMessage` are dropped
   before invoke (invalid-history guard, same as full backend).

@@ -35,15 +35,56 @@ Implemented:
 
 PUIR-06 remains open until its draft pull request is reviewed and merged.
 
+## In Progress (same branch, per maintainer direction)
+
+### PUIR-07 / #29: Compatibility routes onto application services
+
+Implemented on `feature/puir-06-checkpoints` (no new branch):
+
+- new `identity.py`: `DefaultPrincipalResolver` (`x-agent-chat-subject`
+  header, `default_user` fallback); injectable via
+  `create_app(principal_resolver=...)`;
+- `server.py` routes call `SessionService`/`TranscriptService`; no route
+  touches repository state. `thread_manager`/`message_store` kwargs are
+  deprecated best-effort-migrated shims;
+- ownership is server-derived: legacy `user_id` query/body must equal the
+  principal (403 on mismatch); `POST /assistant` ignores body `user_id` and
+  auto-creates owned sessions; deletion cascades transcript/feedback plus the
+  `checkpoint_deleter` port;
+- `CreateThreadBody.user_id` is now optional (`None` = no legacy claim) so
+  header-identified clients can omit it;
+- `composition.py` passes through `repositories`/`session_service`/
+  `transcript_service`/`principal_resolver`/`checkpoint_deleter`; defaults
+  stay in-memory (no file side effects);
+- new `tests/test_compatibility_contract.py` runs the same CRUD, isolation
+  (403), cascade, auto-create, archived-409, and OpenAPI assertions against
+  in-memory and SQLite backends;
+- docs updated: `threads.md` (identity + behavior changes), `persistence.md`
+  (composition), `configuration.md` (new hooks + SQLite/checkpoint example).
+
+Verification: 87 package tests pass (71 pre-existing + 16 contract).
+
+Maintainer manual test (full UI against packaged app): thread CRUD, messages,
+archive, and assistant runs work. The full UI polls
+`GET /tools/web_rag/status` (every ~1.2 s) and receives a refusal. This is
+the known, documented incompatibility (recon conclusion #3; RAG routes live
+only in the separate full backend, gating is PUIR-13): the frontend checks
+`!res.ok` and degrades gracefully, and the backend answers JSON rather than
+SPA HTML (PUIR-01 exclusion holds). Hardened further with an explicit
+`501 {"detail": {"error": "capability_disabled", ...}}` refusal for
+`/tools/*` so "unsupported here" is distinguishable from a mistyped URL.
+
+UI staging: `web/`/`web_full/` are gitignored build outputs, so a source
+checkout starts API-only. `scripts/stage_ui.sh` rebuilds and stages both
+exports (verified `/` and `/full/` served with API intact); `RUNNING.md`
+documents it and the wheel smoke test now asserts `/full/` too.
+
 ## Next Boundary
 
-PUIR-07 should compose the application repositories, checkpoint adapter,
-principal resolver, and services into FastAPI lifespan/dependencies, then move
-the compatibility `/threads` and `/assistant` routes off process-local globals.
-It must preserve current route shapes during the migration window while making
-ownership server-derived and deletion semantics explicit.
+PUIR-07 composition is implemented (above) and awaits maintainer manual
+testing, then merge of the draft PR.
 
-After PUIR-07, PUIR-08 can safely expose runtime UI configuration and
+After PUIR-07 merges, PUIR-08 can safely expose runtime UI configuration and
 capabilities from the canonical composition root.
 
 ## Test Environment

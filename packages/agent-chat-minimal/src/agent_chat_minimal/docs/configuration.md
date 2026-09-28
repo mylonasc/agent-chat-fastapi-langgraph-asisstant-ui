@@ -30,14 +30,32 @@ app = create_app(settings=settings)
 ```
 
 `Settings.resolved_database_url()` returns `DATABASE_URL` when set, otherwise
-an absolute `sqlite+aiosqlite` URL for `DATABASE_PATH`. The current HTTP app
-does not open these repositories yet; PUIR-07 owns that composition. A
-composition root can use `settings.auto_migrate` to choose whether to pass
-`migrate=True` to `SQLiteRepositories.open(...)`.
+an absolute `sqlite+aiosqlite` URL for `DATABASE_PATH`. The HTTP app defaults
+to in-memory repositories (no files, no side effects); a composition root
+opens repositories itself and passes them in (see below). Use
+`settings.auto_migrate` to choose whether to pass `migrate=True` to
+`SQLiteRepositories.open(...)`.
 
 `Settings.resolved_checkpoint_database_url()` independently resolves
 `CHECKPOINT_DATABASE_URL` or `CHECKPOINT_DATABASE_PATH`. It must not point at
-the application session database. PUIR-07 will compose its separate lifecycle.
+the application session database. Open `LangGraphSQLiteCheckpoints` separately
+and pass it as `checkpoint_deleter=` (session deletion) plus
+`checkpointer=<adapter.checkpointer>` (graph factories).
+
+```python
+from agent_chat_minimal.adapters.langgraph_sqlite import LangGraphSQLiteCheckpoints
+from agent_chat_minimal.adapters.sqlite import SQLiteRepositories
+
+repos = await SQLiteRepositories.open(settings.resolved_database_url())
+checkpoints = await LangGraphSQLiteCheckpoints.open(
+    settings.resolved_checkpoint_database_url()
+)
+app = create_app(
+    repositories=repos,
+    checkpoint_deleter=checkpoints,
+    checkpointer=checkpoints.checkpointer,
+)
+```
 
 ## CLI
 
@@ -61,7 +79,11 @@ error when credentials are missing.
 | `web_dir=`       | Override the bundled UI directory                  |
 | `prepare_state=` | `(state, request) -> message dicts` reducer        |
 | `checkpointer=`  | Shared checkpointer (`"memory"` default, see below)|
-| `thread_manager=`/`message_store=` | Swap thread storage (tests)          |
+| `repositories=`  | Bundle with `sessions`/`transcripts`/`feedback` (memory default; pass SQLite for durability) |
+| `session_service=`/`transcript_service=` | Override application services (tests) |
+| `principal_resolver=` | Request → trusted principal (default: `x-agent-chat-subject` header, `default_user` fallback) |
+| `checkpoint_deleter=` | Checkpoint port wired into session deletion |
+| `thread_manager=`/`message_store=` | Deprecated; contents are migrated into the services |
 | `settings=`      | Validated deployment settings; explicit keywords override it |
 
 For an ASGI server, use the side-effect-free factory entry point:
@@ -79,8 +101,8 @@ saver instance for custom backends, or `None` to disable injection.
 
 For durable local graph state, install the `persistence` extra, open
 `LangGraphSQLiteCheckpoints`, and pass its `checkpointer` property to the app or
-graph factories. The adapter is not opened by the current HTTP composition
-root; PUIR-07 owns that integration.
+graph factories (plus the adapter itself as `checkpoint_deleter=` so session
+deletion removes graph state).
 
 ## `/assistant` 503 semantics
 

@@ -13,6 +13,7 @@ from fastapi import FastAPI
 from .capabilities import CapabilityProvider
 from .config import Settings
 from .server import ChatGraph, _build_app
+from .services import SessionService, TranscriptService
 from .threads import ThreadManager, ThreadMessageStore
 from .transport import ChatRequest
 
@@ -30,6 +31,11 @@ def create_app(
     message_store: ThreadMessageStore | None = None,
     settings: Settings | None = None,
     capability_provider: CapabilityProvider | None = None,
+    principal_resolver: Any | None = None,
+    repositories: Any | None = None,
+    session_service: SessionService | None = None,
+    transcript_service: TranscriptService | None = None,
+    checkpoint_deleter: Any | None = None,
 ) -> FastAPI:
     """Compose an application from validated settings and injectable services.
 
@@ -65,6 +71,11 @@ def create_app(
         checkpointer=checkpointer,
         thread_manager=thread_manager,
         message_store=message_store,
+        principal_resolver=principal_resolver,
+        repositories=repositories,
+        session_service=session_service,
+        transcript_service=transcript_service,
+        checkpoint_deleter=checkpoint_deleter,
     )
 
 
