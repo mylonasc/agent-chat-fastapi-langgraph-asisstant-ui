@@ -183,6 +183,31 @@ Branch: `feature/puir-09-unified-frontend` (stacked on
   Promote items into scoped issues (or fix inline with a checkbox tick)
   rather than letting the list grow silently.
 
+## In Progress
+
+### PUIR-10 / #33: Typed API client and identity integration
+
+Branch: `feature/puir-10-api-client-identity` (from merged PUIR-08/09).
+
+- `lib/api-client.ts`: typed thread endpoints, centralized URL/header/base
+  handling, JSON/error parsing (`ApiError`), cancellation passthrough through
+  `RequestInit`, and no `user_id` query/body authorization claims;
+- `lib/identity.ts`: opaque `anon-<UUID>` browser subject stored under
+  `agent-chat.anonymous-subject.v1`, sent only as
+  `x-agent-chat-subject`; delegated mode forwards a deliberately opaque
+  `window.agentChatIdentity` header/subject extension contract and does not
+  interpret authentication tokens;
+- `use-api-client.ts`: combines the runtime-configured base, identity mode,
+  and typed client. Full thread/hydration/transport, RAG status widgets,
+  and admin calls now use it; hard-coded `default_user`, direct component
+  fetches, and user-ID input are removed. Download anchors were removed
+  because an anchor cannot carry trusted subject/auth headers (the disabled
+  RAG surface is owned by PUIR-13).
+- `tsc --noEmit` is clean.
+- Browser verification: the new Playwright anonymous-identity spec passed
+  against the staged unified UI; one profile retains its `anon-` subject
+  across reload while a separate browser context gets a distinct subject.
+
 ## Test Environment
 
 - Supported verification interpreter used so far: CPython 3.12.3.

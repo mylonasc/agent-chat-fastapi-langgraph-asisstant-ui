@@ -12,7 +12,7 @@ import {
 import { useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import { useRuntimeConfig } from "@/hooks/use-runtime-config";
+import { useApiClient } from "@/hooks/use-api-client";
 
 type JsonObj = Record<string, unknown>;
 
@@ -215,8 +215,7 @@ function SourceIndexingPanel({
     return "none";
   }, [fromRetrievalSources.length, fromSearchSources.length, liveJobSources.length, sources.length]);
 
-  const userId = String(args.user_id ?? result.user_id ?? "default_user");
-  const { config, apiBase } = useRuntimeConfig();
+  const { config, client } = useApiClient();
   const ragCapability = config.tools.web_rag;
   const statusPath = ragCapability.status_path ?? "/tools/web_rag/status";
 
@@ -261,14 +260,7 @@ function SourceIndexingPanel({
 
     const run = async () => {
       try {
-        const statusRes = await fetch(
-          `${apiBase}${statusPath}?user_id=${encodeURIComponent(userId)}`,
-          { cache: "no-store" }
-        );
-
-        if (!statusRes.ok || cancelled) return;
-
-        const statusJson = await statusRes.json();
+        const statusJson = await client.request<JsonObj>(statusPath);
         if (cancelled) return;
 
         const st = asObject(statusJson?.index);
@@ -319,7 +311,7 @@ function SourceIndexingPanel({
       cancelled = true;
       window.clearInterval(pollId);
     };
-  }, [jobId, retrievalSources.length, searchResults.length, sources.length, status, statusType, userId, ragCapability.enabled, statusPath, apiBase]);
+  }, [jobId, retrievalSources.length, searchResults.length, sources.length, status, statusType, ragCapability.enabled, statusPath, client]);
 
   const callDocumentCount = useMemo(() => {
     if (sources.length) {

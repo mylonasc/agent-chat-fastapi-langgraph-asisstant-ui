@@ -20,12 +20,19 @@ server. Single-prompt clients can ignore this page entirely.
 ## Identity
 
 Ownership comes from the resolved principal, never from client-supplied ids.
-Send `x-agent-chat-subject: <subject>` to act as that subject; requests
-without the header act as `default_user`. Legacy `user_id` query/body fields
-are still accepted but must equal the principal — a mismatch is rejected with
-403, and `POST /assistant` ignores the body `user_id` entirely. Inject a
-custom resolver via `create_app(principal_resolver=...)` for real
-authentication (JWT/OAuth/proxy).
+The bundled UI's anonymous mode stores one opaque `anon-<UUID>` browser
+subject in local storage and sends it as `x-agent-chat-subject`; it survives
+reloads but is convenience isolation, not authentication. Legacy `user_id`
+query/body fields are still accepted but must equal the principal — a mismatch
+is rejected with 403, and `POST /assistant` ignores the body `user_id`
+entirely.
+
+For a trusted identity provider, inject a custom server
+`create_app(principal_resolver=...)`, set `IDENTITY_MODE=delegated`, and make
+the embedding set `window.agentChatIdentity = { subject, headers }` before the
+UI loads. `headers` are forwarded opaquely by the typed client (for example an
+authorization header); UI components never parse a token or infer identity
+from a request body/tool argument.
 
 ## Endpoints
 

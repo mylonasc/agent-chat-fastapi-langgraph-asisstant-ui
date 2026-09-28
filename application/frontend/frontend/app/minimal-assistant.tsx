@@ -14,7 +14,7 @@ import { ReactNode } from "react";
 
 import { Thread } from "@/components/assistant-ui/thread";
 import { GraphToolUI } from "@/components/tools/GraphToolUI";
-import { useRuntimeConfig } from "@/hooks/use-runtime-config";
+import { useApiClient } from "@/hooks/use-api-client";
 
 type State = {
   messages: LangChainMessage[];
@@ -66,13 +66,13 @@ const converter = (
  * The shared Thread view is reused; only the runtime composition differs.
  */
 export function MinimalAssistant({ children }: { children?: ReactNode }) {
-  const { apiBase } = useRuntimeConfig();
+  const { client } = useApiClient();
   const runtime = useAssistantTransportRuntime({
     initialState: {
       messages: [],
     },
-    api: `${apiBase}/assistant`,
-    headers: {},
+    api: client.assistantUrl(),
+    headers: client.headers(),
     converter,
     onError: (error: Error) => {
       console.error("Assistant transport error:", error);
