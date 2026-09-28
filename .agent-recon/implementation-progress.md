@@ -132,6 +132,20 @@ Implemented (backend-first slice; component wiring stays PUIR-09/PUIR-13):
   app serves `/api/config` (no-store, `web_rag.enabled: false`), `/`,
   and `/full/`; 95 package tests pass; `tsc --noEmit` clean.
 
+## In Progress (stacked on PUIR-08 branch)
+
+### PUIR-09 / #35: Unified static frontend
+
+Branch: `feature/puir-09-unified-frontend` (stacked on
+`feature/puir-08-runtime-config`, unmerged PR #39).
+
+- `/full/` is dropped outright per maintainer decision (no redirect shim,
+  no second build): one static export served at `/`, preset selected at
+  runtime from `/api/config`.
+- Scaffold: `application/frontend/frontend/` copied from `frontend-full`
+  (the superset), server-only `app/api/chat/route.ts` pruned, `basePath`
+  support removed, package renamed to `agent-chat-ui`.
+
 ## Tracker
 
 - Tech-debt tracker: #40 (`PUIR-refactor-tech-debt`, P2, parent #22),
