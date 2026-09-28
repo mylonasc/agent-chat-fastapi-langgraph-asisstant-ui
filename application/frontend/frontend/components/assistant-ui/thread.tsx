@@ -187,28 +187,18 @@ const ACTIVE_THREAD_STORAGE_KEY = "agent-chat.active-thread.v1";
 const RememberRemoteThread: FC = () => {
   const api = useAssistantApi();
   const threadItem = useAssistantState((s) => s.threadListItem);
+  const isLoading = useAssistantState((s) => s.threads.isLoading);
+  const threadIds = useAssistantState((s) => s.threads.threadIds);
 
   useEffect(() => {
     if (threadItem.remoteId) {
       localStorage.setItem(ACTIVE_THREAD_STORAGE_KEY, threadItem.remoteId);
       return;
     }
+    if (isLoading) return;
     const saved = localStorage.getItem(ACTIVE_THREAD_STORAGE_KEY);
-    if (!saved) return;
-    let attempts = 0;
-    let timer: number | undefined;
-    const restore = () => {
-      api.threads().switchToThread(saved);
-      attempts += 1;
-      // Remote-thread initialization also creates a local draft. Retry until
-      // the persisted thread wins that startup race.
-      if (attempts < 4) timer = window.setTimeout(restore, 250);
-    };
-    restore();
-    return () => {
-      if (timer !== undefined) window.clearTimeout(timer);
-    };
-  }, [api, threadItem.remoteId]);
+    if (saved && threadIds.includes(saved)) api.threads().switchToThread(saved);
+  }, [api, isLoading, threadIds, threadItem.remoteId]);
 
   return null;
 };

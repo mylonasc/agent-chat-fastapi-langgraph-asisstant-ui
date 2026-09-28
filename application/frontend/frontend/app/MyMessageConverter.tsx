@@ -25,6 +25,20 @@ export const converter = (
   const serverMessages = state?.messages ?? [];
   const isSending = connectionMetadata.isSending;
 
+  // Transcript hydration returns the complete Assistant UI payload verbatim.
+  // Do not run it through the LangChain converter again or lose rich parts.
+  const isStoredUiTranscript =
+    !isSending &&
+    serverMessages.length > 0 &&
+    serverMessages.every(
+      (message: any) =>
+        (message?.role === "user" || message?.role === "assistant") &&
+        Array.isArray(message?.content),
+    );
+  if (isStoredUiTranscript) {
+    return { messages: serverMessages as any[], isRunning: false };
+  }
+
   const pendingHumanMessages = connectionMetadata.pendingCommands
     .filter((cmd) => cmd.type === "add-message")
     .map((cmd) => ({

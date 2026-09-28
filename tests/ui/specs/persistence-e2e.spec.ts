@@ -63,4 +63,14 @@ test("completed Ollama turns persist and accept feedback", async ({ page }) => {
   }, { apiBase, threadId: persisted.threadId, messageId: assistantMessageId });
   await expect.poll(readFeedback).toMatchObject({ rating: "positive" });
 
+  await page.reload();
+  await expect(page.locator('[data-role="user"]')).toContainText(
+    "persistence works",
+    { timeout: 30_000 },
+  );
+  await expect(page.getByRole("button", { name: "Mark response helpful" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+
 });

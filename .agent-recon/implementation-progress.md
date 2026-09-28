@@ -102,6 +102,10 @@ Branch: `feature/puir-12-message-feedback` (stacked on PUIR-11).
 - opt-in managed Ollama E2E starts/stops its own durable server (no slow
   background-process timeout), persists a real turn, and verifies successful
   feedback mutation after the immediate-rating recovery path.
+- fixed PUIR-11 hydration reliability: wait for the remote list before
+  restoring the active thread and preserve stored Assistant UI payloads rather
+  than reconverting them as LangChain messages. The managed E2E now validates
+  message and feedback restoration after browser reload.
 
 ### PUIR-11: Durable transcript synchronization
 
