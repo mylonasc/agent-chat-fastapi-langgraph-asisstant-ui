@@ -112,6 +112,9 @@ Implemented (backend-first slice; component wiring stays PUIR-09/PUIR-13):
   with `parse_runtime_config` on fixture, malformed, and future inputs);
 - new `runtime-config` guide registered in `docs.py`; configuration env
   table updated.
+- wiring (this branch): `hooks/use-runtime-config.ts` loads the manifest
+  once per page and derives the effective API base (runtime wins, then
+  build-time); `tsc --noEmit` clean.
 
 ## Test Environment
 
