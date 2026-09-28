@@ -15,6 +15,9 @@ Guides (shipped inside the wheel under `agent_chat_minimal/docs/`):
 - [providers.md](providers.md) — model specs for OpenAI, Anthropic, Ollama, ….
 - [configuration.md](configuration.md) — env vars, CLI flags, hooks.
 - [threads.md](threads.md) — multi-thread chats, frontend-full compatibility.
+- [transport.md](transport.md) — Assistant transport protocol boundary.
+- [persistence.md](persistence.md) — durable repositories and checkpoints.
+- [runtime-config.md](runtime-config.md) — runtime UI capabilities.
 - [index.md](index.md) — this file: architecture overview.
 
 Discoverability: every guide is readable at runtime without unpacking the wheel:

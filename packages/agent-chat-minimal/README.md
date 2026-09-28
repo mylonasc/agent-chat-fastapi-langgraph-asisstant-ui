@@ -53,6 +53,9 @@ Set `OPENAI_API_KEY` to enable `/assistant`; without it, the UI and
 (`FULL_WEB_DIR` remains as a deprecated override hook and no longer
 ships a bundle).
 
+See [`../../docs/migration-to-packaged-app.md`](../../docs/migration-to-packaged-app.md)
+for the canonical package migration path and legacy development-stack status.
+
 For a durable full preset, install the persistence extra and configure both
 separate SQLite files (the supported CLI/factory owns migrations and clean
 shutdown):
