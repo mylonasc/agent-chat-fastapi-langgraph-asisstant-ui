@@ -26,8 +26,10 @@ from .domain import (
     SessionStatus,
     StoredMessage,
 )
+from .identity import DefaultPrincipalResolver
 from .ports import PrincipalResolver
 from .registry import AGENT_REGISTRY, discover_agents
+from .services import SessionService, TranscriptService
 from .server import (
     DEFAULT_WEB_DIR,
     DEFAULT_WEB_FULL_DIR,
@@ -47,6 +49,7 @@ __all__ = [
     "ChatGraph",
     "CapabilityProvider",
     "DEFAULT_WEB_DIR",
+    "DefaultPrincipalResolver",
     "DEFAULT_WEB_FULL_DIR",
     "Feedback",
     "FeedbackRating",
@@ -55,9 +58,11 @@ __all__ = [
     "PrincipalResolver",
     "ScopedChatRequest",
     "Session",
+    "SessionService",
     "SessionStatus",
     "Settings",
     "StoredMessage",
+    "TranscriptService",
     "ThreadManager",
     "ThreadMessageStore",
     "ThreadMetadata",

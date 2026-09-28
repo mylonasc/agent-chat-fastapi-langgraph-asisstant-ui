@@ -38,6 +38,7 @@ done
 
 "$curl_bin" -sf "http://127.0.0.1:$port/health"
 "$curl_bin" -sf "http://127.0.0.1:$port/" | /bin/grep -qi "<html"
+"$curl_bin" -sf "http://127.0.0.1:$port/full/" | /bin/grep -qi "<html"
 test "$("$curl_bin" -s -o /dev/null -w '%{http_code}' \
   -X POST "http://127.0.0.1:$port/assistant" \
   -H 'content-type: application/json' \

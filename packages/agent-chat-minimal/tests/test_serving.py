@@ -18,8 +18,9 @@ def test_api_and_static_serving_without_network(tmp_path, monkeypatch):
     assert client.get("/_next/static/test.js").text == "fixture asset"
     assert client.get("/unknown/spa/path").text == "<html>minimal fixture</html>"
     tools_response = client.get("/tools/unavailable")
-    assert tools_response.status_code == 404
+    assert tools_response.status_code == 501
     assert "minimal fixture" not in tools_response.text
+    assert tools_response.json()["detail"]["error"] == "capability_disabled"
 
     response = client.post(
         "/assistant",

@@ -32,7 +32,15 @@ export OPENAI_API_KEY=sk-...
 ```
 
 Open <http://localhost:8011/>. The same process serves the static UI,
-`/health`, and `/assistant`. You can also run it as:
+`/health`, and `/assistant`. The full thread-sidebar UI is served at
+`/full/`. Running from a source checkout without staged builds starts in
+API-only mode (a warning names the missing directory); stage the UIs with:
+
+```bash
+packages/agent-chat-minimal/scripts/stage_ui.sh
+```
+
+You can also run it as:
 
 ```bash
 .venv-minimal/bin/uvicorn agent_chat_minimal:create_default_app --factory --port 8011

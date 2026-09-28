@@ -1,16 +1,29 @@
+import asyncio
 import inspect
 import logging
 import uuid
+import warnings
 from collections.abc import Callable
-from typing import Any, Optional, Protocol, runtime_checkable
+from datetime import timezone
+from typing import Annotated, Any, Optional, Protocol, runtime_checkable
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from langchain_core.messages import HumanMessage
 from pydantic import BaseModel
 
+from .adapters.memory import InMemoryRepositories
 from .capabilities import CapabilityProvider
 from .config import Settings
+from .domain import MessageRole, Principal, Session, SessionStatus
+from .identity import DefaultPrincipalResolver
+from .services import (
+    ConflictError,
+    ForbiddenError,
+    NotFoundError,
+    SessionService,
+    TranscriptService,
+)
 from .static_ui import DEFAULT_WEB_DIR, DEFAULT_WEB_FULL_DIR, mount_static_ui
 from .threads import ThreadManager, ThreadMessageStore, ThreadMetadata
 from .transport import (
@@ -47,7 +60,9 @@ class ScopedChatRequest(ChatRequest):
 
 class CreateThreadBody(BaseModel):
     localId: str
-    user_id: str = "default_user"
+    # Legacy client-supplied owner claim. Accepted for shape compatibility but
+    # never authorizes: when present it must equal the resolved principal.
+    user_id: Optional[str] = None
     title: str = "New Chat"
 
 
@@ -189,6 +204,112 @@ def _default_checkpointer() -> Any:
     return MemorySaver()
 
 
+def _session_to_thread_metadata(session: Session) -> ThreadMetadata:
+    """Map the canonical session onto the compatibility thread shape."""
+    created = session.created_at
+    if created.tzinfo is None:
+        created = created.replace(tzinfo=timezone.utc)
+    return ThreadMetadata(
+        id=session.id,
+        user_id=session.owner_subject,
+        title=session.title,
+        created_at=created,
+        is_archived=session.status is SessionStatus.ARCHIVED,
+        is_public=False,
+    )
+
+
+def _infer_message_role(message: dict[str, Any]) -> MessageRole:
+    """Infer a transcript role from a verbatim UI message object."""
+    role = str(message.get("role") or "").strip().lower()
+    try:
+        return MessageRole(role)
+    except ValueError:
+        return MessageRole.USER
+
+
+def _service_error_to_http(exc: Exception) -> HTTPException:
+    if isinstance(exc, NotFoundError):
+        return HTTPException(status_code=404, detail=str(exc))
+    if isinstance(exc, ForbiddenError):
+        return HTTPException(status_code=403, detail=str(exc))
+    if isinstance(exc, ConflictError):
+        return HTTPException(status_code=409, detail=str(exc))
+    raise exc
+
+
+def _seed_repositories_from_legacy(
+    repositories: InMemoryRepositories,
+    thread_manager: ThreadManager | None,
+    message_store: ThreadMessageStore | None,
+) -> None:
+    """Best-effort migration of deprecated process-local stores into services."""
+
+    async def seed() -> None:
+        if thread_manager is not None:
+            snapshot = dict(getattr(thread_manager, "_threads", {}))
+            for thread in snapshot.values():
+                created = thread.created_at
+                if created.tzinfo is None:
+                    created = created.replace(tzinfo=timezone.utc)
+                try:
+                    await repositories.sessions.add(
+                        Session(
+                            id=thread.id,
+                            owner_subject=thread.user_id,
+                            title=thread.title,
+                            created_at=created,
+                            updated_at=created,
+                            status=SessionStatus.ARCHIVED
+                            if thread.is_archived
+                            else SessionStatus.ACTIVE,
+                            archived_at=created if thread.is_archived else None,
+                            metadata={"migrated_from": "ThreadManager"},
+                        )
+                    )
+                except ValueError:
+                    continue
+        if message_store is not None:
+            snapshot = dict(getattr(message_store, "_messages", {}))
+            for thread_id, items in snapshot.items():
+                if await repositories.sessions.get(thread_id) is None:
+                    continue
+                existing = await repositories.transcripts.list_by_session(thread_id)
+                sequence = existing[-1].sequence if existing else 0
+                for item in items:
+                    from .domain import StoredMessage, utc_now
+
+                    sequence += 1
+                    try:
+                        await repositories.transcripts.add(
+                            StoredMessage(
+                                id=str(item.get("id"))
+                                if item.get("id") is not None
+                                else f"legacy-{sequence}",
+                                session_id=thread_id,
+                                sequence=sequence,
+                                role=_infer_message_role(item),
+                                payload=item,
+                                created_at=utc_now(),
+                                metadata={"migrated_from": "ThreadMessageStore"},
+                            )
+                        )
+                    except ValueError:
+                        sequence -= 1
+                        continue
+
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        asyncio.run(seed())
+    else:
+        warnings.warn(
+            "legacy thread_manager/message_store seeding skipped: "
+            "a running event loop owns _build_app; pass repositories instead",
+            stacklevel=2,
+        )
+
+
 def _build_app(
     settings: Settings,
     capability_provider: CapabilityProvider,
@@ -199,6 +320,11 @@ def _build_app(
     checkpointer: Any | None = "memory",
     thread_manager: ThreadManager | None = None,
     message_store: ThreadMessageStore | None = None,
+    principal_resolver: Any | None = None,
+    repositories: Any | None = None,
+    session_service: SessionService | None = None,
+    transcript_service: TranscriptService | None = None,
+    checkpoint_deleter: Any | None = None,
 ) -> FastAPI:
     """Build routes and transport from composition-root dependencies.
 
@@ -231,8 +357,23 @@ def _build_app(
         checkpointer: Shared LangGraph checkpointer passed to factories that
             accept a ``checkpointer`` kwarg. ``"memory"`` (default) builds one
             ``MemorySaver``; pass an instance, or ``None`` to disable.
-        thread_manager: Override the in-memory thread registry (tests).
-        message_store: Override the assistant-ui message store (tests).
+        thread_manager: Deprecated legacy thread registry. When provided its
+            contents are best-effort migrated into the session service;
+            prefer ``repositories`` or ``session_service``.
+        message_store: Deprecated verbatim message store. When provided its
+            contents are best-effort migrated into the transcript service;
+            prefer ``repositories`` or ``transcript_service``.
+        principal_resolver: Maps a request to a trusted
+            :class:`~agent_chat_minimal.domain.Principal`. Defaults to
+            :class:`~agent_chat_minimal.identity.DefaultPrincipalResolver`
+            (``x-agent-chat-subject`` header, ``default_user`` fallback).
+        repositories: Bundle exposing ``sessions``/``transcripts``/``feedback``
+            repositories (in-memory or SQLite). Defaults to fresh
+            :class:`~agent_chat_minimal.adapters.memory.InMemoryRepositories`.
+        session_service: Override the session application service (tests).
+        transcript_service: Override the transcript application service (tests).
+        checkpoint_deleter: Separate-lifecycle checkpoint port wired into the
+            session service so deletion removes graph state (PUIR-06 adapter).
     """
     from .registry import discover_agents
 
@@ -278,8 +419,36 @@ def _build_app(
             f"available agents: {sorted(factories)}"
         )
 
-    threads = thread_manager or ThreadManager()
-    messages = message_store or ThreadMessageStore()
+    resolver = principal_resolver or DefaultPrincipalResolver()
+    owned_repositories: InMemoryRepositories | Any | None = repositories
+    if session_service is None or transcript_service is None:
+        if owned_repositories is None:
+            owned_repositories = InMemoryRepositories()
+            if thread_manager is not None or message_store is not None:
+                warnings.warn(
+                    "thread_manager/message_store are deprecated; "
+                    "pass repositories or session_service instead",
+                    DeprecationWarning,
+                    stacklevel=2,
+                )
+                if isinstance(owned_repositories, InMemoryRepositories):
+                    _seed_repositories_from_legacy(
+                        owned_repositories, thread_manager, message_store
+                    )
+        base_sessions = session_service or SessionService(
+            owned_repositories.sessions,
+            owned_repositories.transcripts,
+            owned_repositories.feedback,
+            checkpoint_deleter,
+        )
+        base_transcripts = transcript_service or TranscriptService(
+            owned_repositories.sessions, owned_repositories.transcripts
+        )
+    else:
+        base_sessions = session_service
+        base_transcripts = transcript_service
+    sessions = base_sessions
+    transcripts = base_transcripts
 
     built: dict[str, Any] = {}
     build_errors: dict[str, str] = {}
@@ -320,6 +489,14 @@ def _build_app(
     app = FastAPI()
     app.state.settings = settings
     app.state.capabilities = capability_provider
+    app.state.session_service = sessions
+    app.state.transcript_service = transcripts
+    app.state.principal_resolver = resolver
+
+    async def _resolve_principal(request: Request) -> Principal:
+        return await resolver.resolve(request)
+
+    PrincipalDep = Annotated[Principal, Depends(_resolve_principal)]
     app.add_middleware(
         CORSMiddleware,
         # The bundled UI is same-origin; permissive CORS supports split-port development.
@@ -338,100 +515,155 @@ def _build_app(
     async def list_agents():
         return capability_provider.agent_listing(list(factories), default_agent)
 
-    # --- Threads (full-stack compatible) ---
+    # --- Threads (full-stack compatible, service-backed) ---
+    #
+    # Ownership always comes from the resolved principal. The legacy
+    # ``user_id`` query/body fields are accepted for shape compatibility but
+    # never authorize: a value that disagrees with the principal is rejected
+    # with 403. ``POST /assistant`` ignores ``user_id`` in the body and owns
+    # auto-created sessions by the principal.
 
     @app.get("/threads", response_model=list[ThreadMetadata])
-    async def get_threads(user_id: str = "default_user", include_archived: bool = False):
-        return list(reversed(threads.list_user_threads(user_id, include_archived)))
+    async def get_threads(
+        principal: PrincipalDep,
+        user_id: str | None = None,
+        include_archived: bool = False,
+    ):
+        """List the principal's sessions (legacy ``user_id`` must match)."""
+        if user_id is not None and user_id != principal.subject:
+            raise HTTPException(
+                status_code=403,
+                detail=f"principal cannot list sessions for {user_id!r}",
+            )
+        try:
+            owned = await sessions.list(
+                principal, include_archived=include_archived
+            )
+        except (NotFoundError, ForbiddenError, ConflictError) as exc:
+            raise _service_error_to_http(exc) from exc
+        return [_session_to_thread_metadata(item) for item in reversed(owned)]
 
     @app.post("/threads", response_model=ThreadMetadata)
-    async def create_thread(body: CreateThreadBody):
-        existing = threads.get(body.localId)
-        if existing:
-            return existing
-        return threads.create_thread(body.user_id, title=body.title, thread_id=body.localId)
+    async def create_thread(body: CreateThreadBody, principal: PrincipalDep):
+        """Idempotently register a session (legacy ``user_id`` must match)."""
+        if body.user_id is not None and body.user_id != principal.subject:
+            raise HTTPException(
+                status_code=403,
+                detail=f"principal cannot create sessions for {body.user_id!r}",
+            )
+        try:
+            created = await sessions.create(
+                principal, title=body.title, session_id=body.localId
+            )
+        except ConflictError:
+            try:
+                created = await sessions.get(principal, body.localId)
+            except (NotFoundError, ForbiddenError, ConflictError) as exc:
+                raise _service_error_to_http(exc) from exc
+        except (NotFoundError, ForbiddenError) as exc:
+            raise _service_error_to_http(exc) from exc
+        return _session_to_thread_metadata(created)
 
     @app.get("/threads/{thread_id}", response_model=ThreadMetadata)
-    async def fetch_thread(thread_id: str):
-        thread = threads.get(thread_id)
-        if not thread:
-            raise HTTPException(status_code=404, detail="Thread not found")
-        return thread
+    async def fetch_thread(thread_id: str, principal: PrincipalDep):
+        try:
+            found = await sessions.get(principal, thread_id)
+        except (NotFoundError, ForbiddenError, ConflictError) as exc:
+            raise _service_error_to_http(exc) from exc
+        return _session_to_thread_metadata(found)
 
     @app.patch("/threads/{thread_id}", response_model=ThreadMetadata)
-    async def rename_thread(thread_id: str, body: RenameThreadBody):
-        thread = threads.get(thread_id)
-        if not thread:
-            raise HTTPException(status_code=404, detail="Thread not found")
+    async def rename_thread(
+        thread_id: str, body: RenameThreadBody, principal: PrincipalDep
+    ):
         new_title = (body.title or "").strip()
         if not new_title:
             raise HTTPException(status_code=400, detail="title must not be empty")
-        threads.update_title(thread_id, new_title)
-        updated = threads.get(thread_id)
-        if not updated:
-            raise HTTPException(status_code=404, detail="Thread not found")
-        return updated
+        try:
+            renamed = await sessions.rename(principal, thread_id, new_title)
+        except (NotFoundError, ForbiddenError, ConflictError) as exc:
+            raise _service_error_to_http(exc) from exc
+        return _session_to_thread_metadata(renamed)
 
     @app.post("/threads/{thread_id}/archive", response_model=ThreadMetadata)
-    async def archive_thread(thread_id: str):
-        thread = threads.get(thread_id)
-        if not thread:
-            raise HTTPException(status_code=404, detail="Thread not found")
-        threads.archive(thread_id)
-        updated = threads.get(thread_id)
-        if not updated:
-            raise HTTPException(status_code=404, detail="Thread not found")
-        return updated
+    async def archive_thread(thread_id: str, principal: PrincipalDep):
+        try:
+            archived = await sessions.set_archived(principal, thread_id, True)
+        except (NotFoundError, ForbiddenError, ConflictError) as exc:
+            raise _service_error_to_http(exc) from exc
+        return _session_to_thread_metadata(archived)
 
     @app.post("/threads/{thread_id}/unarchive", response_model=ThreadMetadata)
-    async def unarchive_thread(thread_id: str):
-        thread = threads.get(thread_id)
-        if not thread:
-            raise HTTPException(status_code=404, detail="Thread not found")
-        threads.unarchive(thread_id)
-        updated = threads.get(thread_id)
-        if not updated:
-            raise HTTPException(status_code=404, detail="Thread not found")
-        return updated
+    async def unarchive_thread(thread_id: str, principal: PrincipalDep):
+        try:
+            active = await sessions.set_archived(principal, thread_id, False)
+        except (NotFoundError, ForbiddenError, ConflictError) as exc:
+            raise _service_error_to_http(exc) from exc
+        return _session_to_thread_metadata(active)
 
     @app.delete("/threads/{thread_id}")
-    async def delete_thread(thread_id: str):
-        thread = threads.get(thread_id)
-        if not thread:
-            raise HTTPException(status_code=404, detail="Thread not found")
-        threads.delete(thread_id)
-        messages.drop(thread_id)
+    async def delete_thread(thread_id: str, principal: PrincipalDep):
+        """Delete a session, its transcript/feedback, and its checkpoints."""
+        try:
+            await sessions.delete(principal, thread_id)
+        except (NotFoundError, ForbiddenError, ConflictError) as exc:
+            raise _service_error_to_http(exc) from exc
         return {"ok": True}
 
-    @app.get("/threads/{thread_id}/messages")
-    async def get_thread_messages(thread_id: str):
-        """Persisted assistant-ui messages, else checkpointer fallback."""
-        persisted = messages.list(thread_id)
-        if persisted:
-            return {"messages": persisted}
+    async def _checkpointer_fallback_messages(thread_id: str) -> list | None:
+        """Legacy hydration from graph state when no transcript is stored."""
         instance = get_or_build(default_agent)
         if instance is not None and hasattr(instance, "get_state"):
             try:
-                import asyncio
-
                 config = {"configurable": {"thread_id": thread_id}}
                 state = await asyncio.to_thread(instance.get_state, config)
                 if state and "messages" in (state.values or {}):
-                    return {
-                        "messages": [
-                            m.model_dump() for m in state.values["messages"]
-                        ]
-                    }
+                    return [m.model_dump() for m in state.values["messages"]]
             except Exception as exc:
                 logger.debug("checkpointer fallback failed: %s", exc)
-        return {"messages": []}
+        return None
+
+    @app.get("/threads/{thread_id}/messages")
+    async def get_thread_messages(thread_id: str, principal: PrincipalDep):
+        """Owned transcript payloads, else legacy checkpointer hydration."""
+        try:
+            stored = await transcripts.list(principal, thread_id)
+        except ForbiddenError as exc:
+            raise _service_error_to_http(exc) from exc
+        except NotFoundError:
+            stored = None
+        except ConflictError as exc:
+            raise _service_error_to_http(exc) from exc
+        if stored:
+            return {"messages": [item.payload for item in stored]}
+        fallback = await _checkpointer_fallback_messages(thread_id)
+        return {"messages": fallback or []}
 
     @app.post("/threads/{thread_id}/messages")
-    async def append_thread_message(thread_id: str, body: AppendMessageBody):
-        messages.append(thread_id, body.message)
+    async def append_thread_message(
+        thread_id: str, body: AppendMessageBody, principal: PrincipalDep
+    ):
+        """Append a verbatim UI message (unknown/archived sessions rejected)."""
+        from .domain import new_id
+
+        message = body.message if isinstance(body.message, dict) else {}
+        try:
+            await transcripts.append(
+                principal,
+                thread_id,
+                role=_infer_message_role(message),
+                payload=body.message,
+                message_id=str(message.get("id"))
+                if message.get("id") is not None
+                else new_id(),
+            )
+        except (NotFoundError, ForbiddenError, ConflictError) as exc:
+            raise _service_error_to_http(exc) from exc
         return {"ok": True}
 
-    async def run_assistant(request: ScopedChatRequest, agent_id: str):
+    async def run_assistant(
+        request: ScopedChatRequest, agent_id: str, principal: Principal
+    ):
         if agent_id not in factories:
             raise HTTPException(
                 status_code=404,
@@ -462,10 +694,18 @@ def _build_app(
                 },
             )
 
-        user_id = request.user_id or "default_user"
+        # Ownership is server-derived: the body's legacy ``user_id`` is
+        # accepted for shape compatibility but never authorizes.
         thread_id = resolve_thread_id(request, default=str(uuid.uuid4()))
-        if not threads.get(thread_id):
-            threads.create_thread(user_id, title="New Chat", thread_id=thread_id)
+        try:
+            await sessions.create(principal, title="New Chat", session_id=thread_id)
+        except ConflictError:
+            try:
+                await sessions.get(principal, thread_id)
+            except (NotFoundError, ForbiddenError, ConflictError) as exc:
+                raise _service_error_to_http(exc) from exc
+        except (NotFoundError, ForbiddenError) as exc:
+            raise _service_error_to_http(exc) from exc
         config = {"configurable": {"thread_id": thread_id}}
 
         reducer = prepare_state or default_prepare_state
@@ -510,13 +750,43 @@ def _build_app(
         stream = create_run(run_callback, state=request.state)
         return create_response(stream)
 
+    @app.api_route(
+        "/tools/{subpath:path}",
+        methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+        include_in_schema=False,
+    )
+    async def unsupported_tool_capability(subpath: str):
+        """Explicit refusal for optional tool capabilities.
+
+        RAG/admin ``/tools/*`` routes live only in the separate full backend.
+        The packaged application refuses them as JSON (never SPA HTML) so
+        bundled-UI polling degrades gracefully; PUIR-13 owns real
+        capability gating.
+        """
+        raise HTTPException(
+            status_code=501,
+            detail={
+                "error": "capability_disabled",
+                "message": (
+                    f"Tool capability {subpath!r} is not served "
+                    "by this application."
+                ),
+                "hint": (
+                    "RAG/admin tool routes live in the full backend; "
+                    "serve that backend or wait for PUIR-13 capability gating."
+                ),
+            },
+        )
+
     @app.post("/assistant")
-    async def chat_endpoint(request: ScopedChatRequest):
-        return await run_assistant(request, default_agent)
+    async def chat_endpoint(request: ScopedChatRequest, principal: PrincipalDep):
+        return await run_assistant(request, default_agent, principal)
 
     @app.post("/assistant/{agent_id}")
-    async def chat_endpoint_for_agent(agent_id: str, request: ScopedChatRequest):
-        return await run_assistant(request, agent_id)
+    async def chat_endpoint_for_agent(
+        agent_id: str, request: ScopedChatRequest, principal: PrincipalDep
+    ):
+        return await run_assistant(request, agent_id, principal)
 
     mount_static_ui(app, settings)
 

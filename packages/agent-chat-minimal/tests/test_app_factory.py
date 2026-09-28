@@ -33,6 +33,11 @@ def test_settings_defaults_and_invalid_values(monkeypatch):
         "MINIMAL_WEB_DIR",
         "FULL_WEB_DIR",
         "UI_PRESET",
+        "DATABASE_URL",
+        "DATABASE_PATH",
+        "CHECKPOINT_DATABASE_URL",
+        "CHECKPOINT_DATABASE_PATH",
+        "AUTO_MIGRATE",
     ):
         monkeypatch.delenv(name, raising=False)
 

@@ -4,7 +4,11 @@ The canonical package separates chat persistence into four framework-independent
 layers: dataclass models in `domain`, async protocols in `ports`, authorization
 and lifecycle rules in `services`, and implementations in `adapters`. These
 modules do not depend on FastAPI, LangGraph, assistant-stream, or SQLAlchemy.
-Existing HTTP routes and legacy thread stores remain unchanged until PUIR-07.
+The HTTP routes are composed onto these services (PUIR-07): `create_app(...)`
+builds or accepts `SessionService`/`TranscriptService`, resolves a trusted
+`Principal` per request, and maps thread/message endpoints onto service calls.
+No route touches repository state directly; `thread_manager`/`message_store`
+overrides are deprecated shims whose contents are best-effort migrated.
 
 Every service call receives a trusted `Principal`. Ownership is always derived
 from `Principal.subject`; a `user_id` supplied by a request body or query is
@@ -26,12 +30,11 @@ comment, and metadata again returns the existing record unchanged. Ratings are
 
 `SessionService.delete` verifies ownership, invokes an optional
 `CheckpointDeleter`, then removes feedback, transcript entries, and session
-metadata. The checkpoint port deliberately has no implementation here: PUIR-06
-owns the separately managed LangGraph checkpoint adapter. The service currently
-calls multiple repository methods and is therefore not a cross-repository unit
-of work. PUIR-07 composition should delete through the SQL session repository,
-whose database foreign keys atomically cascade to messages and feedback. It
-must not claim that the existing application-service sequence is atomic.
+metadata. The service calls
+multiple repository methods and is therefore not a cross-repository unit
+of work. The SQL session repository's
+database foreign keys atomically cascade to messages and feedback. Do
+not claim that the application-service sequence itself is atomic.
 
 `InMemoryRepositories` supplies reference adapters for composition and fast
 tests. New repository adapters should run the reusable repository contract tests
@@ -75,3 +78,32 @@ and writer coexistence but does not turn a SQLite file into a multi-node store.
 Keep the database and its WAL files on local durable storage, ensure the parent
 directory already exists and is writable, and use a future repository adapter
 for PostgreSQL deployments.
+
+## LangGraph checkpoints
+
+Graph state uses the maintained `langgraph-checkpoint-sqlite` package through a
+separate adapter and SQLite file:
+
+```python
+from agent_chat_minimal.adapters.langgraph_sqlite import LangGraphSQLiteCheckpoints
+
+checkpoints = await LangGraphSQLiteCheckpoints.open(
+    settings.resolved_checkpoint_database_url()
+)
+try:
+    app = create_app(checkpointer=checkpoints.checkpointer)
+finally:
+    await checkpoints.dispose()
+```
+
+Opening eagerly runs `AsyncSqliteSaver.setup()`; disposal closes its async
+connection. Session IDs are used unchanged as LangGraph `thread_id` values.
+Routes and services must validate the session and enforce ownership before graph
+access or `delete_session`; the raw saver contains no user identity policy.
+Deletion uses the saver's official `adelete_thread()` API and removes every
+checkpoint namespace and pending write for that session.
+
+Keep `CHECKPOINT_DATABASE_PATH`/`CHECKPOINT_DATABASE_URL` distinct from the
+application `DATABASE_PATH`/`DATABASE_URL`. SQLite checkpointing is suitable for
+one process/node on local durable storage. A future PostgreSQL checkpointer can
+replace this adapter without changing service or route contracts.
