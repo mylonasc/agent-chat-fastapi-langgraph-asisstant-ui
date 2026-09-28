@@ -7,8 +7,7 @@ name: publish-workflow.yml
 # project with workflow filename `publish-workflow.yml`.
 #
 # Release flow:
-#   1. (Maintainer) bump `version` in packages/agent-chat-minimal/pyproject.toml
-#      (and `__version__` in src/agent_chat_minimal/__init__.py to match).
+#   1. (Maintainer) bump the package version source.
 #   2. Publish a GitHub Release, ideally tagged
 #      `agent-chat-fastapi-langgraph-assistant-ui-vX.Y.Z` matching the bumped
 #      version - the workflow fails fast on mismatch.
@@ -60,19 +59,8 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install frontend dependencies
-        run: pnpm --dir application/frontend/frontend install --frozen-lockfile
-
-      - name: Build frontend static export
-        run: NEXT_PUBLIC_API_BASE="" pnpm --dir application/frontend/frontend build
-
-      - name: Stage prebuilt UI as package data
-        run: |
-          set -euo pipefail
-          web="packages/agent-chat-minimal/src/agent_chat_minimal/web"
-          rm -rf "$web"
-          cp -R application/frontend/frontend/out "$web"
-          test -f "$web/index.html"
+      - name: Build staged wheel and sdist
+        run: packages/agent-chat-minimal/scripts/build_wheel.sh
 
       - name: Check release tag matches package version
         if: github.event_name == 'release'
@@ -82,13 +70,9 @@ jobs:
           tag="${{ github.event.release.tag_name }}"
           echo "package version: $version"
           echo "release tag: $tag"
-          if [[ "$tag" == agent-chat-fastapi-langgraph-assistant-ui-v* ]]; then
-            if [[ "${tag#agent-chat-fastapi-langgraph-assistant-ui-v}" != "$version" ]]; then
-              echo "::error::Release tag $tag does not match pyproject version $version"
-              exit 1
-            fi
-          else
-            echo "Tag does not follow agent-chat-fastapi-langgraph-assistant-ui-vX.Y.Z; skipping strict check."
+          if [[ "$tag" != "agent-chat-fastapi-langgraph-assistant-ui-v$version" ]]; then
+            echo "::error::Release tag must be agent-chat-fastapi-langgraph-assistant-ui-v$version"
+            exit 1
           fi
 
       - name: Install package with test extras
@@ -98,12 +82,6 @@ jobs:
 
       - name: Run offline serving tests
         run: python3 -m pytest packages/agent-chat-minimal
-
-      - name: Build sdist and wheel
-        run: |
-          python3 -m pip install build twine
-          rm -rf packages/agent-chat-minimal/dist
-          python3 -m build --outdir packages/agent-chat-minimal/dist packages/agent-chat-minimal
 
       - name: Verify distributions
         run: |
@@ -130,7 +108,14 @@ jobs:
               assert not any(name.startswith("agent_chat_minimal/web_full/") for name in names), "wheel must not bundle the removed web_full UI"
 
           print("distributions verified: sdist and wheel bundle the unified UI")
-          EOF
+           EOF
+
+      - name: Smoke-test installed archives without Node
+        run: |
+          set -euo pipefail
+          for artifact in packages/agent-chat-minimal/dist/*; do
+            packages/agent-chat-minimal/scripts/smoke_test_wheel.sh "$artifact"
+          done
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
