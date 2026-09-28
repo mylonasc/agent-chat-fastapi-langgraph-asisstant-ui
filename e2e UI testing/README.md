@@ -19,6 +19,10 @@ MODEL=ollama:qwen3.8:latest UI_PRESET=full minimal-chat-serve --port 8011
 MODEL=ollama:qwen3.8:latest UI_PRESET=minimal minimal-chat-serve --port 8012
 ```
 
+The serving environment needs the matching provider package (e.g.
+`langchain-ollama` for `MODEL=ollama:...`); without it `/assistant`
+returns 503 and the suite fails on the first turn.
+
 One unified build serves both presets: the full project uses
 `http://127.0.0.1:8011/` (full preset), the minimal project uses
 `http://127.0.0.1:8012/` (minimal preset). Override them with

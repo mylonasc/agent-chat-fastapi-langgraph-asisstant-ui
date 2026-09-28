@@ -169,6 +169,12 @@ Branch: `feature/puir-09-unified-frontend` (stacked on
 - Verified: unified bundle staged over the old minimal output; `/`
   serves the preset shell under both presets, `/api/config` reflects
   `UI_PRESET`, 95 package tests pass.
+- E2E (`e2e UI testing`, both projects, real ollama model): 2 passed —
+  chronological message order holds on the unified minimal and full
+  presets. Suite repointed from `/full/` to preset-configured servers;
+  README notes the provider-package prerequisite (a 503 from a missing
+  `langchain-ollama` was the only failure seen, environmental).
+- Remaining for release: draft PR for #35, then merge + minor bump.
 
 ## Tracker
 
