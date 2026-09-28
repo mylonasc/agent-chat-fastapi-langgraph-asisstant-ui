@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agent-chat-fastapi-langgraph-assistant-ui"
-version = "0.4.0"
+dynamic = ["version"]
 description = "Portable FastAPI and LangGraph chat with a bundled static UI"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -19,6 +19,15 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+openai = [
+    "langchain-openai>=0.2.0",
+]
+anthropic = [
+    "langchain-anthropic>=0.3.0,<2",
+]
+google = [
+    "langchain-google-genai>=2.0.0,<4",
+]
 persistence = [
     "SQLAlchemy[asyncio]>=2.0.36,<3",
     "aiosqlite>=0.20.0",
@@ -53,6 +62,9 @@ artifacts = ["src/agent_chat_minimal/migrations/**/*.py"]
 # via `packages`, once via `force-include`) and fail the build with "A second
 # file is being added to the wheel archive at the same path".
 exclude = ["**/.gitkeep"]
+
+[tool.hatch.version]
+path = "src/agent_chat_minimal/__init__.py"
 
 [tool.hatch.build.targets.wheel.force-include]
 "src/agent_chat_minimal/web" = "agent_chat_minimal/web"

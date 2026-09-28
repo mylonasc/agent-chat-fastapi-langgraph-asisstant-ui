@@ -7,13 +7,14 @@ Factories take either a `provider:name` spec (resolved via LangChain's
 
 | Spec prefix | Example                     | Credential env      | Install extra        |
 | ----------- | --------------------------- | ------------------- | -------------------- |
-| `openai:`   | `openai:gpt-4o-mini`        | `OPENAI_API_KEY`    | `langchain-openai` ✓ |
-| `anthropic:`| `anthropic:claude-sonnet-4-5` | `ANTHROPIC_API_KEY` | `langchain-anthropic`|
-| `ollama:`   | `ollama:llama3.1`           | none (local daemon) | `langchain-ollama`   |
-| `google_genai:` | `google_genai:gemini-2.5-flash` | `GOOGLE_API_KEY`| `langchain-google-genai` |
+| `openai:`   | `openai:gpt-4o-mini`        | `OPENAI_API_KEY`    | `openai` ✓ |
+| `anthropic:`| `anthropic:claude-sonnet-4-5` | `ANTHROPIC_API_KEY` | `anthropic`|
+| `ollama:`   | `ollama:llama3.1`           | none (local daemon) | `ollama`   |
+| `google_genai:` | `google_genai:gemini-2.5-flash` | `GOOGLE_API_KEY`| `google` |
 
-✓ = bundled with this wheel. Others need their LangChain partner package;
-the import happens lazily, only when that provider is selected.
+`openai` remains installed by default for the packaged demo. Install another
+provider with, for example, `pip install "agent-chat-fastapi-langgraph-assistant-ui[ollama]"`.
+Provider imports remain lazy until selected.
 
 Bare `gpt-4o-mini` still works (provider inferred as OpenAI) for backward
 compatibility; prefer the explicit `openai:` prefix.
