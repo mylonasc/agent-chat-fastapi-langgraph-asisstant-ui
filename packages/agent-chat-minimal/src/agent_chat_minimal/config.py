@@ -19,6 +19,9 @@ class Settings:
     web_dir: str | None = None
     web_full_dir: str | None = None
     ui_preset: Literal["minimal", "full"] = "minimal"
+    database_url: str | None = None
+    database_path: str = "agent-chat.db"
+    auto_migrate: bool = True
 
     def __post_init__(self) -> None:
         if not self.host.strip():
@@ -31,6 +34,10 @@ class Settings:
             raise ValueError("default_agent must not be empty")
         if self.ui_preset not in {"minimal", "full"}:
             raise ValueError("ui_preset must be 'minimal' or 'full'")
+        if self.database_url is not None and not self.database_url.strip():
+            raise ValueError("database_url must not be empty")
+        if not self.database_path.strip():
+            raise ValueError("database_path must not be empty")
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -39,6 +46,9 @@ class Settings:
             port = int(port_raw)
         except ValueError as exc:
             raise ValueError("PORT must be an integer") from exc
+        auto_migrate_raw = os.getenv("AUTO_MIGRATE", "true").lower()
+        if auto_migrate_raw not in {"true", "false", "1", "0"}:
+            raise ValueError("AUTO_MIGRATE must be true or false")
         return cls(
             host=os.getenv("HOST", "0.0.0.0"),
             port=port,
@@ -47,7 +57,16 @@ class Settings:
             web_dir=os.getenv("MINIMAL_WEB_DIR"),
             web_full_dir=os.getenv("FULL_WEB_DIR"),
             ui_preset=os.getenv("UI_PRESET", "minimal"),
+            database_url=os.getenv("DATABASE_URL") or None,
+            database_path=os.getenv("DATABASE_PATH", "agent-chat.db"),
+            auto_migrate=auto_migrate_raw in {"true", "1"},
         )
+
+    def resolved_database_url(self) -> str:
+        if self.database_url is not None:
+            return self.database_url
+        path = Path(self.database_path).expanduser().resolve().as_posix()
+        return f"sqlite+aiosqlite:///{path}"
 
     def web_dir_path(self, fallback: Path) -> Path | None:
         if self.web_dir:
@@ -63,6 +82,9 @@ DEFAULT_AGENT=weather       # registry id aliased by POST /assistant
 MINIMAL_WEB_DIR=            # override bundled web/ (empty = bundled)
 FULL_WEB_DIR=               # override bundled web_full/ (empty = bundled)
 UI_PRESET=minimal           # runtime UI preset: minimal or full
+DATABASE_PATH=agent-chat.db # default application SQLite file
+DATABASE_URL=               # SQLAlchemy URL; overrides DATABASE_PATH
+AUTO_MIGRATE=true           # composition roots may upgrade before opening repos
 OPENAI_API_KEY=             # credential for the default openai model
 ANTHROPIC_API_KEY=          # credential when MODEL uses anthropic:
 """

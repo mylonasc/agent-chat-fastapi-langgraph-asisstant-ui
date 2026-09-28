@@ -13,6 +13,9 @@ DEFAULT_AGENT=weather       # registry id aliased by POST /assistant
 MINIMAL_WEB_DIR=            # override bundled web/ (empty = bundled)
 FULL_WEB_DIR=               # override bundled web_full/ (empty = bundled)
 UI_PRESET=minimal           # runtime UI preset: minimal or full
+DATABASE_PATH=agent-chat.db # default application SQLite file
+DATABASE_URL=               # SQLAlchemy URL; overrides DATABASE_PATH
+AUTO_MIGRATE=true           # migration policy for a composition root
 OPENAI_API_KEY=             # credential for the default openai model
 ANTHROPIC_API_KEY=          # credential when MODEL uses anthropic:
 ```
@@ -23,6 +26,12 @@ from agent_chat_minimal import Settings, create_app
 settings = Settings.from_env()
 app = create_app(settings=settings)
 ```
+
+`Settings.resolved_database_url()` returns `DATABASE_URL` when set, otherwise
+an absolute `sqlite+aiosqlite` URL for `DATABASE_PATH`. The current HTTP app
+does not open these repositories yet; PUIR-07 owns that composition. A
+composition root can use `settings.auto_migrate` to choose whether to pass
+`migrate=True` to `SQLiteRepositories.open(...)`.
 
 ## CLI
 

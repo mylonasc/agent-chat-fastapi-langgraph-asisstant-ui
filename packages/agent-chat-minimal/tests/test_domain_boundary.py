@@ -7,7 +7,7 @@ BOUNDARY = [
     PACKAGE / "domain.py",
     PACKAGE / "ports.py",
     PACKAGE / "services.py",
-    *(PACKAGE / "adapters").glob("*.py"),
+    PACKAGE / "adapters" / "memory.py",
 ]
 FORBIDDEN = ("fastapi", "langgraph", "assistant_stream_ce", "sqlalchemy")
 

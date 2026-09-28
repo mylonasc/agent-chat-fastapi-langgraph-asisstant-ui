@@ -135,12 +135,16 @@ def test_settings_from_env(monkeypatch):
     monkeypatch.setenv("PORT", "9999")
     monkeypatch.setenv("MODEL", "ollama:llama3.1")
     monkeypatch.setenv("DEFAULT_AGENT", "calculator")
+    monkeypatch.setenv("DATABASE_PATH", "data/chat.db")
+    monkeypatch.setenv("AUTO_MIGRATE", "false")
     settings = Settings.from_env()
     assert (settings.port, settings.model, settings.default_agent) == (
         9999,
         "ollama:llama3.1",
         "calculator",
     )
+    assert settings.resolved_database_url().endswith("/data/chat.db")
+    assert settings.auto_migrate is False
 
 
 def test_post_assistant_still_streams_with_command():

@@ -21,6 +21,13 @@ pip install agent-chat-fastapi-langgraph-assistant-ui
 minimal-chat-serve --port 8011
 ```
 
+Install durable application persistence separately when needed:
+
+```bash
+pip install "agent-chat-fastapi-langgraph-assistant-ui[persistence]"
+minimal-chat-migrate ./agent-chat.db
+```
+
 Or install and serve the locally built wheel with:
 
 ```bash
@@ -91,6 +98,9 @@ DEFAULT_AGENT=weather       # registry id aliased by POST /assistant
 MINIMAL_WEB_DIR=            # override bundled web/ (empty = bundled)
 FULL_WEB_DIR=               # override bundled web_full/ (empty = bundled)
 UI_PRESET=minimal           # runtime UI preset: minimal or full
+DATABASE_PATH=agent-chat.db # default application SQLite file
+DATABASE_URL=               # SQLAlchemy URL; overrides DATABASE_PATH
+AUTO_MIGRATE=true           # migration policy for a future composition root
 OPENAI_API_KEY=             # credential for the default openai model
 ANTHROPIC_API_KEY=          # credential when MODEL uses anthropic:
 ```

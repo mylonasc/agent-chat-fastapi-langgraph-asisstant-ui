@@ -4,5 +4,5 @@ from repository_contract import RepositoryContract
 
 
 class TestInMemoryRepositories(RepositoryContract):
-    def make_repositories(self):
+    async def make_repositories(self):
         return InMemoryRepositories()

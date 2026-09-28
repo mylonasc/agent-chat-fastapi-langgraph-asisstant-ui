@@ -151,7 +151,7 @@ build dependencies only and never runtime/install dependencies for users.
 - [x] #23 PUIR-02: Introduce modular app, settings, and capability boundaries
 - [x] #24 PUIR-03: Pin and isolate `assistant-stream-ce` with protocol tests
 - [x] #27 PUIR-04: Define principal, session, transcript, and feedback domain ports
-- [ ] #30 PUIR-05: Add SQLAlchemy SQLite repositories and Alembic migrations
+- [x] #30 PUIR-05: Add SQLAlchemy SQLite repositories and Alembic migrations
 - [ ] #28 PUIR-06: Add persistent LangGraph SQLite checkpoint adapter
 - [ ] #29 PUIR-07: Refactor compatibility routes onto application services
 - [ ] #25 PUIR-08: Serve runtime UI configuration and capability manifest

@@ -27,10 +27,51 @@ comment, and metadata again returns the existing record unchanged. Ratings are
 `SessionService.delete` verifies ownership, invokes an optional
 `CheckpointDeleter`, then removes feedback, transcript entries, and session
 metadata. The checkpoint port deliberately has no implementation here: PUIR-06
-owns the separately managed LangGraph checkpoint adapter. SQL-backed adapters
-should execute application-store deletion in one transaction; SQLite support is
-deferred to PUIR-05.
+owns the separately managed LangGraph checkpoint adapter. The service currently
+calls multiple repository methods and is therefore not a cross-repository unit
+of work. PUIR-07 composition should delete through the SQL session repository,
+whose database foreign keys atomically cascade to messages and feedback. It
+must not claim that the existing application-service sequence is atomic.
 
 `InMemoryRepositories` supplies reference adapters for composition and fast
 tests. New repository adapters should run the reusable repository contract tests
 before being connected to the services.
+
+## SQLite adapter
+
+Install the optional dependencies with:
+
+```bash
+pip install "agent-chat-fastapi-langgraph-assistant-ui[persistence]"
+```
+
+Open one shared bundle and dispose it explicitly during application shutdown:
+
+```python
+from agent_chat_minimal.adapters.sqlite import SQLiteRepositories, sqlite_url
+
+repositories = await SQLiteRepositories.open(sqlite_url("./agent-chat.db"))
+try:
+    session = await repositories.sessions.get("session-id")
+finally:
+    await repositories.dispose()
+```
+
+`SQLiteRepositories.open(..., migrate=True)` upgrades to the packaged Alembic
+head before returning. Set `migrate=False` when deployment tooling performs
+migrations separately. `upgrade_database(engine)` and
+`current_database_revision(engine)` are the programmatic migration lifecycle;
+`minimal-chat-migrate PATH` is the corresponding command. Migration resources
+ship in both wheel and sdist.
+
+Each connection enables `foreign_keys`, WAL journal mode, and a 5000 ms busy
+timeout. The schema stores metadata and message payloads as JSON, stores UTC
+timestamps as ISO-8601 text so loaded domain values remain UTC-aware, and
+enforces stable primary keys, one sequence per session, one feedback row per
+message, parent consistency, indexes, and foreign-key cascades.
+
+SQLite is intended for one application process/node. WAL improves local reader
+and writer coexistence but does not turn a SQLite file into a multi-node store.
+Keep the database and its WAL files on local durable storage, ensure the parent
+directory already exists and is writable, and use a future repository adapter
+for PostgreSQL deployments.

@@ -19,12 +19,15 @@ from agent_chat_minimal.domain import (
 class RepositoryContract:
     """Subclass and implement ``make_repositories`` to verify an adapter set."""
 
-    def make_repositories(self):
+    async def make_repositories(self):
         raise NotImplementedError
+
+    async def close_repositories(self, repos):
+        pass
 
     def test_session_repository_lifecycle_and_owner_filter(self):
         async def scenario():
-            repos = self.make_repositories()
+            repos = await self.make_repositories()
             now = utc_now()
             first = Session("s1", "owner-a", "First", now, now)
             second = Session("s2", "owner-b", "Second", now, now)
@@ -46,23 +49,25 @@ class RepositoryContract:
             ) == [archived]
             assert await repos.sessions.delete("s1") is True
             assert await repos.sessions.delete("s1") is False
+            await self.close_repositories(repos)
 
         asyncio.run(scenario())
 
     def test_session_ids_are_unique(self):
         async def scenario():
-            repos = self.make_repositories()
+            repos = await self.make_repositories()
             now = utc_now()
             session = Session("s1", "owner", "First", now, now)
             await repos.sessions.add(session)
             with pytest.raises(ValueError, match="already exists"):
                 await repos.sessions.add(session)
+            await self.close_repositories(repos)
 
         asyncio.run(scenario())
 
     def test_transcript_is_ordered_and_enforces_id_and_sequence(self):
         async def scenario():
-            repos = self.make_repositories()
+            repos = await self.make_repositories()
             now = utc_now()
             second = StoredMessage(
                 "m2", "s1", 2, MessageRole.ASSISTANT, {"text": "two"}, now
@@ -70,6 +75,7 @@ class RepositoryContract:
             first = StoredMessage(
                 "m1", "s1", 1, MessageRole.USER, {"text": "one"}, now
             )
+            await repos.sessions.add(Session("s1", "owner", "Chat", now, now))
             await repos.transcripts.add(second)
             await repos.transcripts.add(first)
             assert await repos.transcripts.list_by_session("s1") == [first, second]
@@ -80,12 +86,13 @@ class RepositoryContract:
                 await repos.transcripts.add(duplicate_sequence)
             await repos.transcripts.delete_by_session("s1")
             assert await repos.transcripts.list_by_session("s1") == []
+            await self.close_repositories(repos)
 
         asyncio.run(scenario())
 
     def test_feedback_upsert_is_unique_per_message_and_preserves_id(self):
         async def scenario():
-            repos = self.make_repositories()
+            repos = await self.make_repositories()
             now = utc_now()
             positive = Feedback(
                 "f1",
@@ -96,6 +103,12 @@ class RepositoryContract:
                 now,
                 now,
             )
+            await repos.sessions.add(Session("s1", "owner", "Chat", now, now))
+            await repos.transcripts.add(
+                StoredMessage(
+                    "m1", "s1", 1, MessageRole.ASSISTANT, {"text": "one"}, now
+                )
+            )
             assert await repos.feedback.upsert(positive) == positive
             negative = replace(positive, rating=FeedbackRating.NEGATIVE)
             assert await repos.feedback.upsert(negative) == negative
@@ -104,5 +117,6 @@ class RepositoryContract:
                 await repos.feedback.upsert(replace(negative, id="f2"))
             assert await repos.feedback.delete_for_message("s1", "m1") is True
             assert await repos.feedback.delete_for_message("s1", "m1") is False
+            await self.close_repositories(repos)
 
         asyncio.run(scenario())
