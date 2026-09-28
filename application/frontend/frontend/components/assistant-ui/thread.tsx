@@ -73,6 +73,7 @@ export const Thread: FC = () => {
            <WebRAGToolUI />
            <WebRAGStatusToolUI />
            <AutoThreadTitle />
+           <RememberRemoteThread />
            <TranscriptSynchronizer />
 
           <ThreadPrimitive.Viewport className="aui-thread-viewport relative flex flex-1 flex-col overflow-x-auto overflow-y-scroll px-4">
@@ -178,25 +179,57 @@ const AutoThreadTitle: FC = () => {
   return null;
 };
 
+const ACTIVE_THREAD_STORAGE_KEY = "agent-chat.active-thread.v1";
+
+/** Restore the user's selected owned thread rather than a fresh local draft. */
+const RememberRemoteThread: FC = () => {
+  const api = useAssistantApi();
+  const threadItem = useAssistantState((s) => s.threadListItem);
+  const restored = useRef(false);
+
+  useEffect(() => {
+    if (threadItem.remoteId) {
+      localStorage.setItem(ACTIVE_THREAD_STORAGE_KEY, threadItem.remoteId);
+      return;
+    }
+    if (restored.current) return;
+    restored.current = true;
+    const saved = localStorage.getItem(ACTIVE_THREAD_STORAGE_KEY);
+    if (!saved) return;
+    api.threads().switchToThread(saved);
+  }, [api, threadItem.remoteId]);
+
+  return null;
+};
+
 /** Persist only completed turns; stable message IDs make retries idempotent. */
 const TranscriptSynchronizer: FC = () => {
   const { client } = useApiClient();
   const threadItem = useAssistantState((s) => s.threadListItem);
   const messages = useAssistantState((s) => s.thread.messages);
   const isRunning = useAssistantState((s) => s.thread.isRunning);
+  const syncedPayloads = useRef(new Map<string, string>());
 
   useEffect(() => {
     const threadId = threadItem.remoteId;
     if (!threadId || isRunning || messages.length === 0) return;
 
-    void (async () => {
-      for (const message of messages) {
-        if (!message.id) continue;
-        await client.appendMessage(threadId, message);
-      }
-    })().catch(() => {
-      // The next completed turn retries unchanged message IDs without duplicates.
-    });
+    // Assistant UI can publish a final state immediately after isRunning flips.
+    // Wait for that burst to settle before storing an immutable transcript row.
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        for (const message of messages) {
+          if (!message.id) continue;
+          const payload = JSON.stringify(message);
+          if (syncedPayloads.current.get(message.id) === payload) continue;
+          await client.appendMessage(threadId, message);
+          syncedPayloads.current.set(message.id, payload);
+        }
+      })().catch(() => {
+        // The next completed turn retries unchanged message IDs without duplicates.
+      });
+    }, 300);
+    return () => window.clearTimeout(timer);
   }, [client, isRunning, messages, threadItem.id, threadItem.remoteId]);
 
   return null;

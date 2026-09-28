@@ -3,8 +3,9 @@ import { defineConfig, devices } from "@playwright/test";
 const fullBaseURL = process.env.FULL_UI_URL ?? "http://localhost:3001";
 const minimalBaseURL = process.env.MINIMAL_UI_URL ?? "http://localhost:3000";
 const selectedStack = process.env.PLAYWRIGHT_STACK;
+const externalPersistenceStack = process.env.PERSISTENCE_E2E === "1";
 
-const webServer = [
+const webServer = externalPersistenceStack ? [] : [
   selectedStack !== "minimal"
     ? {
         command: "docker compose -f ../../docker-compose.full.yml up --build",
@@ -43,7 +44,7 @@ export default defineConfig({
   projects: [
     {
       name: "full-desktop",
-      testMatch: /full-ui\.spec\.ts/,
+      testMatch: /(full-ui|persistence-e2e)\.spec\.ts/,
       use: { baseURL: fullBaseURL, viewport: { width: 1440, height: 900 } },
     },
     {
