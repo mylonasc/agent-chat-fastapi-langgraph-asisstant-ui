@@ -40,7 +40,7 @@ from .server import (
 )
 from .threads import ThreadManager, ThreadMessageStore, ThreadMetadata
 
-__version__ = "0.3.5"
+__version__ = "0.4.0"
 
 __all__ = [
     "__version__",
