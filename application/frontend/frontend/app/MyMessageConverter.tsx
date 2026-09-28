@@ -41,7 +41,14 @@ export const converter = (
       : serverMessages;
   const threadMessages = LangChainMessageConverter.toThreadMessages(
     allMessages,
-  ).map((message, index) => ({ ...message, id: String(index) }));
+  ).map((message, index) => ({
+    ...message,
+    // Prefer the source LangChain ID even if a converter omits it. This keeps
+    // stored UI rows, feedback targets, and hydration stable across reloads.
+    id:
+      message.id ||
+      String((allMessages[index] as { id?: string } | undefined)?.id ?? `legacy-${index}`),
+  }));
 
   return {
     // Stable logical IDs keep incremental repository updates in transcript order.

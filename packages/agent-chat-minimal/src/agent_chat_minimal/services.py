@@ -168,21 +168,48 @@ class TranscriptService:
         session = await _require_owned(self._sessions, principal, session_id)
         if session.status is SessionStatus.ARCHIVED:
             raise ConflictError(f"session {session_id!r} is archived")
-        current = await self._transcripts.list_by_session(session_id)
-        message = StoredMessage(
-            id=message_id or new_id(),
-            session_id=session_id,
-            sequence=current[-1].sequence + 1 if current else 1,
-            role=role,
-            payload=payload,
-            created_at=utc_now(),
-            metadata=metadata or {},
-        )
-        try:
-            await self._transcripts.add(message)
-        except ValueError as exc:
-            raise ConflictError(str(exc)) from exc
-        return message
+        if message_id:
+            existing = await self._transcripts.get(message_id)
+            if existing is not None:
+                if (
+                    existing.session_id == session_id
+                    and existing.role is role
+                    and existing.payload == payload
+                    and existing.metadata == (metadata or {})
+                ):
+                    return existing
+                raise ConflictError(f"message {message_id!r} already exists")
+        # The unique (session_id, sequence) constraint serializes concurrent
+        # writers. Re-read and retry a contested sequence without duplicating
+        # a stable UI message ID.
+        for _ in range(4):
+            current = await self._transcripts.list_by_session(session_id)
+            message = StoredMessage(
+                id=message_id or new_id(),
+                session_id=session_id,
+                sequence=current[-1].sequence + 1 if current else 1,
+                role=role,
+                payload=payload,
+                created_at=utc_now(),
+                metadata=metadata or {},
+            )
+            try:
+                await self._transcripts.add(message)
+                return message
+            except ValueError as exc:
+                if message_id:
+                    existing = await self._transcripts.get(message_id)
+                    if (
+                        existing is not None
+                        and existing.session_id == session_id
+                        and existing.role is role
+                        and existing.payload == payload
+                        and existing.metadata == (metadata or {})
+                    ):
+                        return existing
+                if "sequence" not in str(exc):
+                    raise ConflictError(str(exc)) from exc
+        raise ConflictError(f"could not assign a sequence for session {session_id!r}")
 
 
 class FeedbackService:

@@ -88,6 +88,39 @@ def test_archived_sessions_are_readable_but_not_mutable():
     asyncio.run(scenario())
 
 
+def test_transcript_append_retries_the_same_ui_message_idempotently():
+    async def scenario():
+        _, sessions, transcripts, _ = _services()
+        owner = Principal("owner")
+        await sessions.create(owner, session_id="s1")
+        first = await transcripts.append(
+            owner,
+            "s1",
+            role=MessageRole.ASSISTANT,
+            payload={"id": "m1", "role": "assistant", "content": []},
+            message_id="m1",
+        )
+        retry = await transcripts.append(
+            owner,
+            "s1",
+            role=MessageRole.ASSISTANT,
+            payload={"id": "m1", "role": "assistant", "content": []},
+            message_id="m1",
+        )
+        assert retry == first
+        assert len(await transcripts.list(owner, "s1")) == 1
+        with pytest.raises(ConflictError, match="already exists"):
+            await transcripts.append(
+                owner,
+                "s1",
+                role=MessageRole.ASSISTANT,
+                payload={"id": "m1", "role": "assistant", "content": ["changed"]},
+                message_id="m1",
+            )
+
+    asyncio.run(scenario())
+
+
 def test_feedback_upsert_is_idempotent_and_updates_in_place():
     async def scenario():
         _, sessions, transcripts, feedback = _services()

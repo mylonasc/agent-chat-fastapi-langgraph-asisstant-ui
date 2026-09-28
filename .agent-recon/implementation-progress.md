@@ -89,6 +89,24 @@ capabilities from the canonical composition root.
 
 ## In Progress
 
+### PUIR-11: Durable transcript synchronization
+
+Branch: `feature/puir-11-durable-transcripts` (stacked on #43).
+
+- started a completed-turn frontend synchronizer: it appends each stable UI
+  message to the owned transcript endpoint only after streaming ends;
+- transcript appends now return the stored message for an exact retry using the
+  same message ID, while a payload/role/session collision stays a conflict;
+- converter preserves LangChain message IDs and uses deterministic legacy
+  fallback IDs rather than reassigning positions on every state update.
+- real local E2E uses `ollama:qwen3.8:latest`: a completed full-preset turn
+  writes two transcript rows and rehydrates the selected remote thread after a
+  browser reload. The test is opt-in via `PERSISTENCE_E2E=1`.
+- fixed durable graph factory injection to resolve the lifespan-owned SQLite
+  saver before LangGraph compiles the graph. Also retain the selected remote
+  thread in local storage and debounce completed-turn synchronization so UI
+  final-state churn does not produce repeated append conflicts.
+
 ### #43: Durable SQLite persistence from supported entry points
 
 Branch: `feature/puir-43-durable-default-app`.

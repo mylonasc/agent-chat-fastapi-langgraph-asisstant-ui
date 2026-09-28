@@ -83,6 +83,8 @@ def mount_static_ui(app: FastAPI, settings: Settings) -> None:
     else:
         logger.warning(
             "Minimal UI build not found at %s; starting in API-only mode. "
-            "Set MINIMAL_WEB_DIR to a frontend-minimal/out directory.",
+            "Set MINIMAL_WEB_DIR to a static export directory, run "
+            "packages/agent-chat-minimal/scripts/stage_ui.sh from a source "
+            "checkout, or install a built wheel.",
             resolved_web_dir,
         )

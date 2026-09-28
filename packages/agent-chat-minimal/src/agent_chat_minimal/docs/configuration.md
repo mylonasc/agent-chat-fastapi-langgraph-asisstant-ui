@@ -144,3 +144,12 @@ Agent factory failures return
 provider or factory exception in `hint`. The server does not assume that the
 selected model uses OpenAI; Ollama, Anthropic, and other configured providers
 are initialized by their own factories.
+
+## Source checkout UI and local Ollama
+
+The generated `web/` directory is intentionally not tracked. An editable
+checkout therefore starts API-only until
+`packages/agent-chat-minimal/scripts/stage_ui.sh` runs, or until
+`MINIMAL_WEB_DIR` points at a static export. Built wheels already contain the
+UI. For a local provider install the `ollama` extra and set, for example,
+`MODEL=ollama:qwen3.8:latest`; no OpenAI credential is needed.

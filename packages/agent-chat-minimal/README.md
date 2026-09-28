@@ -14,6 +14,15 @@ The script runs the frozen pnpm install and static export, stages `out/` as
 package data, and writes the wheel under `packages/agent-chat-minimal/dist/`.
 Generated `web/` content and `dist/` are intentionally gitignored.
 
+An editable source installation does not include generated `web/` files. To
+serve the UI from a checkout, stage it first (or use the built wheel above):
+
+```bash
+packages/agent-chat-minimal/scripts/stage_ui.sh
+python -m pip install -e "packages/agent-chat-minimal[persistence]"
+minimal-chat-serve --port 8011
+```
+
 Install from PyPI (Python 3.11+, no Node required) and serve with:
 
 ```bash
@@ -69,6 +78,8 @@ app = create_app(graph=make_my_agent("anthropic:claude-sonnet-4-5"))
 - Models are `provider:name` specs via `init_chat_model`
   (`openai:gpt-4o-mini`, `anthropic:claude-sonnet-4-5`, `ollama:llama3.1`).
   Factories also accept a chat-model instance (handy for fake-model tests).
+- Ollama needs `pip install "agent-chat-fastapi-langgraph-assistant-ui[ollama]"`.
+  For a local server, use `MODEL=ollama:qwen3.8:latest`.
 - `GET /agents` lists the registry (`weather`, `calculator`, plus
   `agent_chat.agents` entry points); `POST /assistant/{agent_id}` selects one,
   `POST /assistant` aliases the default.
