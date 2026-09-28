@@ -15,6 +15,8 @@ FULL_WEB_DIR=               # override bundled web_full/ (empty = bundled)
 UI_PRESET=minimal           # runtime UI preset: minimal or full
 DATABASE_PATH=agent-chat.db # default application SQLite file
 DATABASE_URL=               # SQLAlchemy URL; overrides DATABASE_PATH
+CHECKPOINT_DATABASE_PATH=agent-chat-checkpoints.db # separate graph state file
+CHECKPOINT_DATABASE_URL=    # SQLite URL; overrides CHECKPOINT_DATABASE_PATH
 AUTO_MIGRATE=true           # migration policy for a composition root
 OPENAI_API_KEY=             # credential for the default openai model
 ANTHROPIC_API_KEY=          # credential when MODEL uses anthropic:
@@ -32,6 +34,10 @@ an absolute `sqlite+aiosqlite` URL for `DATABASE_PATH`. The current HTTP app
 does not open these repositories yet; PUIR-07 owns that composition. A
 composition root can use `settings.auto_migrate` to choose whether to pass
 `migrate=True` to `SQLiteRepositories.open(...)`.
+
+`Settings.resolved_checkpoint_database_url()` independently resolves
+`CHECKPOINT_DATABASE_URL` or `CHECKPOINT_DATABASE_PATH`. It must not point at
+the application session database. PUIR-07 will compose its separate lifecycle.
 
 ## CLI
 
@@ -71,10 +77,15 @@ factory whose signature accepts `checkpointer`. Per-`thread_id` graph state
 then persists across requests (see [threads.md](threads.md)). Pass an explicit
 saver instance for custom backends, or `None` to disable injection.
 
+For durable local graph state, install the `persistence` extra, open
+`LangGraphSQLiteCheckpoints`, and pass its `checkpointer` property to the app or
+graph factories. The adapter is not opened by the current HTTP composition
+root; PUIR-07 owns that integration.
+
 ## `/assistant` 503 semantics
 
-- Default registry + no `OPENAI_API_KEY` → legacy
-  `{"error": "OPENAI_API_KEY not configured", ...}` (backward compatible).
-- Custom graph/factory failure →
-  `{"error": "agent_not_ready", "message": ..., "hint": ...}` with the real
-  factory exception in `hint`.
+Agent factory failures return
+`{"error": "agent_not_ready", "message": ..., "hint": ...}` with the real
+provider or factory exception in `hint`. The server does not assume that the
+selected model uses OpenAI; Ollama, Anthropic, and other configured providers
+are initialized by their own factories.

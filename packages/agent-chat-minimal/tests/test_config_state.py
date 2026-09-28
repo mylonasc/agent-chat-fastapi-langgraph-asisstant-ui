@@ -136,6 +136,7 @@ def test_settings_from_env(monkeypatch):
     monkeypatch.setenv("MODEL", "ollama:llama3.1")
     monkeypatch.setenv("DEFAULT_AGENT", "calculator")
     monkeypatch.setenv("DATABASE_PATH", "data/chat.db")
+    monkeypatch.setenv("CHECKPOINT_DATABASE_PATH", "data/checkpoints.db")
     monkeypatch.setenv("AUTO_MIGRATE", "false")
     settings = Settings.from_env()
     assert (settings.port, settings.model, settings.default_agent) == (
@@ -144,6 +145,9 @@ def test_settings_from_env(monkeypatch):
         "calculator",
     )
     assert settings.resolved_database_url().endswith("/data/chat.db")
+    assert settings.resolved_checkpoint_database_url().endswith(
+        "/data/checkpoints.db"
+    )
     assert settings.auto_migrate is False
 
 

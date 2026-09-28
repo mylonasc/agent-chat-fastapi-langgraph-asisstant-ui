@@ -28,8 +28,15 @@ def _services(checkpoint_deleter=None):
 
 
 def test_services_authorize_every_session_resource_from_principal():
+    class Checkpoints:
+        deleted = []
+
+        async def delete_session(self, session_id):
+            self.deleted.append(session_id)
+
     async def scenario():
-        _, sessions, transcripts, feedback = _services()
+        checkpoints = Checkpoints()
+        _, sessions, transcripts, feedback = _services(checkpoints)
         owner = Principal("owner")
         intruder = Principal("intruder")
         session = await sessions.create(owner, session_id="s1")
@@ -59,6 +66,7 @@ def test_services_authorize_every_session_resource_from_principal():
 
         with pytest.raises(NotFoundError):
             await sessions.get(owner, "missing")
+        assert checkpoints.deleted == []
 
     asyncio.run(scenario())
 

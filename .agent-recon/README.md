@@ -28,6 +28,8 @@ design and implementation work.
   retain/isolate/replace options.
 - [decision-record-and-roadmap.md](decision-record-and-roadmap.md): accepted
   product decisions, target architecture, phased roadmap, and issue checklist.
+- [implementation-progress.md](implementation-progress.md): living status,
+  shipped commits, verification results, and the next implementation boundary.
 - [`github-issues/`](github-issues/): durable copies of every PUIR issue body.
 
 ## GitHub Issues

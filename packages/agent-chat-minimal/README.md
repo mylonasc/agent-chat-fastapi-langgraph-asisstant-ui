@@ -100,6 +100,8 @@ FULL_WEB_DIR=               # override bundled web_full/ (empty = bundled)
 UI_PRESET=minimal           # runtime UI preset: minimal or full
 DATABASE_PATH=agent-chat.db # default application SQLite file
 DATABASE_URL=               # SQLAlchemy URL; overrides DATABASE_PATH
+CHECKPOINT_DATABASE_PATH=agent-chat-checkpoints.db # graph checkpoint SQLite file
+CHECKPOINT_DATABASE_URL=    # SQLite URL; overrides checkpoint path
 AUTO_MIGRATE=true           # migration policy for a future composition root
 OPENAI_API_KEY=             # credential for the default openai model
 ANTHROPIC_API_KEY=          # credential when MODEL uses anthropic:
