@@ -32,9 +32,11 @@ export OPENAI_API_KEY=sk-...
 ```
 
 Open <http://localhost:8011/>. The same process serves the static UI,
-`/health`, and `/assistant`. The full thread-sidebar UI is served at
-`/full/`. Running from a source checkout without staged builds starts in
-API-only mode (a warning names the missing directory); stage the UIs with:
+`/health`, `/assistant`, and `/api/config`. One build covers both presets:
+the runtime preset (`UI_PRESET`, visible at `/api/config`) selects the
+single-prompt chat or the thread sidebar; `/full/` no longer exists.
+Running from a source checkout without a staged build starts in API-only
+mode (a warning names the missing directory); stage the UI with:
 
 ```bash
 packages/agent-chat-minimal/scripts/stage_ui.sh

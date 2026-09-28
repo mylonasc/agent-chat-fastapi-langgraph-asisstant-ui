@@ -132,6 +132,50 @@ Implemented (backend-first slice; component wiring stays PUIR-09/PUIR-13):
   app serves `/api/config` (no-store, `web_rag.enabled: false`), `/`,
   and `/full/`; 95 package tests pass; `tsc --noEmit` clean.
 
+## In Progress (stacked on PUIR-08 branch)
+
+### PUIR-09 / #35: Unified static frontend
+
+Branch: `feature/puir-09-unified-frontend` (stacked on
+`feature/puir-08-runtime-config`, unmerged PR #39).
+
+- `/full/` is dropped outright per maintainer decision (no redirect shim,
+  no second build): one static export served at `/`, preset selected at
+  runtime from `/api/config`.
+- Scaffold: `application/frontend/frontend/` copied from `frontend-full`
+  (the superset), server-only `app/api/chat/route.ts` pruned, `basePath`
+  support removed, package renamed to `agent-chat-ui`.
+- Shared components merged: `ToolFallback` combines running + cancelled
+  states; `attachment` takes v4-correct important modifiers;
+  `tooltip-icon-button` was identical; `markdown-text`/`ui/*` keep the
+  newer full variants (minimal's align selectors were invalid).
+- Dependency union: newer `@assistant-ui/react`/`next`, plus `d3`/`@types/d3`
+  for the graph tool; dropped minimal-only `zod` (dead import),
+  `assistant-ui` CLI, and `tailwindcss-animate` (unused). Fresh lockfile;
+  baseline `tsc` + static export (`/`, `/admin`) verified.
+- Minimal preset: ported `GraphToolUI` (`render_graph`, d3) and the
+  single-thread transport converter; `app/minimal-assistant.tsx` reuses
+  the shared `Thread` view with a single-thread runtime (no sidebar/admin
+  chrome). `app/page.tsx` gates first paint on the runtime manifest and
+  composes the preset from `config.ui_preset` (newer assistant-ui needs
+  explicit `headers` in transport options). `tsc` + export verified.
+- Repackaging: `stage_ui.sh`/`build_wheel.sh`/publish workflow build and
+  stage only `frontend/`; `web_full/` deleted from the package, its
+  hatch includes and `.gitignore` entries removed; `/full/` now 404s
+  (mount hook stays for explicit `FULL_WEB_DIR` overrides and existing
+  tests, warning only when configured). Smoke test asserts `/` HTML,
+  `/api/config` v1, `/assistant` 503, and `/full/` 404. Docs updated
+  (package README, `threads`, `configuration`, `RUNNING.md`).
+- Verified: unified bundle staged over the old minimal output; `/`
+  serves the preset shell under both presets, `/api/config` reflects
+  `UI_PRESET`, 95 package tests pass.
+- E2E (`e2e UI testing`, both projects, real ollama model): 2 passed —
+  chronological message order holds on the unified minimal and full
+  presets. Suite repointed from `/full/` to preset-configured servers;
+  README notes the provider-package prerequisite (a 503 from a missing
+  `langchain-ollama` was the only failure seen, environmental).
+- Remaining for release: draft PR for #35, then merge + minor bump.
+
 ## Tracker
 
 - Tech-debt tracker: #40 (`PUIR-refactor-tech-debt`, P2, parent #22),

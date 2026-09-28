@@ -35,11 +35,14 @@ python -m pip install packages/agent-chat-minimal/dist/*.whl
 minimal-chat-serve --port 8011
 ```
 
-Open <http://localhost:8011/> (single-prompt chat) or
-<http://localhost:8011/full/> (thread sidebar with previous chats).
-Set `OPENAI_API_KEY` to enable `/assistant`; without it, the UIs and
+Open <http://localhost:8011/>. One static UI serves both presets: the
+runtime preset (`UI_PRESET`, visible at `GET /api/config`) selects the
+single-prompt chat or the thread sidebar with previous chats.
+Set `OPENAI_API_KEY` to enable `/assistant`; without it, the UI and
 `/health` still work and `/assistant` returns 503.
-`MINIMAL_WEB_DIR` / `FULL_WEB_DIR` may override the bundled web directories.
+`MINIMAL_WEB_DIR` may override the bundled web directory
+(`FULL_WEB_DIR` remains as a deprecated override hook and no longer
+ships a bundle).
 
 ## Arbitrary agents & providers
 
@@ -82,11 +85,12 @@ docs.show("threads")
 | `transport` | pinned Python/frontend protocol boundary and replacement criteria |
 | `persistence` | principal, domain ports, service authorization, and deletion semantics |
 
-## Threads (frontend-full compatible)
+## Threads (full-preset compatible)
 
 The server also speaks the full-stack thread protocol (`/threads`,
 `/threads/{id}/messages`, scoped `POST /assistant` with `thread_id`/`user_id`),
-so `frontend-full` works against either backend. See the `threads` guide.
+so the full preset (and the legacy `frontend-full` dev app) works against
+either backend. See the `threads` guide.
 
 ## Configuration
 
@@ -96,7 +100,6 @@ PORT=8011                   # uvicorn bind port
 MODEL=openai:gpt-4o-mini    # provider:model spec
 DEFAULT_AGENT=weather       # registry id aliased by POST /assistant
 MINIMAL_WEB_DIR=            # override bundled web/ (empty = bundled)
-FULL_WEB_DIR=               # override bundled web_full/ (empty = bundled)
 UI_PRESET=minimal           # runtime UI preset: minimal or full
 DATABASE_PATH=agent-chat.db # default application SQLite file
 DATABASE_URL=               # SQLAlchemy URL; overrides DATABASE_PATH
