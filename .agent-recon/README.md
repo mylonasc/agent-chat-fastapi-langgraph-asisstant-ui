@@ -50,6 +50,8 @@ design and implementation work.
 - [PUIR-13 #36](https://github.com/mylonasc/agent-chat-fastapi-langgraph-asisstant-ui/issues/36): optional capability gating
 - [PUIR-14 #32](https://github.com/mylonasc/agent-chat-fastapi-langgraph-asisstant-ui/issues/32): packaging and artifact CI
 - [PUIR-15 #34](https://github.com/mylonasc/agent-chat-fastapi-langgraph-asisstant-ui/issues/34): app and documentation migration
+- [PUIR-refactor-tech-debt #40](https://github.com/mylonasc/agent-chat-fastapi-langgraph-asisstant-ui/issues/40): discovered gaps and potential improvements (P2)
+- [`PUIR-TD.md`](github-issues/PUIR-TD.md): local mirror of the tech-debt tracker groups
 
 ## Cross-Cutting Conclusions
 
