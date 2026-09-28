@@ -41,6 +41,7 @@ class Settings:
     checkpoint_database_url: str | None = None
     checkpoint_database_path: str = "agent-chat-checkpoints.db"
     auto_migrate: bool = True
+    persistence_enabled: bool = False
 
     def __post_init__(self) -> None:
         if not self.host.strip():
@@ -95,6 +96,19 @@ class Settings:
                 "CHECKPOINT_DATABASE_PATH", "agent-chat-checkpoints.db"
             ),
             auto_migrate=auto_migrate_raw in {"true", "1"},
+            persistence_enabled=(
+                os.getenv("PERSISTENCE_ENABLED", "false").lower()
+                in {"true", "1"}
+                or any(
+                    os.getenv(name)
+                    for name in (
+                        "DATABASE_URL",
+                        "DATABASE_PATH",
+                        "CHECKPOINT_DATABASE_URL",
+                        "CHECKPOINT_DATABASE_PATH",
+                    )
+                )
+            ),
         )
 
     def resolved_database_url(self) -> str:
@@ -130,6 +144,7 @@ DATABASE_URL=               # SQLAlchemy URL; overrides DATABASE_PATH
 CHECKPOINT_DATABASE_PATH=agent-chat-checkpoints.db # separate graph state file
 CHECKPOINT_DATABASE_URL=    # SQLite URL; overrides CHECKPOINT_DATABASE_PATH
 AUTO_MIGRATE=true           # composition roots may upgrade before opening repos
+PERSISTENCE_ENABLED=false   # open SQLite repos/checkpoints in supported entry points
 OPENAI_API_KEY=             # credential for the default openai model
 ANTHROPIC_API_KEY=          # credential when MODEL uses anthropic:
 """

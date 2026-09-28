@@ -20,6 +20,7 @@ DATABASE_URL=               # SQLAlchemy URL; overrides DATABASE_PATH
 CHECKPOINT_DATABASE_PATH=agent-chat-checkpoints.db # separate graph state file
 CHECKPOINT_DATABASE_URL=    # SQLite URL; overrides CHECKPOINT_DATABASE_PATH
 AUTO_MIGRATE=true           # migration policy for a composition root
+PERSISTENCE_ENABLED=false   # explicitly open durable SQLite app/checkpoint stores
 OPENAI_API_KEY=             # credential for the default openai model
 ANTHROPIC_API_KEY=          # credential when MODEL uses anthropic:
 ```
@@ -48,6 +49,30 @@ opens repositories itself and passes them in (see below). Use
 the application session database. Open `LangGraphSQLiteCheckpoints` separately
 and pass it as `checkpoint_deleter=` (session deletion) plus
 `checkpointer=<adapter.checkpointer>` (graph factories).
+
+## Durable packaged app
+
+The supported CLI and ASGI factory remain in-memory by default. Enable durable
+SQLite composition explicitly with `PERSISTENCE_ENABLED=true`, or by explicitly
+setting any application/checkpoint database path or URL. Install the optional
+dependencies first:
+
+```bash
+pip install "agent-chat-fastapi-langgraph-assistant-ui[persistence]"
+UI_PRESET=full DATABASE_PATH=./agent-chat.db \
+CHECKPOINT_DATABASE_PATH=./agent-chat-checkpoints.db \
+minimal-chat-serve --port 8011
+```
+
+The entry point opens a migrated `SQLiteRepositories` application database and
+a separate `LangGraphSQLiteCheckpoints` database during FastAPI lifespan,
+injects both into routes/graph factories, and disposes them at shutdown. Set
+`AUTO_MIGRATE=false` to require a deployment-time
+`minimal-chat-migrate ./agent-chat.db` instead; it never upgrades implicitly.
+Missing optional dependencies fail startup with the exact persistence-extra
+install command. The legacy `application/backend/full` remains a development
+implementation and is not made durable by its current data volume; migrate
+deployments to the packaged app.
 
 ```python
 from agent_chat_minimal.adapters.langgraph_sqlite import LangGraphSQLiteCheckpoints

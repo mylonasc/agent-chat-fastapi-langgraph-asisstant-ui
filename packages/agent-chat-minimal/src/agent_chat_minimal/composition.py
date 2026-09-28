@@ -3,6 +3,7 @@
 import argparse
 import os
 from collections.abc import Callable
+from contextlib import asynccontextmanager
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -36,6 +37,7 @@ def create_app(
     session_service: SessionService | None = None,
     transcript_service: TranscriptService | None = None,
     checkpoint_deleter: Any | None = None,
+    lifespan: Any | None = None,
 ) -> FastAPI:
     """Compose an application from validated settings and injectable services.
 
@@ -76,12 +78,95 @@ def create_app(
         session_service=session_service,
         transcript_service=transcript_service,
         checkpoint_deleter=checkpoint_deleter,
+        lifespan=lifespan,
     )
+
+
+class _DeferredCheckpointer:
+    """Expose the lifespan-owned saver to lazily constructed graph factories."""
+
+    def __init__(self) -> None:
+        self._adapter: Any | None = None
+
+    def set_adapter(self, adapter: Any) -> None:
+        self._adapter = adapter
+
+    def clear_adapter(self) -> None:
+        self._adapter = None
+
+    @property
+    def checkpointer(self) -> Any:
+        if self._adapter is None:
+            raise RuntimeError("checkpoint store is not available before application startup")
+        return self._adapter.checkpointer
+
+    async def delete_session(self, session_id: str) -> None:
+        await self.checkpointer.adelete_thread(session_id)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self.checkpointer, name)
+
+
+def _durable_dependencies(settings: Settings) -> tuple[Any, Any, Any]:
+    """Construct lazy durable dependencies without opening loop-bound I/O."""
+    try:
+        from .adapters.langgraph_sqlite import LangGraphSQLiteCheckpoints
+        from .adapters.sqlite import SQLiteRepositories, create_sqlite_engine, upgrade_database
+    except ModuleNotFoundError as exc:
+        raise RuntimeError(
+            "Durable persistence requires the persistence extra. Install with "
+            'pip install "agent-chat-fastapi-langgraph-assistant-ui[persistence]".'
+        ) from exc
+
+    repositories = SQLiteRepositories(create_sqlite_engine(settings.resolved_database_url()))
+    deferred_checkpointer = _DeferredCheckpointer()
+
+    @asynccontextmanager
+    async def durable_lifespan(_: FastAPI):
+        checkpoints = None
+        try:
+            if settings.auto_migrate:
+                await upgrade_database(repositories.engine)
+            checkpoints = await LangGraphSQLiteCheckpoints.open(
+                settings.resolved_checkpoint_database_url()
+            )
+            deferred_checkpointer.set_adapter(checkpoints)
+            yield
+        finally:
+            deferred_checkpointer.clear_adapter()
+            if checkpoints is not None:
+                await checkpoints.dispose()
+            await repositories.dispose()
+
+    return repositories, deferred_checkpointer, durable_lifespan
+
+
+def create_configured_app(settings: Settings) -> FastAPI:
+    """Compose the supported app, owning durable resources when enabled.
+
+    The entry points call this synchronous factory before their event loop
+    starts. Explicit ``create_app(...)`` remains injection-first for tests and
+    embedding applications.
+    """
+    if not settings.persistence_enabled:
+        return create_app(settings=settings)
+
+    repositories, checkpoints, lifespan = _durable_dependencies(settings)
+    app = create_app(
+        settings=settings,
+        repositories=repositories,
+        checkpointer=checkpoints,
+        checkpoint_deleter=checkpoints,
+        lifespan=lifespan,
+    )
+    app.state.repositories = repositories
+    app.state.checkpoints = checkpoints
+    return app
 
 
 def create_default_app() -> FastAPI:
     """ASGI factory for ``uvicorn agent_chat_minimal:create_default_app --factory``."""
-    return create_app(settings=Settings.from_env())
+    return create_configured_app(Settings.from_env())
 
 
 def main(argv=None):
@@ -126,5 +211,5 @@ def main(argv=None):
         print(f"agent {settings.default_agent!r} built OK")
         return
     uvicorn.run(
-        create_app(settings=settings), host=settings.host, port=settings.port
+        create_configured_app(settings), host=settings.host, port=settings.port
     )

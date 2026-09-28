@@ -325,6 +325,7 @@ def _build_app(
     session_service: SessionService | None = None,
     transcript_service: TranscriptService | None = None,
     checkpoint_deleter: Any | None = None,
+    lifespan: Any | None = None,
 ) -> FastAPI:
     """Build routes and transport from composition-root dependencies.
 
@@ -389,7 +390,11 @@ def _build_app(
         except (TypeError, ValueError):
             return factory()
         if checkpointer is not None and "checkpointer" in params:
-            return factory(checkpointer=checkpointer)
+            # Durable composition defers opening SQLite until FastAPI lifespan.
+            # Resolve its proxy only when the lazy registry factory is built,
+            # so LangGraph receives the actual BaseCheckpointSaver.
+            factory_checkpointer = getattr(checkpointer, "checkpointer", checkpointer)
+            return factory(checkpointer=factory_checkpointer)
         return factory()
 
     if single_mode:
@@ -486,7 +491,7 @@ def _build_app(
             eager_error = str(exc)
             logger.warning("graph_factory failed: %s", exc)
 
-    app = FastAPI()
+    app = FastAPI(lifespan=lifespan)
     app.state.settings = settings
     app.state.capabilities = capability_provider
     app.state.session_service = sessions
