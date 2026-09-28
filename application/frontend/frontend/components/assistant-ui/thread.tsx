@@ -70,9 +70,10 @@ export const Thread: FC = () => {
           </div>
 
           <WebSearchToolUI />
-          <WebRAGToolUI />
-          <WebRAGStatusToolUI />
-          <AutoThreadTitle />
+           <WebRAGToolUI />
+           <WebRAGStatusToolUI />
+           <AutoThreadTitle />
+           <TranscriptSynchronizer />
 
           <ThreadPrimitive.Viewport className="aui-thread-viewport relative flex flex-1 flex-col overflow-x-auto overflow-y-scroll px-4">
             <ThreadPrimitive.If empty>
@@ -173,6 +174,30 @@ const AutoThreadTitle: FC = () => {
     autoTitledByThreadRef.current.add(threadId);
     api.threadListItem().rename(suggested);
   }, [api, messages, threadItem.id, threadItem.remoteId, threadItem.title]);
+
+  return null;
+};
+
+/** Persist only completed turns; stable message IDs make retries idempotent. */
+const TranscriptSynchronizer: FC = () => {
+  const { client } = useApiClient();
+  const threadItem = useAssistantState((s) => s.threadListItem);
+  const messages = useAssistantState((s) => s.thread.messages);
+  const isRunning = useAssistantState((s) => s.thread.isRunning);
+
+  useEffect(() => {
+    const threadId = threadItem.remoteId;
+    if (!threadId || isRunning || messages.length === 0) return;
+
+    void (async () => {
+      for (const message of messages) {
+        if (!message.id) continue;
+        await client.appendMessage(threadId, message);
+      }
+    })().catch(() => {
+      // The next completed turn retries unchanged message IDs without duplicates.
+    });
+  }, [client, isRunning, messages, threadItem.id, threadItem.remoteId]);
 
   return null;
 };

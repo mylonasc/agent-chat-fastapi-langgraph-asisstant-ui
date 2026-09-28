@@ -89,6 +89,17 @@ capabilities from the canonical composition root.
 
 ## In Progress
 
+### PUIR-11: Durable transcript synchronization
+
+Branch: `feature/puir-11-durable-transcripts` (stacked on #43).
+
+- started a completed-turn frontend synchronizer: it appends each stable UI
+  message to the owned transcript endpoint only after streaming ends;
+- transcript appends now return the stored message for an exact retry using the
+  same message ID, while a payload/role/session collision stays a conflict;
+- converter preserves LangChain message IDs and uses deterministic legacy
+  fallback IDs rather than reassigning positions on every state update.
+
 ### #43: Durable SQLite persistence from supported entry points
 
 Branch: `feature/puir-43-durable-default-app`.

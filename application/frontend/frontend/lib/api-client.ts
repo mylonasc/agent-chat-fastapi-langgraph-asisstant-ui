@@ -126,6 +126,14 @@ export class ApiClient {
     return this.request(`/threads/${encodeURIComponent(threadId)}/messages`);
   }
 
+  appendMessage(threadId: string, message: unknown): Promise<{ ok: boolean }> {
+    return this.request(`/threads/${encodeURIComponent(threadId)}/messages`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message }),
+    });
+  }
+
   toolUrl(path: string): string {
     return `${this.apiBase}${path}`;
   }
