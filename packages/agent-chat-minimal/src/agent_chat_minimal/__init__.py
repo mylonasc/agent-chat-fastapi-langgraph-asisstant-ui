@@ -29,6 +29,13 @@ from .domain import (
 from .identity import DefaultPrincipalResolver
 from .ports import PrincipalResolver
 from .registry import AGENT_REGISTRY, discover_agents
+from .runtime_config import (
+    DEFAULT_RUNTIME_CONFIG,
+    RUNTIME_CONFIG_VERSION,
+    RuntimeConfig,
+    build_runtime_config,
+    parse_runtime_config,
+)
 from .services import SessionService, TranscriptService
 from .server import (
     DEFAULT_WEB_DIR,
@@ -54,15 +61,20 @@ __all__ = [
     "Feedback",
     "FeedbackRating",
     "MessageRole",
+    "DEFAULT_RUNTIME_CONFIG",
     "Principal",
     "PrincipalResolver",
+    "RUNTIME_CONFIG_VERSION",
+    "RuntimeConfig",
     "ScopedChatRequest",
+    "build_runtime_config",
     "Session",
     "SessionService",
     "SessionStatus",
     "Settings",
     "StoredMessage",
     "TranscriptService",
+    "parse_runtime_config",
     "ThreadManager",
     "ThreadMessageStore",
     "ThreadMetadata",

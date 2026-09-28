@@ -31,6 +31,7 @@ import { LazyMotion, MotionConfig, domAnimation } from "motion/react";
 import * as m from "motion/react-m";
 
 import { Button } from "@/components/ui/button";
+import { useRuntimeConfig } from "@/hooks/use-runtime-config";
 import { MarkdownText } from "@/components/assistant-ui/markdown-text";
 import { Reasoning, ReasoningGroup } from "@/components/assistant-ui/reasoning";
 import {
@@ -47,11 +48,6 @@ import {
 } from "@/components/assistant-ui/attachment";
 
 import { cn } from "@/lib/utils";
-
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE ??
-  process.env.NEXT_PUBLIC_API_URL?.replace(/\/assistant$/, "") ??
-  "http://localhost:8010";
 
 export const Thread: FC = () => {
   return (
@@ -380,14 +376,22 @@ type IndexJob = {
 
 const IndexingStatusPanel: FC = () => {
   const [jobs, setJobs] = useState<IndexJob[]>([]);
+  const { config, apiBase } = useRuntimeConfig();
+  const rag = config.tools.web_rag;
+  const statusPath = rag.status_path ?? "/tools/web_rag/status";
 
   useEffect(() => {
+    // Capability-gated: no polling when the backend does not serve RAG.
+    if (!rag.enabled) {
+      setJobs([]);
+      return;
+    }
     let cancelled = false;
 
     const fetchStatus = async () => {
       try {
         const res = await fetch(
-          `${API_BASE}/tools/web_rag/status?user_id=default_user`,
+          `${apiBase}${statusPath}?user_id=default_user`,
           { cache: "no-store" }
         );
         if (!res.ok || cancelled) return;
@@ -411,7 +415,7 @@ const IndexingStatusPanel: FC = () => {
       cancelled = true;
       window.clearInterval(id);
     };
-  }, []);
+  }, [rag.enabled, statusPath, apiBase]);
 
   if (!jobs.length) return null;
 

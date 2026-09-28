@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "api_base": "http://localhost:8010",
+  "ui_preset": "full",
+  "identity_mode": "delegated",
+  "features": {
+    "agents": true,
+    "assistant": true,
+    "threads": true,
+    "transcripts": true
+  },
+  "tools": {
+    "web_rag": {"enabled": true, "status_path": "/tools/web_rag/status"},
+    "admin": {"enabled": false, "status_path": null},
+    "sharing": {"enabled": false, "status_path": null},
+    "attachments": {"enabled": false, "status_path": null}
+  }
+}
