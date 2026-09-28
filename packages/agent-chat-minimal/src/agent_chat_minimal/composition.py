@@ -8,13 +8,13 @@ from pathlib import Path
 from typing import Any
 
 import uvicorn
-from assistant_stream_ce.assistant_stream_models import ChatRequest
 from fastapi import FastAPI
 
 from .capabilities import CapabilityProvider
 from .config import Settings
 from .server import ChatGraph, _build_app
 from .threads import ThreadManager, ThreadMessageStore
+from .transport import ChatRequest
 
 
 def create_app(

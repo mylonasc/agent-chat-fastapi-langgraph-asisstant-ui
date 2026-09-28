@@ -1,0 +1,1 @@
+aui-state:[{"type": "set", "path": ["tool_updates"], "value": []}, {"type": "set", "path": ["messages"], "value": []}, {"type": "set", "path": ["tool_updates"], "value": [{"tool": "search", "status": "running"}]}, {"type": "set", "path": ["score"], "value": 7}]

@@ -1,0 +1,3 @@
+aui-state:[{"type": "set", "path": ["status"], "value": "running"}, {"type": "set", "path": ["items", "0"], "value": {"id": 1}}]
+0:"hello"
+2:[{"progress": 1}]

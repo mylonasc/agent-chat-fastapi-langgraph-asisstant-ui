@@ -72,6 +72,7 @@ docs.show("threads")
 | `providers` | OpenAI / Anthropic / Ollama specs & creds |
 | `configuration` | env vars, CLI flags, hooks, 503 semantics |
 | `threads` | multi-thread chats, frontend-full compat |
+| `transport` | pinned Python/frontend protocol boundary and replacement criteria |
 
 ## Threads (frontend-full compatible)
 

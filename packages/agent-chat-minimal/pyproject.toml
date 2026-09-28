@@ -9,7 +9,7 @@ description = "Portable FastAPI and LangGraph chat with a bundled static UI"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "assistant-stream-ce>=0.0.2",
+    "assistant-stream-ce==0.0.2",
     "fastapi>=0.127.0",
     "langchain>=1.2.0",
     "langchain-openai>=0.2.0",

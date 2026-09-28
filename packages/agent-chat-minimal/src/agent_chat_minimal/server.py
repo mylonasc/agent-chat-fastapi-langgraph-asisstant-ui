@@ -4,10 +4,6 @@ import uuid
 from collections.abc import Callable
 from typing import Any, Optional, Protocol, runtime_checkable
 
-from assistant_stream_ce import RunController, create_run
-from assistant_stream_ce.assistant_stream_models import ChatRequest
-from assistant_stream_ce.modules.langgraph import append_langgraph_event
-from assistant_stream_ce.serialization import DataStreamResponse
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from langchain_core.messages import HumanMessage
@@ -17,6 +13,13 @@ from .capabilities import CapabilityProvider
 from .config import Settings
 from .static_ui import DEFAULT_WEB_DIR, DEFAULT_WEB_FULL_DIR, mount_static_ui
 from .threads import ThreadManager, ThreadMessageStore, ThreadMetadata
+from .transport import (
+    ChatRequest,
+    RunController,
+    append_graph_event,
+    create_response,
+    create_run,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -29,7 +32,7 @@ class ChatGraph(Protocol):
     The graph must accept ``{"messages": [...]}`` as input and support
     ``astream(input, config, stream_mode=[...], subgraphs=True)`` yielding
     ``(namespace, event_type, chunk)`` triples consumable by
-    ``assistant_stream_ce.modules.langgraph.append_langgraph_event``.
+    the package transport adapter.
     """
 
     def astream(self, *args: Any, **kwargs: Any) -> Any: ...
@@ -502,12 +505,10 @@ def _build_app(
                             )
                     except Exception:
                         pass
-                append_langgraph_event(
-                    controller.state, namespace, event_type, chunk
-                )
+                append_graph_event(controller.state, namespace, event_type, chunk)
 
         stream = create_run(run_callback, state=request.state)
-        return DataStreamResponse(stream)
+        return create_response(stream)
 
     @app.post("/assistant")
     async def chat_endpoint(request: ScopedChatRequest):

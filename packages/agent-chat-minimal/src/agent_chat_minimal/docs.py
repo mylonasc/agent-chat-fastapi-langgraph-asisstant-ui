@@ -8,7 +8,15 @@ docs.show("quickstart")
 ```
 """
 
-GUIDES = ("index", "quickstart", "agents", "providers", "configuration", "threads")
+GUIDES = (
+    "index",
+    "quickstart",
+    "agents",
+    "providers",
+    "configuration",
+    "threads",
+    "transport",
+)
 
 
 def _read(name: str) -> str:

@@ -1,0 +1,4 @@
+b:{"toolCallId": "call_1", "toolName": "weather"}
+c:{"toolCallId": "call_1", "argsTextDelta": "{\"city\":"}
+c:{"toolCallId": "call_1", "argsTextDelta": "\"Athens\"}"}
+a:{"toolCallId": "call_1", "result": {"temperature": 24}}
