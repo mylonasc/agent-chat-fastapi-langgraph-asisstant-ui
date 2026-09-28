@@ -204,6 +204,9 @@ Branch: `feature/puir-10-api-client-identity` (from merged PUIR-08/09).
   because an anchor cannot carry trusted subject/auth headers (the disabled
   RAG surface is owned by PUIR-13).
 - `tsc --noEmit` is clean.
+- Browser verification: the new Playwright anonymous-identity spec passed
+  against the staged unified UI; one profile retains its `anon-` subject
+  across reload while a separate browser context gets a distinct subject.
 
 ## Test Environment
 

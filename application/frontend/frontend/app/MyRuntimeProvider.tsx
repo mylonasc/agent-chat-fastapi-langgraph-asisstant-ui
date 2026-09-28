@@ -1,6 +1,6 @@
 "use client";
 
-import React, { ReactNode, useEffect, useMemo } from "react";
+import React, { ReactNode, useEffect, useMemo, useState } from "react";
 import type { AssistantStreamChunk } from "assistant-stream";
 import {
   AssistantRuntimeProvider,
@@ -78,6 +78,7 @@ function usePerThreadTransportRuntime() {
 // ------------------------------------------------------------------
 function ProviderInner({ children }: { children: ReactNode }) {
   const { client } = useApiClient();
+  const [apiError, setApiError] = useState<string | null>(null);
   const adapter = useMemo(() => ({
       async list() {
         try {
@@ -89,7 +90,10 @@ function ProviderInner({ children }: { children: ReactNode }) {
               status: t.is_archived ? ("archived" as const) : ("regular" as const),
             })),
           };
-        } catch (e) { return { threads: [] }; }
+        } catch (error) {
+          setApiError(error instanceof Error ? error.message : "Unable to load chats");
+          return { threads: [] };
+        }
       },
       async fetch(threadId: string) {
         const data = await client.getThread(threadId);
@@ -127,6 +131,12 @@ function ProviderInner({ children }: { children: ReactNode }) {
 
   return (
     <AssistantRuntimeProvider runtime={runtime}>
+      {apiError && (
+        <div role="alert" className="fixed right-4 bottom-4 z-50 rounded border bg-background p-3 text-sm shadow">
+          {apiError}
+          <button className="ml-3 underline" onClick={() => setApiError(null)}>Dismiss</button>
+        </div>
+      )}
       {children}
     </AssistantRuntimeProvider>
   );

@@ -42,7 +42,11 @@ export function getOrCreateAnonymousSubject(storage: Storage): string {
 
 /** Resolve the browser identity without accepting any tool/body user_id. */
 export function useClientIdentity(mode: IdentityMode): ClientIdentity {
-  const [identity, setIdentity] = useState<ClientIdentity>({ subject: null });
+  const [identity, setIdentity] = useState<ClientIdentity>(() => {
+    if (typeof window === "undefined") return { subject: null };
+    if (mode === "delegated") return window.agentChatIdentity ?? { subject: null };
+    return { subject: getOrCreateAnonymousSubject(window.localStorage) };
+  });
 
   useEffect(() => {
     if (mode === "delegated") {
