@@ -17,6 +17,7 @@ GUIDES = (
     "threads",
     "transport",
     "persistence",
+    "runtime-config",
 )
 
 

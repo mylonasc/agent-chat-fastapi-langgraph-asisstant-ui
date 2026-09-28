@@ -10,6 +10,21 @@ from pathlib import Path
 from typing import Literal
 
 
+def _validate_api_base(value: str) -> None:
+    """Same-origin (``""``) is the secure default; external bases are explicit."""
+    if not value:
+        return
+    if value.endswith("/"):
+        raise ValueError("api_base must not end with '/'")
+    if "://" not in value:
+        raise ValueError("api_base must be '' or an absolute http(s) URL")
+    scheme = value.split("://", 1)[0].lower()
+    if scheme not in {"http", "https"}:
+        raise ValueError("api_base must use http or https")
+    if any(character.isspace() for character in value):
+        raise ValueError("api_base must not contain whitespace")
+
+
 @dataclass(frozen=True)
 class Settings:
     host: str = "0.0.0.0"
@@ -19,6 +34,8 @@ class Settings:
     web_dir: str | None = None
     web_full_dir: str | None = None
     ui_preset: Literal["minimal", "full"] = "minimal"
+    api_base: str = ""
+    identity_mode: Literal["anonymous", "delegated"] = "anonymous"
     database_url: str | None = None
     database_path: str = "agent-chat.db"
     checkpoint_database_url: str | None = None
@@ -36,6 +53,9 @@ class Settings:
             raise ValueError("default_agent must not be empty")
         if self.ui_preset not in {"minimal", "full"}:
             raise ValueError("ui_preset must be 'minimal' or 'full'")
+        if self.identity_mode not in {"anonymous", "delegated"}:
+            raise ValueError("identity_mode must be 'anonymous' or 'delegated'")
+        _validate_api_base(self.api_base)
         if self.database_url is not None and not self.database_url.strip():
             raise ValueError("database_url must not be empty")
         if not self.database_path.strip():
@@ -66,6 +86,8 @@ class Settings:
             web_dir=os.getenv("MINIMAL_WEB_DIR"),
             web_full_dir=os.getenv("FULL_WEB_DIR"),
             ui_preset=os.getenv("UI_PRESET", "minimal"),
+            api_base=os.getenv("API_BASE", ""),
+            identity_mode=os.getenv("IDENTITY_MODE", "anonymous"),
             database_url=os.getenv("DATABASE_URL") or None,
             database_path=os.getenv("DATABASE_PATH", "agent-chat.db"),
             checkpoint_database_url=os.getenv("CHECKPOINT_DATABASE_URL") or None,
@@ -101,6 +123,8 @@ DEFAULT_AGENT=weather       # registry id aliased by POST /assistant
 MINIMAL_WEB_DIR=            # override bundled web/ (empty = bundled)
 FULL_WEB_DIR=               # override bundled web_full/ (empty = bundled)
 UI_PRESET=minimal           # runtime UI preset: minimal or full
+API_BASE=                   # same-origin default; absolute http(s) URL for split-port dev
+IDENTITY_MODE=anonymous     # anonymous or delegated (custom principal resolver)
 DATABASE_PATH=agent-chat.db # default application SQLite file
 DATABASE_URL=               # SQLAlchemy URL; overrides DATABASE_PATH
 CHECKPOINT_DATABASE_PATH=agent-chat-checkpoints.db # separate graph state file

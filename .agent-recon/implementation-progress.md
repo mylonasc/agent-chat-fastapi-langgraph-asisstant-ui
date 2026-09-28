@@ -87,6 +87,32 @@ testing, then merge of the draft PR.
 After PUIR-07 merges, PUIR-08 can safely expose runtime UI configuration and
 capabilities from the canonical composition root.
 
+## In Progress
+
+### PUIR-08 / #25: Runtime UI configuration and capability manifest
+
+Branch: `feature/puir-08-runtime-config`
+
+Implemented (backend-first slice; component wiring stays PUIR-09/PUIR-13):
+
+- `Settings.api_base` (`API_BASE`, same-origin `""` default, validated
+  absolute http(s) or empty) and `Settings.identity_mode`
+  (`IDENTITY_MODE`, `anonymous`/`delegated`);
+- `CapabilityProvider.tool_capabilities()` reporting `web_rag`/`admin`/
+  `sharing`/`attachments` with enabled flags and the RAG status path;
+- new `runtime_config` module: `RUNTIME_CONFIG_VERSION = 1`,
+  `build_runtime_config()`, and a tolerant `parse_runtime_config()`
+  (unknown versions, missing/mistyped fields degrade to compiled defaults);
+- `GET /api/config` served per request with `Cache-Control: no-store`;
+  `api` added to the SPA reserved paths so it never falls through to HTML;
+- `lib/runtime-config.ts` in both frontends mirroring the schema, parser,
+  fetcher-with-defaults, and `resolveApiBase` precedence; `tsc --noEmit`
+  clean in both apps; TS/Python parity proven ad hoc against
+  `tests/fixtures/runtime-config-v1.json` (Node-compiled parser agrees
+  with `parse_runtime_config` on fixture, malformed, and future inputs);
+- new `runtime-config` guide registered in `docs.py`; configuration env
+  table updated.
+
 ## Test Environment
 
 - Supported verification interpreter used so far: CPython 3.12.3.

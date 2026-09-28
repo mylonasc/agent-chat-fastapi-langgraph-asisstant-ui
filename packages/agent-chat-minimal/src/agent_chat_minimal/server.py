@@ -778,6 +778,21 @@ def _build_app(
             },
         )
 
+    @app.get("/api/config")
+    async def runtime_config():
+        """Serve the versioned runtime UI configuration (PUIR-08).
+
+        Deployment-specific values are computed per request and marked
+        ``no-store`` so wheels stay portable while deployments can change
+        behavior without rebuilding the static UI.
+        """
+        from fastapi.responses import JSONResponse
+
+        from .runtime_config import build_runtime_config
+
+        snapshot = build_runtime_config(settings, capability_provider)
+        return JSONResponse(content=snapshot.as_dict(), headers={"Cache-Control": "no-store"})
+
     @app.post("/assistant")
     async def chat_endpoint(request: ScopedChatRequest, principal: PrincipalDep):
         return await run_assistant(request, default_agent, principal)

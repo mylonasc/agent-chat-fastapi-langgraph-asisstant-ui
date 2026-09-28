@@ -13,6 +13,8 @@ DEFAULT_AGENT=weather       # registry id aliased by POST /assistant
 MINIMAL_WEB_DIR=            # override bundled web/ (empty = bundled)
 FULL_WEB_DIR=               # override bundled web_full/ (empty = bundled)
 UI_PRESET=minimal           # runtime UI preset: minimal or full
+API_BASE=                   # same-origin default; absolute http(s) URL for split-port dev
+IDENTITY_MODE=anonymous     # anonymous or delegated (custom principal resolver)
 DATABASE_PATH=agent-chat.db # default application SQLite file
 DATABASE_URL=               # SQLAlchemy URL; overrides DATABASE_PATH
 CHECKPOINT_DATABASE_PATH=agent-chat-checkpoints.db # separate graph state file
@@ -28,6 +30,11 @@ from agent_chat_minimal import Settings, create_app
 settings = Settings.from_env()
 app = create_app(settings=settings)
 ```
+
+`GET /api/config` serves the versioned runtime UI contract derived from these
+settings and the capability provider (see [runtime-config.md](runtime-config.md)).
+It is computed per request with `Cache-Control: no-store` so deployments stay
+tunable after the wheel is built.
 
 `Settings.resolved_database_url()` returns `DATABASE_URL` when set, otherwise
 an absolute `sqlite+aiosqlite` URL for `DATABASE_PATH`. The HTTP app defaults

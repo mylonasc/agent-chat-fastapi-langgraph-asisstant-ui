@@ -19,6 +19,7 @@ DEFAULT_WEB_FULL_DIR = Path(__file__).parent / "web_full"
 class SPAStaticFiles(StaticFiles):
     async def get_response(self, path, scope):
         reserved_paths = (
+            "api",
             "assistant",
             "agents",
             "threads",
