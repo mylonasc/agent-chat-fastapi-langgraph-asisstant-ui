@@ -1,31 +1,25 @@
-import argparse
 import inspect
 import logging
-import os
 import uuid
 from collections.abc import Callable
-from pathlib import Path
 from typing import Any, Optional, Protocol, runtime_checkable
 
-import uvicorn
 from assistant_stream_ce import RunController, create_run
 from assistant_stream_ce.assistant_stream_models import ChatRequest
 from assistant_stream_ce.modules.langgraph import append_langgraph_event
 from assistant_stream_ce.serialization import DataStreamResponse
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse
-from fastapi.staticfiles import StaticFiles
 from langchain_core.messages import HumanMessage
 from pydantic import BaseModel
-from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from .capabilities import CapabilityProvider
+from .config import Settings
+from .static_ui import DEFAULT_WEB_DIR, DEFAULT_WEB_FULL_DIR, mount_static_ui
 from .threads import ThreadManager, ThreadMessageStore, ThreadMetadata
 
 
 logger = logging.getLogger(__name__)
-DEFAULT_WEB_DIR = Path(__file__).parent / "web"
-DEFAULT_WEB_FULL_DIR = Path(__file__).parent / "web_full"
 
 
 @runtime_checkable
@@ -39,35 +33,6 @@ class ChatGraph(Protocol):
     """
 
     def astream(self, *args: Any, **kwargs: Any) -> Any: ...
-
-
-class SPAStaticFiles(StaticFiles):
-    async def get_response(self, path, scope):
-        reserved_paths = (
-            "assistant",
-            "agents",
-            "threads",
-            "tools",
-            "full",
-            "health",
-            "docs",
-            "openapi.json",
-        )
-        if path in reserved_paths or path.startswith(
-            tuple(f"{prefix}/" for prefix in reserved_paths)
-        ):
-            raise StarletteHTTPException(status_code=404)
-
-        try:
-            response = await super().get_response(path, scope)
-        except StarletteHTTPException as exc:
-            if exc.status_code != 404:
-                raise
-            return await super().get_response("index.html", scope)
-
-        if response.status_code == 404:
-            return await super().get_response("index.html", scope)
-        return response
 
 
 class ScopedChatRequest(ChatRequest):
@@ -221,19 +186,18 @@ def _default_checkpointer() -> Any:
     return MemorySaver()
 
 
-def create_app(
+def _build_app(
+    settings: Settings,
+    capability_provider: CapabilityProvider,
     graph: ChatGraph | None = None,
     graph_factory: Callable[..., ChatGraph | None] | None = None,
     agents: dict[str, Callable[..., ChatGraph | None]] | None = None,
-    default_agent: str | None = None,
-    web_dir: Path | None = None,
-    web_full_dir: Path | None = None,
     prepare_state: Callable[[dict, ChatRequest], list] | None = None,
     checkpointer: Any | None = "memory",
     thread_manager: ThreadManager | None = None,
     message_store: ThreadMessageStore | None = None,
 ) -> FastAPI:
-    """Create the FastAPI app serving LangGraph agent(s).
+    """Build routes and transport from composition-root dependencies.
 
     Single-agent override (takes precedence):
         ``create_app(graph=my_graph)`` or
@@ -259,11 +223,6 @@ def create_app(
         graph_factory: Factory building the graph (single-agent mode, deferred
             build). Receives ``checkpointer=`` when its signature accepts it.
         agents: Mapping of name -> factory (multi-agent mode).
-        default_agent: Name aliased by ``POST /assistant``. Defaults to
-            ``"weather"`` for the discovered registry and the first entry for
-            a caller-supplied ``agents`` mapping.
-        web_dir: Override for the bundled minimal UI directory (``/``).
-        web_full_dir: Override for the bundled full UI directory (``/full``).
         prepare_state: ``(state, request) -> message dicts`` reducer hook;
             defaults to :func:`default_prepare_state`.
         checkpointer: Shared LangGraph checkpointer passed to factories that
@@ -274,6 +233,7 @@ def create_app(
     """
     from .registry import discover_agents
 
+    default_agent: str | None = settings.default_agent
     single_mode = graph is not None or graph_factory is not None
 
     if checkpointer == "memory":
@@ -301,12 +261,13 @@ def create_app(
         factories = dict(agents)
         if not factories:
             raise ValueError("agents must contain at least one factory")
-        if default_agent is None:
-            default_agent = next(iter(factories))
     else:
-        factories = discover_agents()
-        if default_agent is None:
-            default_agent = "weather"
+        parameters = inspect.signature(discover_agents).parameters
+        factories = (
+            discover_agents(model=settings.model)
+            if "model" in parameters
+            else discover_agents()
+        )
 
     if default_agent not in factories:
         raise ValueError(
@@ -354,6 +315,8 @@ def create_app(
             logger.warning("graph_factory failed: %s", exc)
 
     app = FastAPI()
+    app.state.settings = settings
+    app.state.capabilities = capability_provider
     app.add_middleware(
         CORSMiddleware,
         # The bundled UI is same-origin; permissive CORS supports split-port development.
@@ -370,7 +333,7 @@ def create_app(
 
     @app.get("/agents")
     async def list_agents():
-        return {"agents": sorted(factories.keys()), "default": default_agent}
+        return capability_provider.agent_listing(list(factories), default_agent)
 
     # --- Threads (full-stack compatible) ---
 
@@ -554,87 +517,27 @@ def create_app(
     async def chat_endpoint_for_agent(agent_id: str, request: ScopedChatRequest):
         return await run_assistant(request, agent_id)
 
-    # Full UI (thread sidebar) first: Starlette matches mounts in order, so
-    # /full must be registered before the catch-all / mount.
-    resolved_full_dir = Path(
-        web_full_dir or os.getenv("FULL_WEB_DIR", DEFAULT_WEB_FULL_DIR)
-    ).resolve()
-    if resolved_full_dir.is_dir() and (resolved_full_dir / "index.html").is_file():
-
-        @app.get("/full", include_in_schema=False)
-        async def full_root():
-            return RedirectResponse(url="/full/", status_code=307)
-
-        app.mount(
-            "/full",
-            SPAStaticFiles(directory=resolved_full_dir, html=True),
-            name="web-full",
-        )
-    else:
-        logger.warning(
-            "Full UI build not found at %s; /full is disabled. "
-            "Set FULL_WEB_DIR to a frontend-full/out directory.",
-            resolved_full_dir,
-        )
-
-    resolved_web_dir = Path(
-        web_dir or os.getenv("MINIMAL_WEB_DIR", DEFAULT_WEB_DIR)
-    ).resolve()
-    if resolved_web_dir.is_dir() and (resolved_web_dir / "index.html").is_file():
-        app.mount(
-            "/",
-            SPAStaticFiles(directory=resolved_web_dir, html=True),
-            name="web",
-        )
-    else:
-        logger.warning(
-            "Minimal UI build not found at %s; starting in API-only mode. "
-            "Set MINIMAL_WEB_DIR to a frontend-minimal/out directory.",
-            resolved_web_dir,
-        )
+    mount_static_ui(app, settings)
 
     return app
 
 
-app = create_app()
+def create_app(*args, **kwargs) -> FastAPI:
+    """Compatibility import for :func:`agent_chat_minimal.create_app`."""
+    from .composition import create_app as compose_app
+
+    return compose_app(*args, **kwargs)
+
+
+def create_default_app() -> FastAPI:
+    """Compatibility ASGI factory without import-time app construction."""
+    from .composition import create_default_app as compose_default_app
+
+    return compose_default_app()
 
 
 def main(argv=None):
-    from .config import Settings
+    """Compatibility CLI entry point."""
+    from .composition import main as composition_main
 
-    env = Settings.from_env()
-    parser = argparse.ArgumentParser(description="Serve the minimal chat application")
-    parser.add_argument("--host", default=env.host)
-    parser.add_argument("--port", type=int, default=env.port)
-    parser.add_argument(
-        "--model",
-        default=None,
-        help="Model spec, e.g. openai:gpt-4o-mini (sets MODEL env)",
-    )
-    parser.add_argument(
-        "--agent",
-        default=None,
-        help="Default agent id for POST /assistant (sets DEFAULT_AGENT env)",
-    )
-    parser.add_argument(
-        "--check",
-        action="store_true",
-        help="Build the default agent graph and exit (smoke check)",
-    )
-    args = parser.parse_args(argv)
-    if args.model:
-        os.environ["MODEL"] = args.model
-    default_agent = args.agent or os.getenv("DEFAULT_AGENT", env.default_agent)
-    if args.check:
-        from .registry import discover_agents
-
-        factories = discover_agents()
-        factory = factories.get(default_agent)
-        if factory is None:
-            raise SystemExit(f"unknown agent {default_agent!r}")
-        factory()
-        print(f"agent {default_agent!r} built OK")
-        return
-    uvicorn.run(
-        create_app(default_agent=default_agent), host=args.host, port=args.port
-    )
+    return composition_main(argv)

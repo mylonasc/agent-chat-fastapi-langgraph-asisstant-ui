@@ -10,6 +10,7 @@ Third-party packages can register agents without forking via the
 import logging
 import os
 from collections.abc import Callable
+from functools import partial
 from importlib.metadata import entry_points
 from typing import Any
 
@@ -18,19 +19,19 @@ logger = logging.getLogger(__name__)
 ENTRY_POINTS_GROUP = "agent_chat.agents"
 
 
-def _weather_factory(checkpointer: Any = None) -> Any:
+def _weather_factory(checkpointer: Any = None, *, model: str | None = None) -> Any:
     from .demo_agent.get_graph import make_agent_with_weather_tool
 
     return make_agent_with_weather_tool(
-        os.getenv("MODEL", "openai:gpt-4o-mini"), checkpointer=checkpointer
+        model or os.getenv("MODEL", "openai:gpt-4o-mini"), checkpointer=checkpointer
     )
 
 
-def _calculator_factory(checkpointer: Any = None) -> Any:
+def _calculator_factory(checkpointer: Any = None, *, model: str | None = None) -> Any:
     from .demo_agent.calculator import make_calculator_agent
 
     return make_calculator_agent(
-        os.getenv("MODEL", "openai:gpt-4o-mini"), checkpointer=checkpointer
+        model or os.getenv("MODEL", "openai:gpt-4o-mini"), checkpointer=checkpointer
     )
 
 
@@ -40,9 +41,12 @@ AGENT_REGISTRY: dict[str, Callable[[], Any]] = {
 }
 
 
-def discover_agents() -> dict[str, Callable[[], Any]]:
+def discover_agents(model: str | None = None) -> dict[str, Callable[[], Any]]:
     """Merge the built-in registry with ``agent_chat.agents`` entry points."""
     agents = dict(AGENT_REGISTRY)
+    if model is not None:
+        agents["weather"] = partial(_weather_factory, model=model)
+        agents["calculator"] = partial(_calculator_factory, model=model)
     try:
         eps = entry_points(group=ENTRY_POINTS_GROUP)
     except Exception as exc:  # pragma: no cover - metadata backend variance

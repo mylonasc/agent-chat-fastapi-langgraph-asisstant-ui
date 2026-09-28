@@ -11,13 +11,17 @@ PORT=8011                   # uvicorn bind port
 MODEL=openai:gpt-4o-mini    # provider:model spec (see providers.md)
 DEFAULT_AGENT=weather       # registry id aliased by POST /assistant
 MINIMAL_WEB_DIR=            # override bundled web/ (empty = bundled)
+FULL_WEB_DIR=               # override bundled web_full/ (empty = bundled)
+UI_PRESET=minimal           # runtime UI preset: minimal or full
 OPENAI_API_KEY=             # credential for the default openai model
 ANTHROPIC_API_KEY=          # credential when MODEL uses anthropic:
 ```
 
 ```python
-from agent_chat_minimal import Settings
-Settings.from_env()  # Settings(host='0.0.0.0', port=8011, ...)
+from agent_chat_minimal import Settings, create_app
+
+settings = Settings.from_env()
+app = create_app(settings=settings)
 ```
 
 ## CLI
@@ -43,6 +47,13 @@ error when credentials are missing.
 | `prepare_state=` | `(state, request) -> message dicts` reducer        |
 | `checkpointer=`  | Shared checkpointer (`"memory"` default, see below)|
 | `thread_manager=`/`message_store=` | Swap thread storage (tests)          |
+| `settings=`      | Validated deployment settings; explicit keywords override it |
+
+For an ASGI server, use the side-effect-free factory entry point:
+
+```bash
+uvicorn agent_chat_minimal:create_default_app --factory
+```
 
 ## Checkpointer
 

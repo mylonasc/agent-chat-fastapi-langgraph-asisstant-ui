@@ -7,6 +7,7 @@ stays dependency-light (no ``pydantic-settings`` required).
 import os
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
 
 
 @dataclass(frozen=True)
@@ -17,14 +18,27 @@ class Settings:
     default_agent: str = "weather"
     web_dir: str | None = None
     web_full_dir: str | None = None
+    ui_preset: Literal["minimal", "full"] = "minimal"
+
+    def __post_init__(self) -> None:
+        if not self.host.strip():
+            raise ValueError("host must not be empty")
+        if not 1 <= self.port <= 65535:
+            raise ValueError("port must be between 1 and 65535")
+        if not self.model.strip():
+            raise ValueError("model must not be empty")
+        if not self.default_agent.strip():
+            raise ValueError("default_agent must not be empty")
+        if self.ui_preset not in {"minimal", "full"}:
+            raise ValueError("ui_preset must be 'minimal' or 'full'")
 
     @classmethod
     def from_env(cls) -> "Settings":
         port_raw = os.getenv("PORT", "8011")
         try:
             port = int(port_raw)
-        except ValueError:
-            port = 8011
+        except ValueError as exc:
+            raise ValueError("PORT must be an integer") from exc
         return cls(
             host=os.getenv("HOST", "0.0.0.0"),
             port=port,
@@ -32,6 +46,7 @@ class Settings:
             default_agent=os.getenv("DEFAULT_AGENT", "weather"),
             web_dir=os.getenv("MINIMAL_WEB_DIR"),
             web_full_dir=os.getenv("FULL_WEB_DIR"),
+            ui_preset=os.getenv("UI_PRESET", "minimal"),
         )
 
     def web_dir_path(self, fallback: Path) -> Path | None:
@@ -47,6 +62,7 @@ MODEL=openai:gpt-4o-mini    # provider:model spec (anthropic:.., ollama:..)
 DEFAULT_AGENT=weather       # registry id aliased by POST /assistant
 MINIMAL_WEB_DIR=            # override bundled web/ (empty = bundled)
 FULL_WEB_DIR=               # override bundled web_full/ (empty = bundled)
+UI_PRESET=minimal           # runtime UI preset: minimal or full
 OPENAI_API_KEY=             # credential for the default openai model
 ANTHROPIC_API_KEY=          # credential when MODEL uses anthropic:
 """

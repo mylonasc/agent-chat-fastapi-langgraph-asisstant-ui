@@ -148,7 +148,7 @@ build dependencies only and never runtime/install dependencies for users.
 ## Issue Checklist
 
 - [x] #26 PUIR-01: Correct baseline package contracts and regressions
-- [ ] #23 PUIR-02: Introduce modular app, settings, and capability boundaries
+- [x] #23 PUIR-02: Introduce modular app, settings, and capability boundaries
 - [ ] #24 PUIR-03: Pin and isolate `assistant-stream-ce` with protocol tests
 - [ ] #27 PUIR-04: Define principal, session, transcript, and feedback domain ports
 - [ ] #30 PUIR-05: Add SQLAlchemy SQLite repositories and Alembic migrations

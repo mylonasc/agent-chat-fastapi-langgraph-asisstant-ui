@@ -35,7 +35,7 @@ Open <http://localhost:8011/>. The same process serves the static UI,
 `/health`, and `/assistant`. You can also run it as:
 
 ```bash
-.venv-minimal/bin/uvicorn agent_chat_minimal.server:app --port 8011
+.venv-minimal/bin/uvicorn agent_chat_minimal:create_default_app --factory --port 8011
 ```
 
 For verification and a Python-only container:

@@ -87,6 +87,8 @@ PORT=8011                   # uvicorn bind port
 MODEL=openai:gpt-4o-mini    # provider:model spec
 DEFAULT_AGENT=weather       # registry id aliased by POST /assistant
 MINIMAL_WEB_DIR=            # override bundled web/ (empty = bundled)
+FULL_WEB_DIR=               # override bundled web_full/ (empty = bundled)
+UI_PRESET=minimal           # runtime UI preset: minimal or full
 OPENAI_API_KEY=             # credential for the default openai model
 ANTHROPIC_API_KEY=          # credential when MODEL uses anthropic:
 ```
