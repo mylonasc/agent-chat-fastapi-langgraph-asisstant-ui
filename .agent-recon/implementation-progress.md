@@ -125,8 +125,12 @@ Implemented (backend-first slice; component wiring stays PUIR-09/PUIR-13):
 - repo hygiene notes: root `.gitignore` `lib/` (a Python rule) also
   covers frontend `lib/`, so new frontend lib files need `git add -f`
   (same as the existing tracked `utils.ts`); repo eslint config crashes
-  even on untouched files (pre-existing), `tsc --noEmit` + prettier are
-  the working gates.
+  even on untouched files (pre-existing), `tsc --noEmit` is the working
+  gate; full-frontend sources were not prettier-clean, so new hunks keep
+  surrounding style instead of whole-file reflows.
+- verification: full UI rebuilt + restaged from wired sources; packaged
+  app serves `/api/config` (no-store, `web_rag.enabled: false`), `/`,
+  and `/full/`; 95 package tests pass; `tsc --noEmit` clean.
 
 ## Test Environment
 
