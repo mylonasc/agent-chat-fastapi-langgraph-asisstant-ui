@@ -1,0 +1,43 @@
+name: artifact-workflow.yml
+
+on:
+  pull_request:
+    paths:
+      - "packages/agent-chat-minimal/**"
+      - "application/frontend/frontend/**"
+      - ".github/workflows/artifact-workflow.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  artifacts:
+    name: Build and smoke-test package artifacts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.20.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: application/frontend/frontend/pnpm-lock.yaml
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: astral-sh/setup-uv@v5
+      - name: Build wheel and sdist
+        run: packages/agent-chat-minimal/scripts/build_wheel.sh
+      - name: Check archives
+        run: |
+          uv run --with twine twine check packages/agent-chat-minimal/dist/*
+          for artifact in packages/agent-chat-minimal/dist/*; do
+            packages/agent-chat-minimal/scripts/smoke_test_wheel.sh "$artifact"
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: agent-chat-minimal-dist
+          path: packages/agent-chat-minimal/dist/

@@ -59,6 +59,9 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+
       - name: Build staged wheel and sdist
         run: packages/agent-chat-minimal/scripts/build_wheel.sh
 
