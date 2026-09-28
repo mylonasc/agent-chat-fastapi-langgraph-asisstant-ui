@@ -42,10 +42,13 @@ the factory form defers credential errors to startup instead of import.
 
 ```python
 app = create_app(agents={"shout": make_shout_agent})
-# POST /assistant/shout, GET /agents -> ["calculator","shout","weather"]
+# POST /assistant/shout, GET /agents -> ["shout"]
 ```
 
-`POST /assistant` aliases the `default_agent` (`"weather"` unless overridden).
+Passing `agents` replaces the discovered registry. In a custom mapping,
+`POST /assistant` aliases the first entry unless `default_agent` is provided.
+Without `agents`, the discovered registry includes the built-ins and defaults
+to `"weather"`.
 
 ## Reference: calculator agent
 

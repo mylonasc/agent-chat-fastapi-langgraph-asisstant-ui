@@ -17,10 +17,14 @@ def test_api_and_static_serving_without_network(tmp_path, monkeypatch):
     assert client.get("/").text == "<html>minimal fixture</html>"
     assert client.get("/_next/static/test.js").text == "fixture asset"
     assert client.get("/unknown/spa/path").text == "<html>minimal fixture</html>"
+    tools_response = client.get("/tools/unavailable")
+    assert tools_response.status_code == 404
+    assert "minimal fixture" not in tools_response.text
 
     response = client.post(
         "/assistant",
         json={"state": {"messages": []}, "commands": []},
     )
     assert response.status_code == 503
-    assert response.json()["detail"]["error"] == "OPENAI_API_KEY not configured"
+    assert response.json()["detail"]["error"] == "agent_not_ready"
+    assert "OPENAI_API_KEY" in response.json()["detail"]["hint"]

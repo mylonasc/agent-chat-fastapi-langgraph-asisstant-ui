@@ -47,6 +47,7 @@ class SPAStaticFiles(StaticFiles):
             "assistant",
             "agents",
             "threads",
+            "tools",
             "full",
             "health",
             "docs",
@@ -90,17 +91,6 @@ class RenameThreadBody(BaseModel):
     title: str
 
 
-def _legacy_openai_503() -> HTTPException:
-    return HTTPException(
-        status_code=503,
-        detail={
-            "error": "OPENAI_API_KEY not configured",
-            "message": "Please set the OPENAI_API_KEY environment variable to use the chat functionality.",
-            "instructions": "Add OPENAI_API_KEY=your-key to your .env file and restart the server.",
-        },
-    )
-
-
 def _next_ui_message_id(messages: list) -> str:
     """Match assistant-ui's index after joining AI/tool/AI sequences."""
     count = 0
@@ -133,7 +123,7 @@ def default_prepare_state(state: dict, request: ChatRequest) -> list:
     return messages
 
 
-def resolve_thread_id(request: ChatRequest) -> str:
+def resolve_thread_id(request: ChatRequest, default: str = "default") -> str:
     """Derive a persistence thread id from the request (default: "default").
 
     Checks the top-level ``thread_id`` field (full-stack shape), then
@@ -149,7 +139,7 @@ def resolve_thread_id(request: ChatRequest) -> str:
             thread_id = str(source["thread_id"])
             if thread_id != "new":
                 return thread_id
-    return "default"
+    return default
 
 
 def _append_tool_update(state: dict[str, Any], payload: Any) -> None:
@@ -235,7 +225,7 @@ def create_app(
     graph: ChatGraph | None = None,
     graph_factory: Callable[..., ChatGraph | None] | None = None,
     agents: dict[str, Callable[..., ChatGraph | None]] | None = None,
-    default_agent: str = "weather",
+    default_agent: str | None = None,
     web_dir: Path | None = None,
     web_full_dir: Path | None = None,
     prepare_state: Callable[[dict, ChatRequest], list] | None = None,
@@ -269,7 +259,9 @@ def create_app(
         graph_factory: Factory building the graph (single-agent mode, deferred
             build). Receives ``checkpointer=`` when its signature accepts it.
         agents: Mapping of name -> factory (multi-agent mode).
-        default_agent: Name aliased by ``POST /assistant``.
+        default_agent: Name aliased by ``POST /assistant``. Defaults to
+            ``"weather"`` for the discovered registry and the first entry for
+            a caller-supplied ``agents`` mapping.
         web_dir: Override for the bundled minimal UI directory (``/``).
         web_full_dir: Override for the bundled full UI directory (``/full``).
         prepare_state: ``(state, request) -> message dicts`` reducer hook;
@@ -282,7 +274,6 @@ def create_app(
     """
     from .registry import discover_agents
 
-    openai_api_key = os.getenv("OPENAI_API_KEY")
     single_mode = graph is not None or graph_factory is not None
 
     if checkpointer == "memory":
@@ -306,17 +297,22 @@ def create_app(
             assert graph_factory is not None
             factories = {"default": graph_factory}
         default_agent = "default"
-        legacy_default = False
     elif agents is not None:
         factories = dict(agents)
-        legacy_default = False
+        if not factories:
+            raise ValueError("agents must contain at least one factory")
+        if default_agent is None:
+            default_agent = next(iter(factories))
     else:
         factories = discover_agents()
-        legacy_default = True
-        if not openai_api_key:
-            logger.warning(
-                "OPENAI_API_KEY is not set; the /assistant endpoint will return 503."
-            )
+        if default_agent is None:
+            default_agent = "weather"
+
+    if default_agent not in factories:
+        raise ValueError(
+            f"default_agent {default_agent!r} is not registered; "
+            f"available agents: {sorted(factories)}"
+        )
 
     threads = thread_manager or ThreadManager()
     messages = message_store or ThreadMessageStore()
@@ -479,14 +475,6 @@ def create_app(
                     "hint": f"Available: {sorted(factories.keys())}",
                 },
             )
-        if (
-            legacy_default
-            and agent_id == default_agent
-            and agent_id == "weather"
-            and not openai_api_key
-        ):
-            raise _legacy_openai_503()
-
         instance = get_or_build(agent_id)
         if instance is None:
             err = build_errors.get(agent_id) or eager_error
@@ -509,11 +497,7 @@ def create_app(
             )
 
         user_id = request.user_id or "default_user"
-        thread_id = request.thread_id
-        if (not thread_id or thread_id == "new") and isinstance(request.state, dict):
-            thread_id = request.state.get("thread_id")
-        if not thread_id or thread_id == "new":
-            thread_id = str(uuid.uuid4())
+        thread_id = resolve_thread_id(request, default=str(uuid.uuid4()))
         if not threads.get(thread_id):
             threads.create_thread(user_id, title="New Chat", thread_id=thread_id)
         config = {"configurable": {"thread_id": thread_id}}

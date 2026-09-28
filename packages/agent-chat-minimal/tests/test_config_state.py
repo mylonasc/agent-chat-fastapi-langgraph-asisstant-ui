@@ -108,6 +108,17 @@ def test_thread_id_passed_as_configurable():
     assert graph.seen_configs[0]["configurable"]["thread_id"] == "t-123"
 
 
+def test_runconfig_thread_id_passed_as_configurable():
+    graph = ToyGraph()
+    client = TestClient(create_app(graph=graph))
+    response = client.post(
+        "/assistant",
+        json={"state": {}, "runConfig": {"thread_id": "t-run"}, "commands": []},
+    )
+    assert response.status_code == 200
+    assert graph.seen_configs[0]["configurable"]["thread_id"] == "t-run"
+
+
 def test_resolve_thread_id_defaults_and_runconfig():
     class R:
         def __init__(self, state, runConfig):
@@ -115,6 +126,7 @@ def test_resolve_thread_id_defaults_and_runconfig():
             self.runConfig = runConfig
 
     assert resolve_thread_id(R({}, None)) == "default"
+    assert resolve_thread_id(R({}, None), default="generated") == "generated"
     assert resolve_thread_id(R({"thread_id": "a"}, None)) == "a"
     assert resolve_thread_id(R({}, {"thread_id": "b"})) == "b"
 
