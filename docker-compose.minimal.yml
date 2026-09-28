@@ -3,8 +3,8 @@ name: agent-chat-minimal
 services:
   backend-minimal:
     build:
-      context: ./application/backend/langgraph-server-minimal
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: application/backend/langgraph-server-minimal/Dockerfile
     ports:
       - "8011:8011"
     environment:

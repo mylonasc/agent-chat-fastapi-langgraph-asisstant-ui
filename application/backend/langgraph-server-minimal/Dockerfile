@@ -2,13 +2,12 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-RUN pip install uv
+COPY packages/agent-chat-minimal /app/packages/agent-chat-minimal
+RUN pip install "/app/packages/agent-chat-minimal[persistence]"
 
-COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev
-
-COPY . .
+COPY application/backend/langgraph-server-minimal /app/dev-server
+WORKDIR /app/dev-server
 
 EXPOSE 8011
 
-CMD [".venv/bin/uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8011"]
+CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8011"]
