@@ -325,6 +325,7 @@ def _build_app(
     session_service: SessionService | None = None,
     transcript_service: TranscriptService | None = None,
     checkpoint_deleter: Any | None = None,
+    lifespan: Any | None = None,
 ) -> FastAPI:
     """Build routes and transport from composition-root dependencies.
 
@@ -486,7 +487,7 @@ def _build_app(
             eager_error = str(exc)
             logger.warning("graph_factory failed: %s", exc)
 
-    app = FastAPI()
+    app = FastAPI(lifespan=lifespan)
     app.state.settings = settings
     app.state.capabilities = capability_provider
     app.state.session_service = sessions

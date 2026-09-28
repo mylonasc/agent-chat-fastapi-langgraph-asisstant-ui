@@ -89,6 +89,27 @@ capabilities from the canonical composition root.
 
 ## In Progress
 
+### #43: Durable SQLite persistence from supported entry points
+
+Branch: `feature/puir-43-durable-default-app`.
+
+- added `Settings.persistence_enabled`: explicit `PERSISTENCE_ENABLED=true`
+  or any explicitly configured app/checkpoint database setting selects durable
+  composition; no configured setting retains the historical in-memory default;
+- `create_configured_app()` is now the CLI/default-factory composition root.
+  It creates the application SQLite engine without I/O, then FastAPI lifespan
+  applies migrations according to `AUTO_MIGRATE`, opens the loop-bound
+  LangGraph SQLite saver, injects a deferred checkpointer into lazy graph
+  factories/routes, and disposes saver + engine on shutdown. The app and
+  checkpoint databases remain separate;
+- missing persistence extra is an actionable factory error; `AUTO_MIGRATE=false`
+  does not create/upgrade the application schema; tests cover durable restart,
+  separate checkpoint state, disposal lifecycle, and the in-memory default;
+- docs now define the supported durable CLI flow and clarify that the legacy
+  development full backend/data volume does not provide durable conversations.
+
+### PUIR-10 / #33: Typed API client and identity integration
+
 ### PUIR-08 / #25: Runtime UI configuration and capability manifest
 
 Branch: `feature/puir-08-runtime-config`

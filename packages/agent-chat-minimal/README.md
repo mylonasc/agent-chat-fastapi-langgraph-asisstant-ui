@@ -44,6 +44,17 @@ Set `OPENAI_API_KEY` to enable `/assistant`; without it, the UI and
 (`FULL_WEB_DIR` remains as a deprecated override hook and no longer
 ships a bundle).
 
+For a durable full preset, install the persistence extra and configure both
+separate SQLite files (the supported CLI/factory owns migrations and clean
+shutdown):
+
+```bash
+pip install "agent-chat-fastapi-langgraph-assistant-ui[persistence]"
+UI_PRESET=full DATABASE_PATH=./agent-chat.db \
+CHECKPOINT_DATABASE_PATH=./agent-chat-checkpoints.db \
+minimal-chat-serve --port 8011
+```
+
 ## Arbitrary agents & providers
 
 ```python
