@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
-import { useRuntimeConfig } from "@/hooks/use-runtime-config";
+import { useApiClient } from "@/hooks/use-api-client";
 
 type StatusResponse = {
   index?: Record<string, unknown>;
@@ -17,7 +17,6 @@ type ToolsOverview = {
 };
 
 export default function AdminPage() {
-  const [userId, setUserId] = useState("default_user");
   const [status, setStatus] = useState<StatusResponse | null>(null);
   const [chunks, setChunks] = useState<any[]>([]);
   const [raw, setRaw] = useState<any[]>([]);
@@ -25,32 +24,18 @@ export default function AdminPage() {
   const [searchResult, setSearchResult] = useState<any>(null);
   const [overview, setOverview] = useState<ToolsOverview | null>(null);
   const [loading, setLoading] = useState(false);
-  const { config, loaded, apiBase } = useRuntimeConfig();
+  const { config, loaded, client } = useApiClient();
   const ragEnabled = config.tools.web_rag.enabled;
 
-  const chunksUrl = useMemo(
-    () => `${apiBase}/tools/web_rag/chunks?user_id=${encodeURIComponent(userId)}&limit=20`,
-    [apiBase, userId]
-  );
-  const rawUrl = useMemo(
-    () => `${apiBase}/tools/web_rag/raw?user_id=${encodeURIComponent(userId)}&limit=10`,
-    [apiBase, userId]
-  );
-
   const refresh = async () => {
-    setLoading(true);
-    try {
-      const [s, c, r] = await Promise.all([
-        fetch(`${apiBase}/tools/web_rag/status?user_id=${encodeURIComponent(userId)}`, {
-          cache: "no-store",
-        }).then((x) => x.json()),
-        fetch(chunksUrl, { cache: "no-store" }).then((x) => x.json()),
-        fetch(rawUrl, { cache: "no-store" }).then((x) => x.json()),
+      setLoading(true);
+      try {
+        const [s, c, r] = await Promise.all([
+        client.request<StatusResponse>("/tools/web_rag/status"),
+        client.request<{ items?: unknown[] }>("/tools/web_rag/chunks?limit=20"),
+        client.request<{ items?: unknown[] }>("/tools/web_rag/raw?limit=10"),
       ]);
-      const o = await fetch(
-        `${apiBase}/tools/overview?user_id=${encodeURIComponent(userId)}`,
-        { cache: "no-store" }
-      ).then((x) => x.json());
+      const o = await client.request<ToolsOverview>("/tools/overview");
       setStatus(s);
       setChunks(Array.isArray(c?.items) ? c.items : []);
       setRaw(Array.isArray(r?.items) ? r.items : []);
@@ -66,15 +51,15 @@ export default function AdminPage() {
     void refresh();
     const id = window.setInterval(() => void refresh(), 2000);
     return () => window.clearInterval(id);
-  }, [loaded, ragEnabled, userId, chunksUrl, rawUrl]);
+  }, [loaded, ragEnabled, client]);
 
   const runTestSearch = async () => {
-    const res = await fetch(`${apiBase}/tools/web_rag/test-search`, {
+    const result = await client.request("/tools/web_rag/test-search", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ user_id: userId, query, k: 5 }),
+      body: JSON.stringify({ query, k: 5 }),
     });
-    setSearchResult(await res.json());
+    setSearchResult(result);
   };
 
   return (
@@ -95,33 +80,9 @@ export default function AdminPage() {
       )}
 
       <section className="flex flex-wrap items-end gap-2">
-        <label className="flex flex-col gap-1">
-          <span className="text-xs text-muted-foreground">User ID</span>
-          <input
-            className="rounded border px-2 py-1"
-            value={userId}
-            onChange={(e) => setUserId(e.target.value)}
-          />
-        </label>
-        <button className="rounded border px-3 py-1" onClick={() => void refresh()}>
+        <button className="rounded border px-3 py-1" disabled={!ragEnabled} onClick={() => void refresh()}>
           {loading ? "Refreshing..." : "Refresh"}
         </button>
-        <a
-          className="rounded border px-3 py-1"
-          href={`${apiBase}/tools/web_rag/download/chunks?user_id=${encodeURIComponent(userId)}`}
-          target="_blank"
-          rel="noreferrer"
-        >
-          Download chunks
-        </a>
-        <a
-          className="rounded border px-3 py-1"
-          href={`${apiBase}/tools/web_rag/download/raw?user_id=${encodeURIComponent(userId)}`}
-          target="_blank"
-          rel="noreferrer"
-        >
-          Download raw sources
-        </a>
       </section>
 
       <section className="rounded border p-3">

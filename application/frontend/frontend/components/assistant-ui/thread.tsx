@@ -31,7 +31,7 @@ import { LazyMotion, MotionConfig, domAnimation } from "motion/react";
 import * as m from "motion/react-m";
 
 import { Button } from "@/components/ui/button";
-import { useRuntimeConfig } from "@/hooks/use-runtime-config";
+import { useApiClient } from "@/hooks/use-api-client";
 import { MarkdownText } from "@/components/assistant-ui/markdown-text";
 import { Reasoning, ReasoningGroup } from "@/components/assistant-ui/reasoning";
 import {
@@ -376,7 +376,7 @@ type IndexJob = {
 
 const IndexingStatusPanel: FC = () => {
   const [jobs, setJobs] = useState<IndexJob[]>([]);
-  const { config, apiBase } = useRuntimeConfig();
+  const { config, client } = useApiClient();
   const rag = config.tools.web_rag;
   const statusPath = rag.status_path ?? "/tools/web_rag/status";
 
@@ -390,12 +390,7 @@ const IndexingStatusPanel: FC = () => {
 
     const fetchStatus = async () => {
       try {
-        const res = await fetch(
-          `${apiBase}${statusPath}?user_id=default_user`,
-          { cache: "no-store" }
-        );
-        if (!res.ok || cancelled) return;
-        const data = await res.json();
+        const data = await client.request<{ jobs?: IndexJob[] }>(statusPath);
         if (cancelled) return;
 
         const list = Array.isArray(data?.jobs) ? (data.jobs as IndexJob[]) : [];
@@ -415,7 +410,7 @@ const IndexingStatusPanel: FC = () => {
       cancelled = true;
       window.clearInterval(id);
     };
-  }, [rag.enabled, statusPath, apiBase]);
+  }, [rag.enabled, statusPath, client]);
 
   if (!jobs.length) return null;
 
