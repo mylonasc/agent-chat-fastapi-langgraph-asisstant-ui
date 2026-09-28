@@ -153,6 +153,12 @@ Branch: `feature/puir-09-unified-frontend` (stacked on
   for the graph tool; dropped minimal-only `zod` (dead import),
   `assistant-ui` CLI, and `tailwindcss-animate` (unused). Fresh lockfile;
   baseline `tsc` + static export (`/`, `/admin`) verified.
+- Minimal preset: ported `GraphToolUI` (`render_graph`, d3) and the
+  single-thread transport converter; `app/minimal-assistant.tsx` reuses
+  the shared `Thread` view with a single-thread runtime (no sidebar/admin
+  chrome). `app/page.tsx` gates first paint on the runtime manifest and
+  composes the preset from `config.ui_preset` (newer assistant-ui needs
+  explicit `headers` in transport options). `tsc` + export verified.
 
 ## Tracker
 
