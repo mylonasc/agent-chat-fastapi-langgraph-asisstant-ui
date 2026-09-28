@@ -22,6 +22,7 @@ reconnaissance bundle itself was introduced by commit `b91343f`.
 ### PUIR-06 / #28: Persistent LangGraph SQLite checkpoints
 
 Branch: `feature/puir-06-checkpoints`
+Draft PR: https://github.com/mylonasc/agent-chat-fastapi-langgraph-asisstant-ui/pull/38
 
 Implemented:
 
