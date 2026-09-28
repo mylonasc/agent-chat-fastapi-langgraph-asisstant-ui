@@ -1,6 +1,6 @@
 import { defineConfig } from "@playwright/test";
 
-const fullUiUrl = process.env.FULL_UI_URL ?? "http://127.0.0.1:8011/full/";
+const fullUiUrl = process.env.FULL_UI_URL ?? "http://127.0.0.1:8011/";
 const minimalUiUrl = process.env.MINIMAL_UI_URL ?? "http://127.0.0.1:8012/";
 
 export default defineConfig({
