@@ -17,6 +17,16 @@ from . import docs
 from .capabilities import CapabilityProvider
 from .composition import create_app, create_default_app, main
 from .config import ENV_DOC, Settings
+from .domain import (
+    Feedback,
+    FeedbackRating,
+    MessageRole,
+    Principal,
+    Session,
+    SessionStatus,
+    StoredMessage,
+)
+from .ports import PrincipalResolver
 from .registry import AGENT_REGISTRY, discover_agents
 from .server import (
     DEFAULT_WEB_DIR,
@@ -38,8 +48,16 @@ __all__ = [
     "CapabilityProvider",
     "DEFAULT_WEB_DIR",
     "DEFAULT_WEB_FULL_DIR",
+    "Feedback",
+    "FeedbackRating",
+    "MessageRole",
+    "Principal",
+    "PrincipalResolver",
     "ScopedChatRequest",
+    "Session",
+    "SessionStatus",
     "Settings",
+    "StoredMessage",
     "ThreadManager",
     "ThreadMessageStore",
     "ThreadMetadata",

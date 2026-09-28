@@ -14,6 +14,7 @@ def test_all_guides_readable():
         "providers",
         "configuration",
         "threads",
+        "persistence",
     }
     for name in names:
         text = docs.get(name)

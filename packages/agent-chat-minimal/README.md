@@ -57,7 +57,7 @@ app = create_app(graph=make_my_agent("anthropic:claude-sonnet-4-5"))
 
 ## Documentation (in the wheel)
 
-Six guides ship inside the package and are readable at runtime:
+Guides ship inside the package and are readable at runtime:
 
 ```python
 from agent_chat_minimal import docs
@@ -73,6 +73,7 @@ docs.show("threads")
 | `configuration` | env vars, CLI flags, hooks, 503 semantics |
 | `threads` | multi-thread chats, frontend-full compat |
 | `transport` | pinned Python/frontend protocol boundary and replacement criteria |
+| `persistence` | principal, domain ports, service authorization, and deletion semantics |
 
 ## Threads (frontend-full compatible)
 
