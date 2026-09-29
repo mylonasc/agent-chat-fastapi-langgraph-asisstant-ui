@@ -14,12 +14,18 @@ from functools import partial
 from importlib.metadata import entry_points
 from typing import Any
 
+from langchain_core.language_models.chat_models import BaseChatModel
+
+from .models import ModelConfig
+
+ModelLike = str | ModelConfig | BaseChatModel
+
 logger = logging.getLogger(__name__)
 
 ENTRY_POINTS_GROUP = "agent_chat.agents"
 
 
-def _weather_factory(checkpointer: Any = None, *, model: str | None = None) -> Any:
+def _weather_factory(checkpointer: Any = None, *, model: ModelLike | None = None) -> Any:
     from .demo_agent.get_graph import make_agent_with_weather_tool
 
     return make_agent_with_weather_tool(
@@ -27,7 +33,7 @@ def _weather_factory(checkpointer: Any = None, *, model: str | None = None) -> A
     )
 
 
-def _calculator_factory(checkpointer: Any = None, *, model: str | None = None) -> Any:
+def _calculator_factory(checkpointer: Any = None, *, model: ModelLike | None = None) -> Any:
     from .demo_agent.calculator import make_calculator_agent
 
     return make_calculator_agent(
@@ -41,7 +47,7 @@ AGENT_REGISTRY: dict[str, Callable[[], Any]] = {
 }
 
 
-def discover_agents(model: str | None = None) -> dict[str, Callable[[], Any]]:
+def discover_agents(model: ModelLike | None = None) -> dict[str, Callable[[], Any]]:
     """Merge the built-in registry with ``agent_chat.agents`` entry points."""
     agents = dict(AGENT_REGISTRY)
     if model is not None:

@@ -1,7 +1,6 @@
 """Application composition and executable entry points."""
 
 import argparse
-import os
 from collections.abc import Callable
 from contextlib import asynccontextmanager
 from dataclasses import replace
@@ -141,19 +140,41 @@ def _durable_dependencies(settings: Settings) -> tuple[Any, Any, Any]:
     return repositories, deferred_checkpointer, durable_lifespan
 
 
-def create_configured_app(settings: Settings) -> FastAPI:
+def create_configured_app(
+    settings: Settings,
+    agents: dict[str, Callable[..., ChatGraph | None]] | None = None,
+    default_agent: str | None = None,
+    graph: ChatGraph | None = None,
+    graph_factory: Callable[..., ChatGraph | None] | None = None,
+    capability_provider: CapabilityProvider | None = None,
+) -> FastAPI:
     """Compose the supported app, owning durable resources when enabled.
 
-    The entry points call this synchronous factory before their event loop
-    starts. Explicit ``create_app(...)`` remains injection-first for tests and
-    embedding applications.
+    Accepts the same explicit Python agent mappings/factories as
+    :func:`create_app`, so generated projects and embedders share one
+    route/service/transport implementation instead of copying private
+    persistence or lifespan code. The entry points call this synchronous
+    factory before their event loop starts. Explicit ``create_app(...)``
+    remains injection-first for tests and embedding applications.
     """
     if not settings.persistence_enabled:
-        return create_app(settings=settings)
+        return create_app(
+            settings=settings,
+            agents=agents,
+            default_agent=default_agent,
+            graph=graph,
+            graph_factory=graph_factory,
+            capability_provider=capability_provider,
+        )
 
     repositories, checkpoints, lifespan = _durable_dependencies(settings)
     app = create_app(
         settings=settings,
+        agents=agents,
+        default_agent=default_agent,
+        graph=graph,
+        graph_factory=graph_factory,
+        capability_provider=capability_provider,
         repositories=repositories,
         checkpointer=checkpoints,
         checkpoint_deleter=checkpoints,
@@ -166,12 +187,16 @@ def create_configured_app(settings: Settings) -> FastAPI:
 
 def create_default_app() -> FastAPI:
     """ASGI factory for ``uvicorn agent_chat_minimal:create_default_app --factory``."""
-    return create_configured_app(Settings.from_env())
+    return create_configured_app(Settings.load())
 
 
 def main(argv=None):
-    env = Settings.from_env()
+    config_parser = argparse.ArgumentParser(add_help=False)
+    config_parser.add_argument("--config", help="Path to versioned agent-chat YAML")
+    config_args, _ = config_parser.parse_known_args(argv)
+    env = Settings.from_yaml(config_args.config) if config_args.config else Settings.load()
     parser = argparse.ArgumentParser(description="Serve the minimal chat application")
+    parser.add_argument("--config", default=config_args.config, help=argparse.SUPPRESS)
     parser.add_argument("--host", default=env.host)
     parser.add_argument("--port", type=int, default=env.port)
     parser.add_argument(
@@ -197,13 +222,10 @@ def main(argv=None):
         model=args.model or env.model,
         default_agent=args.agent or env.default_agent,
     )
-    if args.model:
-        # Built-in factories retain their released environment contract.
-        os.environ["MODEL"] = args.model
     if args.check:
         from .registry import discover_agents
 
-        factories = discover_agents()
+        factories = discover_agents(model=settings.model)
         factory = factories.get(settings.default_agent)
         if factory is None:
             raise SystemExit(f"unknown agent {settings.default_agent!r}")

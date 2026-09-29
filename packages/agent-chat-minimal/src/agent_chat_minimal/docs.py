@@ -18,6 +18,8 @@ GUIDES = (
     "transport",
     "persistence",
     "runtime-config",
+    "setup",
+    "starter",
 )
 
 

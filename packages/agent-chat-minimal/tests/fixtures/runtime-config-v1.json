@@ -14,5 +14,16 @@
     "admin": {"enabled": false, "status_path": null},
     "sharing": {"enabled": false, "status_path": null},
     "attachments": {"enabled": false, "status_path": null}
+  },
+  "presentation": {
+    "title": "Agent Chat",
+    "welcome_heading": "How can I help?",
+    "welcome_description": "Ask a question to get started.",
+    "composer_placeholder": "Message the assistant...",
+    "questions": [
+      {"id": "react-hooks", "label": "Explain React hooks", "prompt": "Explain React hooks like useState and useEffect"},
+      {"id": "sql-query", "label": "Write a SQL query", "prompt": "Write a SQL query to find top customers"},
+      {"id": "meal-plan", "label": "Create a meal plan", "prompt": "Create a meal plan for healthy weight loss"}
+    ]
   }
 }

@@ -5,9 +5,40 @@ stays dependency-light (no ``pydantic-settings`` required).
 """
 
 import os
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal, Mapping
+
+CONFIG_VERSION = 1
+
+_CONFIG_FIELDS = frozenset(
+    field
+    for field in (
+        "host", "port", "model", "default_agent", "web_dir", "web_full_dir",
+        "ui_preset", "api_base", "identity_mode", "database_url", "database_path",
+        "checkpoint_database_url", "checkpoint_database_path", "auto_migrate",
+        "persistence_enabled", "ui", "app_title", "welcome_heading",
+        "welcome_description", "composer_placeholder", "proposed_questions",
+    )
+)
+
+
+@dataclass(frozen=True)
+class ProposedQuestion:
+    """A plain-text prompt that may be shown by a compatible UI."""
+
+    id: str
+    label: str
+    prompt: str
+    agents: tuple[str, ...] = ()
+    capabilities: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        for name, value in (("id", self.id), ("label", self.label), ("prompt", self.prompt)):
+            if not value.strip():
+                raise ValueError(f"question {name} must not be empty")
+            if len(value) > 500:
+                raise ValueError(f"question {name} must be at most 500 characters")
 
 
 def _validate_api_base(value: str) -> None:
@@ -42,6 +73,12 @@ class Settings:
     checkpoint_database_path: str = "agent-chat-checkpoints.db"
     auto_migrate: bool = True
     persistence_enabled: bool = False
+    app_title: str = "Agent Chat"
+    welcome_heading: str = "How can I help?"
+    welcome_description: str = "Ask a question to get started."
+    composer_placeholder: str = "Message the assistant..."
+    # None means the YAML omitted questions; () means intentionally none.
+    proposed_questions: tuple[ProposedQuestion, ...] | None = None
 
     def __post_init__(self) -> None:
         if not self.host.strip():
@@ -68,6 +105,12 @@ class Settings:
             raise ValueError("checkpoint_database_url must not be empty")
         if not self.checkpoint_database_path.strip():
             raise ValueError("checkpoint_database_path must not be empty")
+        for name in ("app_title", "welcome_heading", "welcome_description", "composer_placeholder"):
+            value = getattr(self, name)
+            if not value.strip() or len(value) > 500:
+                raise ValueError(f"{name} must contain 1 to 500 characters")
+        if self.proposed_questions is not None and len({question.id for question in self.proposed_questions}) != len(self.proposed_questions):
+            raise ValueError("proposed question ids must be unique")
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -111,6 +154,65 @@ class Settings:
             ),
         )
 
+    @classmethod
+    def from_yaml(
+        cls,
+        path: str | Path,
+        *,
+        environ: Mapping[str, str] | None = None,
+        overrides: Mapping[str, Any] | None = None,
+    ) -> "Settings":
+        """Load a versioned YAML file with present environment values applied.
+
+        Precedence is defaults, YAML, explicitly present supported environment
+        variables, then explicit caller overrides. Relative SQLite/static paths
+        are interpreted relative to the configuration file, never ``cwd``.
+        """
+        config_path = Path(path).expanduser().resolve()
+        if not config_path.is_file():
+            raise ValueError(f"configuration file does not exist: {config_path}")
+        try:
+            import yaml
+        except ImportError as exc:  # pragma: no cover - base dependency guard
+            raise RuntimeError("YAML configuration requires PyYAML") from exc
+        try:
+            document = yaml.safe_load(config_path.read_text())
+        except yaml.YAMLError as exc:
+            raise ValueError(f"invalid YAML configuration: {exc}") from exc
+        if document is None:
+            document = {}
+        if not isinstance(document, dict):
+            raise ValueError("configuration root must be a mapping")
+        version = document.pop("version", CONFIG_VERSION)
+        if version != CONFIG_VERSION:
+            raise ValueError(f"unsupported configuration version: {version!r}")
+        ui = document.pop("ui", None)
+        if ui is not None:
+            document.update(_parse_ui_config(ui))
+        unknown = set(document) - _CONFIG_FIELDS
+        if unknown:
+            raise ValueError(f"unknown configuration field(s): {', '.join(sorted(unknown))}")
+        values = asdict(cls())
+        values.update(document)
+        for name in ("web_dir", "web_full_dir", "database_path", "checkpoint_database_path"):
+            value = values.get(name)
+            if value and not Path(value).expanduser().is_absolute():
+                values[name] = str(config_path.parent / value)
+        values.update(_present_env_overrides(os.environ if environ is None else environ))
+        if overrides:
+            unknown = set(overrides) - _CONFIG_FIELDS
+            if unknown:
+                raise ValueError(f"unknown settings override(s): {', '.join(sorted(unknown))}")
+            values.update(overrides)
+        return cls(**values)
+
+    @classmethod
+    def load(cls, environ: Mapping[str, str] | None = None) -> "Settings":
+        """Load ``AGENT_CHAT_CONFIG`` when explicitly set, otherwise env defaults."""
+        env = os.environ if environ is None else environ
+        config_path = env.get("AGENT_CHAT_CONFIG")
+        return cls.from_yaml(config_path, environ=env) if config_path else cls.from_env()
+
     def resolved_database_url(self) -> str:
         if self.database_url is not None:
             return self.database_url
@@ -129,6 +231,77 @@ class Settings:
         return None if fallback is None else fallback
 
 
+def _parse_bool(value: str, name: str) -> bool:
+    if value.lower() not in {"true", "false", "1", "0"}:
+        raise ValueError(f"{name} must be true or false")
+    return value.lower() in {"true", "1"}
+
+
+def _present_env_overrides(environ: Mapping[str, str]) -> dict[str, Any]:
+    """Translate only environment variables that are present into settings."""
+    values: dict[str, Any] = {}
+    names = {
+        "HOST": "host", "MODEL": "model", "DEFAULT_AGENT": "default_agent",
+        "MINIMAL_WEB_DIR": "web_dir", "FULL_WEB_DIR": "web_full_dir",
+        "UI_PRESET": "ui_preset", "API_BASE": "api_base", "IDENTITY_MODE": "identity_mode",
+        "DATABASE_URL": "database_url", "DATABASE_PATH": "database_path",
+        "CHECKPOINT_DATABASE_URL": "checkpoint_database_url",
+        "CHECKPOINT_DATABASE_PATH": "checkpoint_database_path",
+    }
+    for env_name, field_name in names.items():
+        if env_name in environ:
+            values[field_name] = environ[env_name] or None if env_name.endswith("_URL") else environ[env_name]
+    if "PORT" in environ:
+        try:
+            values["port"] = int(environ["PORT"])
+        except ValueError as exc:
+            raise ValueError("PORT must be an integer") from exc
+    for env_name, field_name in (("AUTO_MIGRATE", "auto_migrate"), ("PERSISTENCE_ENABLED", "persistence_enabled")):
+        if env_name in environ:
+            values[field_name] = _parse_bool(environ[env_name], env_name)
+    return values
+
+
+def _parse_ui_config(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise ValueError("ui must be a mapping")
+    names = {
+        "title": "app_title",
+        "welcome_heading": "welcome_heading",
+        "welcome_description": "welcome_description",
+        "composer_placeholder": "composer_placeholder",
+    }
+    unknown = set(value) - set(names) - {"questions"}
+    if unknown:
+        raise ValueError(f"unknown ui field(s): {', '.join(sorted(unknown))}")
+    parsed = {target: value[source] for source, target in names.items() if source in value}
+    if "questions" not in value:
+        return parsed
+    questions = value["questions"]
+    if not isinstance(questions, list):
+        raise ValueError("ui.questions must be a list")
+    result: list[ProposedQuestion] = []
+    for index, item in enumerate(questions):
+        if not isinstance(item, dict):
+            raise ValueError(f"ui.questions[{index}] must be a mapping")
+        unknown = set(item) - {"id", "label", "prompt", "agents", "capabilities"}
+        required = {"id", "label", "prompt"} - set(item)
+        if unknown or required:
+            details = sorted(unknown or required)
+            raise ValueError(f"invalid ui.questions[{index}] field(s): {', '.join(details)}")
+        agents = _string_list(item.get("agents", []), f"ui.questions[{index}].agents")
+        capabilities = _string_list(item.get("capabilities", []), f"ui.questions[{index}].capabilities")
+        result.append(ProposedQuestion(item["id"], item["label"], item["prompt"], agents, capabilities))
+    parsed["proposed_questions"] = tuple(result)
+    return parsed
+
+
+def _string_list(value: Any, name: str) -> tuple[str, ...]:
+    if not isinstance(value, list) or not all(isinstance(item, str) and item.strip() for item in value):
+        raise ValueError(f"{name} must be a list of non-empty strings")
+    return tuple(value)
+
+
 ENV_DOC = """\
 HOST=0.0.0.0                # uvicorn bind host
 PORT=8011                   # uvicorn bind port
@@ -145,6 +318,7 @@ CHECKPOINT_DATABASE_PATH=agent-chat-checkpoints.db # separate graph state file
 CHECKPOINT_DATABASE_URL=    # SQLite URL; overrides CHECKPOINT_DATABASE_PATH
 AUTO_MIGRATE=true           # composition roots may upgrade before opening repos
 PERSISTENCE_ENABLED=false   # open SQLite repos/checkpoints in supported entry points
+AGENT_CHAT_CONFIG=           # explicit versioned YAML configuration path
 OPENAI_API_KEY=             # credential for the default openai model
 ANTHROPIC_API_KEY=          # credential when MODEL uses anthropic:
 """

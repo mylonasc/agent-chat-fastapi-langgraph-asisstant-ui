@@ -16,6 +16,39 @@ DEFAULT_WEB_DIR = Path(__file__).parent / "web"
 DEFAULT_WEB_FULL_DIR = Path(__file__).parent / "web_full"
 
 
+def bundled_ui_dir(preset: str = "minimal") -> Path:
+    """Return the installed prebuilt UI directory for a preset.
+
+    Generated projects should call this at startup instead of capturing a
+    machine-specific absolute path at generation time.
+    """
+    if preset == "minimal":
+        return DEFAULT_WEB_DIR
+    if preset == "full":
+        return DEFAULT_WEB_FULL_DIR
+    raise ValueError("preset must be 'minimal' or 'full'")
+
+
+def is_ui_bundle(path: Path) -> bool:
+    """Return True when a directory contains a servable static UI bundle."""
+    return path.is_dir() and (path / "index.html").is_file()
+
+
+def resolve_ui_dir(override: str | None, preset: str = "minimal") -> Path:
+    """Resolve an explicit UI override or fall back to the installed bundle.
+
+    Empty overrides return the bundled resource path (which may itself be
+    absent in a source checkout, yielding documented API-only mode). Explicit
+    overrides must be non-empty strings; existence is checked by the caller
+    so missing bundles degrade to API-only mode with a warning.
+    """
+    if not override:
+        return bundled_ui_dir(preset)
+    if not override.strip():
+        raise ValueError("UI override path must not be blank")
+    return Path(override).expanduser()
+
+
 class SPAStaticFiles(StaticFiles):
     async def get_response(self, path, scope):
         reserved_paths = (
@@ -48,8 +81,8 @@ class SPAStaticFiles(StaticFiles):
 
 def mount_static_ui(app: FastAPI, settings: Settings) -> None:
     """Mount full and minimal builds after API routes, preserving route order."""
-    resolved_full_dir = Path(settings.web_full_dir or DEFAULT_WEB_FULL_DIR).resolve()
-    if resolved_full_dir.is_dir() and (resolved_full_dir / "index.html").is_file():
+    resolved_full_dir = resolve_ui_dir(settings.web_full_dir, "full").resolve()
+    if is_ui_bundle(resolved_full_dir):
 
         @app.get("/full", include_in_schema=False)
         async def full_root():
@@ -73,8 +106,8 @@ def mount_static_ui(app: FastAPI, settings: Settings) -> None:
         else:
             logger.debug("No FULL_WEB_DIR override; /full is not served.")
 
-    resolved_web_dir = Path(settings.web_dir or DEFAULT_WEB_DIR).resolve()
-    if resolved_web_dir.is_dir() and (resolved_web_dir / "index.html").is_file():
+    resolved_web_dir = resolve_ui_dir(settings.web_dir, "minimal").resolve()
+    if is_ui_bundle(resolved_web_dir):
         app.mount(
             "/",
             SPAStaticFiles(directory=resolved_web_dir, html=True),

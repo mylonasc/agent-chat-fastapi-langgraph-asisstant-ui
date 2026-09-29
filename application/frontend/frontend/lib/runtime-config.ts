@@ -35,6 +35,13 @@ export interface RuntimeConfig {
     sharing: ToolCapability;
     attachments: ToolCapability;
   };
+  presentation: {
+    title: string;
+    welcome_heading: string;
+    welcome_description: string;
+    composer_placeholder: string;
+    questions: { id: string; label: string; prompt: string }[];
+  };
 }
 
 export const DEFAULT_RUNTIME_CONFIG: RuntimeConfig = {
@@ -48,6 +55,17 @@ export const DEFAULT_RUNTIME_CONFIG: RuntimeConfig = {
     admin: { enabled: false, status_path: null },
     sharing: { enabled: false, status_path: null },
     attachments: { enabled: false, status_path: null },
+  },
+  presentation: {
+    title: "Agent Chat",
+    welcome_heading: "How can I help?",
+    welcome_description: "Ask a question to get started.",
+    composer_placeholder: "Message the assistant...",
+    questions: [
+      { id: "react-hooks", label: "Explain React hooks", prompt: "Explain React hooks like useState and useEffect" },
+      { id: "sql-query", label: "Write a SQL query", prompt: "Write a SQL query to find top customers" },
+      { id: "meal-plan", label: "Create a meal plan", prompt: "Create a meal plan for healthy weight loss" },
+    ],
   },
 };
 
@@ -95,6 +113,14 @@ export function parseRuntimeConfig(payload: unknown): RuntimeConfig {
 
   const uiPreset = asString(data.ui_preset, "minimal");
   const identityMode = asString(data.identity_mode, "anonymous");
+  const rawPresentation = asRecord(data.presentation);
+  const defaults = DEFAULT_RUNTIME_CONFIG.presentation;
+  const questions = Array.isArray(rawPresentation.questions)
+    ? rawPresentation.questions.filter((question): question is RuntimeConfig["presentation"]["questions"][number] => {
+        const item = asRecord(question);
+        return typeof item.id === "string" && typeof item.label === "string" && typeof item.prompt === "string";
+      }).map((question) => ({ ...question }))
+    : defaults.questions;
 
   return {
     version,
@@ -107,6 +133,13 @@ export function parseRuntimeConfig(payload: unknown): RuntimeConfig {
       admin: tool("admin"),
       sharing: tool("sharing"),
       attachments: tool("attachments"),
+    },
+    presentation: {
+      title: asString(rawPresentation.title, defaults.title),
+      welcome_heading: asString(rawPresentation.welcome_heading, defaults.welcome_heading),
+      welcome_description: asString(rawPresentation.welcome_description, defaults.welcome_description),
+      composer_placeholder: asString(rawPresentation.composer_placeholder, defaults.composer_placeholder),
+      questions,
     },
   };
 }

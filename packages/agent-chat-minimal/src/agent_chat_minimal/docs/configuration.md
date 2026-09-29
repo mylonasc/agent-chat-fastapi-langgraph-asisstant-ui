@@ -25,12 +25,32 @@ OPENAI_API_KEY=             # credential for the default openai model
 ANTHROPIC_API_KEY=          # credential when MODEL uses anthropic:
 ```
 
+The machine-readable contract is `agent_chat_minimal/schemas/agent_chat.schema.json`
+(`version: 1`, also via `get_config_schema()` for wizard/editor use). Public
+Python hooks: `Settings.from_yaml` / `Settings.load`, `create_app`,
+`create_configured_app`, `ModelConfig`/`resolve_model`, `bundled_ui_dir`,
+and the `agent_chat_minimal.setup` validation/diagnostic API.
+
 ```python
-from agent_chat_minimal import Settings, create_app
+from agent_chat_minimal import Settings, create_app, create_configured_app
 
 settings = Settings.from_env()
 app = create_app(settings=settings)
+
+# Custom agents with package-owned in-memory or SQLite resources. The same
+# mapping works in both modes; durable stores open during lifespan and are
+# disposed at shutdown.
+custom = create_configured_app(settings, agents={"helper": make_helper_agent})
 ```
+
+`create_configured_app(settings, agents=..., default_agent=...)` is the public
+composition API for generated projects and embedders. It forwards explicit
+Python agent mappings through the same route/service/transport implementation
+as `create_app`, validates `default_agent` membership, and passes
+`settings.model` explicitly to built-in factories. It never mutates process
+environment state, so independent app instances can use different models in one
+process. Legacy no-argument factories that read `MODEL` themselves keep working
+through the documented environment fallback.
 
 `GET /api/config` serves the versioned runtime UI contract derived from these
 settings and the capability provider (see [runtime-config.md](runtime-config.md)).
@@ -94,8 +114,14 @@ app = create_app(
 ```bash
 minimal-chat-serve --host 127.0.0.1 --port 8011 \
   --model ollama:llama3.1 --agent calculator
+minimal-chat-serve --config ./agent_chat.yaml --agent weather
 minimal-chat-serve --agent weather --check   # build graph, exit, no server
 ```
+
+`--config` loads a versioned YAML file (`version: 1`); `AGENT_CHAT_CONFIG`
+selects one explicitly without flags. `--check` builds the configured default
+agent with `settings.model` and exits, without starting the server or making
+network calls beyond model construction.
 
 `--check` is the fast CI smoke test: non-zero exit with the real factory
 error when credentials are missing.
@@ -108,7 +134,7 @@ error when credentials are missing.
 | `graph_factory=` | Deferred single-graph build (errors at startup)    |
 | `agents=`        | Name → factory map (multi-agent mode)              |
 | `default_agent=` | Id aliased by `POST /assistant`                    |
-| `web_dir=`       | Override the bundled UI directory                  |
+| `web_dir=`       | Override the bundled UI directory (empty = bundled; missing = API-only) |
 | `prepare_state=` | `(state, request) -> message dicts` reducer        |
 | `checkpointer=`  | Shared checkpointer (`"memory"` default, see below)|
 | `web_full_dir=`  | Deprecated mount hook (no bundle ships; `/full` is gone) |
@@ -124,6 +150,12 @@ For an ASGI server, use the side-effect-free factory entry point:
 ```bash
 uvicorn agent_chat_minimal:create_default_app --factory
 ```
+
+Resolve the installed prebuilt UI at startup with `bundled_ui_dir("minimal")`
+or `bundled_ui_dir("full")` instead of capturing an absolute path at
+generation time. `resolve_ui_dir(override, preset)` maps an empty override to
+the bundle; a missing bundle starts in API-only mode (`/api/config` and
+`/assistant` keep working, static routes are disabled).
 
 ## Checkpointer
 
