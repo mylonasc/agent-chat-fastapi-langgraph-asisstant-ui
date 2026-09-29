@@ -69,7 +69,7 @@ jobs:
         if: github.event_name == 'release'
         run: |
           set -euo pipefail
-          version="$(python3 -c 'import re; print(re.search(r"__version__\\s*=\\s*[\"\\x27]([^\"\\x27]+)", open("packages/agent-chat-minimal/src/agent_chat_minimal/__init__.py").read()).group(1))')"
+          version="$(python3 -c 'import re; print(re.search(r"__version__\s*=\s*[\"\x27]([^\"\x27]+)", open("packages/agent-chat-minimal/src/agent_chat_minimal/__init__.py").read()).group(1))')"
           tag="${{ github.event.release.tag_name }}"
           echo "package version: $version"
           echo "release tag: $tag"
