@@ -78,6 +78,31 @@ Use separate application and LangGraph checkpoint databases. Full configuration,
 ASGI factory use, and persistence lifecycle details are in the
 [package configuration guide](../packages/agent-chat-minimal/src/agent_chat_minimal/docs/configuration.md).
 
+## Configuration File And Starter Projects
+
+Beyond environment variables, the server loads a versioned YAML file with
+explicit precedence (defaults → YAML → present environment → CLI/API
+overrides), including welcome copy, proposed questions, endpoints, and
+persistence paths:
+
+```bash
+minimal-chat-serve --config ./agent_chat.yaml
+AGENT_CHAT_CONFIG=./agent_chat.yaml minimal-chat-serve
+```
+
+Generate a user-owned agent project (editable agent, thin server, config,
+offline tests) with no network calls at generation time:
+
+```bash
+minimal-chat-init ./my-agent --provider ollama --preset full --persistence sqlite
+cd my-agent && pip install -e .[test] && pytest
+```
+
+Details: [starter guide](../packages/agent-chat-minimal/src/agent_chat_minimal/docs/starter.md),
+[setup engine](../packages/agent-chat-minimal/src/agent_chat_minimal/docs/setup.md),
+and [provider guide](../packages/agent-chat-minimal/src/agent_chat_minimal/docs/providers.md)
+(endpoint/credential setup, LiteLLM direct-vs-proxy semantics, offline-vs-live checks).
+
 ## Container Image
 
 Build the wheel first, then build the runtime image. The image installs the

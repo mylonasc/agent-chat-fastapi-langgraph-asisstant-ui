@@ -14,6 +14,7 @@ dependencies = [
     "langchain>=1.2.0",
     "langchain-openai>=0.2.0",
     "langgraph>=1.0.5",
+    "PyYAML>=6.0,<7",
     "typing-extensions>=4.8.0",
     "uvicorn>=0.34.0",
 ]
@@ -37,6 +38,9 @@ persistence = [
 ollama = [
     "langchain-ollama>=1.0.0,<2",
 ]
+litellm = [
+    "langchain-litellm>=0.4.0,<1",
+]
 test = [
     "SQLAlchemy[asyncio]>=2.0.36,<3",
     "aiosqlite>=0.20.0",
@@ -50,6 +54,7 @@ test = [
 [project.scripts]
 minimal-chat-serve = "agent_chat_minimal.server:main"
 minimal-chat-migrate = "agent_chat_minimal.adapters.sqlite:migration_main"
+minimal-chat-init = "agent_chat_minimal.starter:main"
 
 # Third-party agents register here, e.g.
 # [project.entry-points."agent_chat.agents"]
@@ -68,6 +73,8 @@ path = "src/agent_chat_minimal/__init__.py"
 
 [tool.hatch.build.targets.wheel.force-include]
 "src/agent_chat_minimal/web" = "agent_chat_minimal/web"
+# schemas/ ships as regular package data via `packages` (like docs/*.md);
+# force-including it here would duplicate the path and fail the build.
 
 # The sdist file list comes from git, where the staged prebuilt UI is
 # ignored - so it must be force-included here (staged from
@@ -79,3 +86,5 @@ artifacts = ["src/agent_chat_minimal/migrations/**/*.py"]
 
 [tool.hatch.build.targets.sdist.force-include]
 "src/agent_chat_minimal/web" = "src/agent_chat_minimal/web"
+# schemas/ is tracked package data and ships in the sdist without help;
+# only the gitignored staged web/ bundle needs forcing here.

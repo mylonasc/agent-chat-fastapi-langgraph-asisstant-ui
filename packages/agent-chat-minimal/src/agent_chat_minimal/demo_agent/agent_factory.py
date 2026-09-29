@@ -8,28 +8,24 @@ from langgraph.graph import StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode, tools_condition
 
+from ..models import ModelConfig, resolve_model
+
 
 class AgentState(TypedDict):
     messages: Annotated[list[BaseMessage], add_messages]
 
 
-def resolve_llm(model: str | BaseChatModel) -> BaseChatModel:
+def resolve_llm(model: str | ModelConfig | BaseChatModel) -> BaseChatModel:
     """Resolve a model spec or instance to a chat model.
 
-    Accepts ``openai:gpt-4o-mini``-style specs (bare ``gpt-4o-mini`` infers
-    OpenAI), or an already-instantiated ``BaseChatModel`` (e.g.
-    ``GenericFakeChatModel`` in tests). Imported lazily so non-OpenAI
-    providers don't require ``langchain-openai``.
+    Accepts legacy specs, :class:`~agent_chat_minimal.models.ModelConfig`, or
+    an already-instantiated ``BaseChatModel`` (e.g. a fake in tests).
     """
-    if isinstance(model, BaseChatModel):
-        return model
-    from langchain.chat_models import init_chat_model
-
-    return init_chat_model(model, streaming=True)
+    return resolve_model(model)
 
 
 def make_tool_agent(
-    model: str | BaseChatModel,
+    model: str | ModelConfig | BaseChatModel,
     tools: list,
     system_prompt: str | None = None,
     checkpointer: Any | None = None,

@@ -63,6 +63,29 @@ def test_config_reflects_enabled_tool_capabilities():
     assert body["tools"]["admin"]["enabled"] is False
 
 
+def test_config_projects_safe_presentation_and_filters_questions():
+    from agent_chat_minimal.config import ProposedQuestion
+
+    settings = Settings(
+        app_title="Configured Chat",
+        welcome_heading="Welcome",
+        welcome_description="Choose a prompt",
+        composer_placeholder="Ask weather...",
+        proposed_questions=(
+            ProposedQuestion("weather", "Weather", "Weather in London?", agents=("dummy",)),
+            ProposedQuestion("rag", "Search", "Search docs", capabilities=("web_rag",)),
+        ),
+    )
+    body = _client(settings=settings, default_agent="dummy").get("/api/config").json()
+    assert body["presentation"] == {
+        "title": "Configured Chat",
+        "welcome_heading": "Welcome",
+        "welcome_description": "Choose a prompt",
+        "composer_placeholder": "Ask weather...",
+        "questions": [{"id": "weather", "label": "Weather", "prompt": "Weather in London?"}],
+    }
+
+
 def test_config_is_json_even_with_static_ui_mounted(tmp_path):
     web = tmp_path / "web"
     web.mkdir()

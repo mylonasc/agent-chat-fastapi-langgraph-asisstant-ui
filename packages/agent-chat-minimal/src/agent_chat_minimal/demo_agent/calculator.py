@@ -4,6 +4,7 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.tools import tool
 from langgraph.graph import StateGraph
 
+from ..models import ModelConfig
 from .agent_factory import make_tool_agent
 
 
@@ -43,7 +44,7 @@ CALCULATOR_SYSTEM_PROMPT = (
 
 
 def make_calculator_agent(
-    model: str | BaseChatModel = "openai:gpt-4o-mini",
+    model: str | ModelConfig | BaseChatModel = "openai:gpt-4o-mini",
     checkpointer=None,
 ) -> StateGraph:
     """Build the calculator agent for any provider model spec/instance."""

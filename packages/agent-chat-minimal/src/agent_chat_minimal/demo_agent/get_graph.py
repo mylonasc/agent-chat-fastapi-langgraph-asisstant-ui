@@ -2,6 +2,7 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.tools import tool
 from langgraph.graph import StateGraph
 
+from ..models import ModelConfig
 from .agent_factory import AgentState, make_tool_agent
 from .tools.graph_tool import render_graph
 
@@ -18,7 +19,7 @@ def get_weather(city: str):
 
 
 def make_agent_with_weather_tool(
-    model: str | BaseChatModel = "openai:gpt-4o-mini",
+    model: str | ModelConfig | BaseChatModel = "openai:gpt-4o-mini",
     checkpointer=None,
 ) -> StateGraph:
     """Build the weather demo agent for any provider model spec/instance.

@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from .capabilities import CapabilityProvider
-from .config import Settings
+from .config import ProposedQuestion, Settings
 
 RUNTIME_CONFIG_VERSION = 1
 
@@ -27,6 +27,17 @@ DEFAULT_RUNTIME_CONFIG: dict[str, Any] = {
         "admin": {"enabled": False, "status_path": None},
         "sharing": {"enabled": False, "status_path": None},
         "attachments": {"enabled": False, "status_path": None},
+    },
+    "presentation": {
+        "title": "Agent Chat",
+        "welcome_heading": "How can I help?",
+        "welcome_description": "Ask a question to get started.",
+        "composer_placeholder": "Message the assistant...",
+        "questions": [
+            {"id": "react-hooks", "label": "Explain React hooks", "prompt": "Explain React hooks like useState and useEffect"},
+            {"id": "sql-query", "label": "Write a SQL query", "prompt": "Write a SQL query to find top customers"},
+            {"id": "meal-plan", "label": "Create a meal plan", "prompt": "Create a meal plan for healthy weight loss"},
+        ],
     },
 }
 
@@ -51,6 +62,7 @@ class RuntimeConfig:
     identity_mode: str = "anonymous"
     features: dict[str, bool] = field(default_factory=dict)
     tools: dict[str, dict[str, Any]] = field(default_factory=dict)
+    presentation: dict[str, Any] = field(default_factory=dict)
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -60,6 +72,10 @@ class RuntimeConfig:
             "identity_mode": self.identity_mode,
             "features": dict(self.features),
             "tools": {name: dict(info) for name, info in self.tools.items()},
+            "presentation": {
+                **self.presentation,
+                "questions": [dict(question) for question in self.presentation.get("questions", [])],
+            },
         }
 
 
@@ -68,6 +84,23 @@ def build_runtime_config(
 ) -> RuntimeConfig:
     """Build the served snapshot from deployment settings and capabilities."""
     features = {name: provider.supports(name) for name in _BASELINE_FEATURES}
+    questions = settings.proposed_questions
+    if questions is None:
+        presentation = dict(DEFAULT_RUNTIME_CONFIG["presentation"])
+        presentation.update({
+            "title": settings.app_title,
+            "welcome_heading": settings.welcome_heading,
+            "welcome_description": settings.welcome_description,
+            "composer_placeholder": settings.composer_placeholder,
+        })
+    else:
+        presentation = {
+            "title": settings.app_title,
+            "welcome_heading": settings.welcome_heading,
+            "welcome_description": settings.welcome_description,
+            "composer_placeholder": settings.composer_placeholder,
+            "questions": [_question_dict(question) for question in questions if _question_available(question, settings, provider)],
+        }
     return RuntimeConfig(
         version=RUNTIME_CONFIG_VERSION,
         api_base=settings.api_base,
@@ -75,7 +108,18 @@ def build_runtime_config(
         identity_mode=settings.identity_mode,
         features=features,
         tools=provider.tool_capabilities(),
+        presentation=presentation,
     )
+
+
+def _question_available(question: ProposedQuestion, settings: Settings, provider: CapabilityProvider) -> bool:
+    return (not question.agents or settings.default_agent in question.agents) and all(
+        provider.supports(capability) for capability in question.capabilities
+    )
+
+
+def _question_dict(question: ProposedQuestion) -> dict[str, str]:
+    return {"id": question.id, "label": question.label, "prompt": question.prompt}
 
 
 def parse_runtime_config(payload: Any) -> RuntimeConfig:
@@ -117,6 +161,16 @@ def parse_runtime_config(payload: Any) -> RuntimeConfig:
     if identity_mode not in {"anonymous", "delegated"}:
         identity_mode = "anonymous"
     api_base = _as_str(data.get("api_base"), "")
+    raw_presentation = _as_dict(data.get("presentation"))
+    default_presentation = DEFAULT_RUNTIME_CONFIG["presentation"]
+    questions = raw_presentation.get("questions", default_presentation["questions"])
+    if not isinstance(questions, list) or not all(isinstance(question, dict) and all(isinstance(question.get(name), str) for name in ("id", "label", "prompt")) for question in questions):
+        questions = default_presentation["questions"]
+    presentation = {
+        name: _as_str(raw_presentation.get(name), default_presentation[name])
+        for name in ("title", "welcome_heading", "welcome_description", "composer_placeholder")
+    }
+    presentation["questions"] = questions
 
     return RuntimeConfig(
         version=version,
@@ -125,6 +179,7 @@ def parse_runtime_config(payload: Any) -> RuntimeConfig:
         identity_mode=identity_mode,
         features=features,
         tools=tools,
+        presentation=presentation,
     )
 
 
