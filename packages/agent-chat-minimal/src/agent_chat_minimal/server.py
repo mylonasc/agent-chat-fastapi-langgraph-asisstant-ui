@@ -15,11 +15,12 @@ from pydantic import BaseModel
 from .adapters.memory import InMemoryRepositories
 from .capabilities import CapabilityProvider
 from .config import Settings
-from .domain import MessageRole, Principal, Session, SessionStatus
+from .domain import Feedback, FeedbackRating, MessageRole, Principal, Session, SessionStatus
 from .identity import DefaultPrincipalResolver
 from .services import (
     ConflictError,
     ForbiddenError,
+    FeedbackService,
     NotFoundError,
     SessionService,
     TranscriptService,
@@ -72,6 +73,25 @@ class AppendMessageBody(BaseModel):
 
 class RenameThreadBody(BaseModel):
     title: str
+
+
+class FeedbackBody(BaseModel):
+    rating: FeedbackRating
+    comment: str | None = None
+    metadata: dict[str, Any] | None = None
+
+
+def _feedback_payload(feedback: Feedback) -> dict[str, Any]:
+    return {
+        "id": feedback.id,
+        "thread_id": feedback.session_id,
+        "message_id": feedback.message_id,
+        "rating": feedback.rating.value,
+        "comment": feedback.comment,
+        "metadata": feedback.metadata,
+        "created_at": feedback.created_at.isoformat(),
+        "updated_at": feedback.updated_at.isoformat(),
+    }
 
 
 def _next_ui_message_id(messages: list) -> str:
@@ -454,6 +474,11 @@ def _build_app(
         base_transcripts = transcript_service
     sessions = base_sessions
     transcripts = base_transcripts
+    feedback = FeedbackService(
+        owned_repositories.sessions,
+        owned_repositories.transcripts,
+        owned_repositories.feedback,
+    )
 
     built: dict[str, Any] = {}
     build_errors: dict[str, str] = {}
@@ -664,6 +689,57 @@ def _build_app(
             )
         except (NotFoundError, ForbiddenError, ConflictError) as exc:
             raise _service_error_to_http(exc) from exc
+        return {"ok": True}
+
+    @app.get("/threads/{thread_id}/messages/{message_id}/feedback")
+    async def get_message_feedback(
+        thread_id: str, message_id: str, principal: PrincipalDep
+    ):
+        try:
+            item = await feedback.get(principal, thread_id, message_id)
+        except (NotFoundError, ForbiddenError, ConflictError) as exc:
+            raise _service_error_to_http(exc) from exc
+        if item is None:
+            raise HTTPException(status_code=404, detail=f"feedback for {message_id!r} was not found")
+        return _feedback_payload(item)
+
+    @app.put("/threads/{thread_id}/messages/{message_id}/feedback")
+    async def upsert_message_feedback(
+        thread_id: str,
+        message_id: str,
+        body: FeedbackBody,
+        principal: PrincipalDep,
+    ):
+        try:
+            item = await feedback.upsert(
+                principal,
+                thread_id,
+                message_id,
+                rating=body.rating,
+                comment=body.comment,
+                metadata=body.metadata,
+            )
+        except (NotFoundError, ForbiddenError, ConflictError) as exc:
+            raise _service_error_to_http(exc) from exc
+        logger.info(
+            "feedback upserted thread_id=%s message_id=%s rating=%s",
+            thread_id,
+            message_id,
+            item.rating.value,
+        )
+        return _feedback_payload(item)
+
+    @app.delete("/threads/{thread_id}/messages/{message_id}/feedback")
+    async def delete_message_feedback(
+        thread_id: str, message_id: str, principal: PrincipalDep
+    ):
+        try:
+            deleted = await feedback.delete(principal, thread_id, message_id)
+        except (NotFoundError, ForbiddenError, ConflictError) as exc:
+            raise _service_error_to_http(exc) from exc
+        if not deleted:
+            raise HTTPException(status_code=404, detail=f"feedback for {message_id!r} was not found")
+        logger.info("feedback deleted thread_id=%s message_id=%s", thread_id, message_id)
         return {"ok": True}
 
     async def run_assistant(

@@ -89,6 +89,46 @@ capabilities from the canonical composition root.
 
 ## In Progress
 
+### PUIR-14: Artifact and release hardening
+
+Branch: `feature/puir-14-artifact-hardening` (continued by PUIR-15 stack).
+
+- shared staging now builds wheel and sdist; each archive clean-installs and
+  serves UI/configuration without Node on `PATH`;
+- package version and release-tag validation use `agent_chat_minimal.__version__`;
+  provider extras are explicit and documented;
+- pull requests affecting package/frontend sources run the exact artifact
+  build, archive check, and clean-install smoke suite before publication.
+
+### PUIR-15: Non-RAG development migration
+
+Branch: `feature/puir-15-migration-docs`.
+
+- minimal development `server:app` is now a compatibility shim over
+  `agent_chat_minimal.create_default_app`; its Docker image installs the local
+  package, removing the duplicate non-RAG routing/transport implementation;
+- migration guidance defines the packaged canonical server, preset/persistence
+  configuration, legacy RAG boundary, and `/full`/`FULL_WEB_DIR` deprecation;
+- package docs no longer direct users to `/full/` and list all shipped guides.
+
+### PUIR-12: End-to-end message feedback
+
+Branch: `feature/puir-12-message-feedback` (stacked on PUIR-11).
+
+- began backend delivery: owned `GET`/idempotent `PUT`/`DELETE` feedback routes
+  now expose the existing feedback service and durable repositories for a
+  thread message; API tests cover retry, update, ownership, and retraction;
+- accessible assistant-message helpful/not-helpful controls use the typed API
+  client, optimistic state, explicit retry after a transcript-not-yet-written
+  404, and screen-reader error feedback; mutations emit structured server logs;
+- opt-in managed Ollama E2E starts/stops its own durable server (no slow
+  background-process timeout), persists a real turn, and verifies successful
+  feedback mutation after the immediate-rating recovery path.
+- fixed PUIR-11 hydration reliability: wait for the remote list before
+  restoring the active thread and preserve stored Assistant UI payloads rather
+  than reconverting them as LangChain messages. The managed E2E now validates
+  message and feedback restoration after browser reload.
+
 ### PUIR-11: Durable transcript synchronization
 
 Branch: `feature/puir-11-durable-transcripts` (stacked on #43).

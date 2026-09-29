@@ -7,6 +7,19 @@ export interface ThreadMetadata {
   user_id: string;
 }
 
+export type FeedbackRating = "positive" | "negative";
+
+export interface MessageFeedback {
+  id: string;
+  thread_id: string;
+  message_id: string;
+  rating: FeedbackRating;
+  comment: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -132,6 +145,34 @@ export class ApiClient {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ message }),
     });
+  }
+
+  getFeedback(threadId: string, messageId: string): Promise<MessageFeedback> {
+    return this.request(
+      `/threads/${encodeURIComponent(threadId)}/messages/${encodeURIComponent(messageId)}/feedback`,
+    );
+  }
+
+  setFeedback(
+    threadId: string,
+    messageId: string,
+    rating: FeedbackRating,
+  ): Promise<MessageFeedback> {
+    return this.request(
+      `/threads/${encodeURIComponent(threadId)}/messages/${encodeURIComponent(messageId)}/feedback`,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rating }),
+      },
+    );
+  }
+
+  async deleteFeedback(threadId: string, messageId: string): Promise<void> {
+    await this.request(
+      `/threads/${encodeURIComponent(threadId)}/messages/${encodeURIComponent(messageId)}/feedback`,
+      { method: "DELETE" },
+    );
   }
 
   toolUrl(path: string): string {

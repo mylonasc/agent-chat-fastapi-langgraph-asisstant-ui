@@ -12,6 +12,8 @@ import {
   PencilIcon,
   RefreshCwIcon,
   Square,
+  ThumbsDownIcon,
+  ThumbsUpIcon,
 } from "lucide-react";
 
 import {
@@ -50,6 +52,7 @@ import {
 import { cn } from "@/lib/utils";
 
 export const Thread: FC = () => {
+  const { config } = useApiClient();
   return (
     <LazyMotion features={domAnimation}>
       <MotionConfig reducedMotion="user">
@@ -62,10 +65,12 @@ export const Thread: FC = () => {
           <div className="flex items-center justify-between border-b px-4 py-2">
             <ChatTitle />
             <div className="flex items-center gap-2">
-              <Button asChild variant="outline" size="sm">
-                <Link href="/admin">Admin</Link>
-              </Button>
-              <ShareButton />
+              {config.tools.admin.enabled && (
+                <Button asChild variant="outline" size="sm">
+                  <Link href="/admin">Admin</Link>
+                </Button>
+              )}
+              {config.tools.sharing.enabled && <ShareButton />}
             </div>
           </div>
 
@@ -185,19 +190,18 @@ const ACTIVE_THREAD_STORAGE_KEY = "agent-chat.active-thread.v1";
 const RememberRemoteThread: FC = () => {
   const api = useAssistantApi();
   const threadItem = useAssistantState((s) => s.threadListItem);
-  const restored = useRef(false);
+  const isLoading = useAssistantState((s) => s.threads.isLoading);
+  const threadIds = useAssistantState((s) => s.threads.threadIds);
 
   useEffect(() => {
     if (threadItem.remoteId) {
       localStorage.setItem(ACTIVE_THREAD_STORAGE_KEY, threadItem.remoteId);
       return;
     }
-    if (restored.current) return;
-    restored.current = true;
+    if (isLoading) return;
     const saved = localStorage.getItem(ACTIVE_THREAD_STORAGE_KEY);
-    if (!saved) return;
-    api.threads().switchToThread(saved);
-  }, [api, threadItem.remoteId]);
+    if (saved && threadIds.includes(saved)) api.threads().switchToThread(saved);
+  }, [api, isLoading, threadIds, threadItem.remoteId]);
 
   return null;
 };
@@ -351,34 +355,45 @@ const ThreadSuggestions: FC<{ disabled?: boolean }> = ({ disabled }) => {
 
 const Composer: FC = () => {
   const { canSend, isInitializing } = useEnsureThreadInitialized();
+  const { config } = useApiClient();
+  const attachmentsEnabled = config.tools.attachments.enabled;
+  const contents = (
+    <>
+      {attachmentsEnabled && <ComposerAttachments />}
+      <ComposerPrimitive.Input
+        placeholder={canSend ? "Send a message..." : (isInitializing ? "Initializing chat..." : "Preparing chat...")}
+        className="aui-composer-input mb-1 max-h-32 min-h-16 w-full resize-none bg-transparent px-3.5 pt-1.5 pb-3 text-base outline-none placeholder:text-muted-foreground focus-visible:ring-0"
+        rows={1}
+        autoFocus
+        aria-label="Message input"
+      />
+      <ComposerAction canSend={canSend} attachmentsEnabled={attachmentsEnabled} />
+    </>
+  );
 
   return (
     <div className="aui-composer-wrapper sticky bottom-0 mx-auto flex w-full max-w-[var(--thread-max-width)] flex-col gap-4 overflow-visible rounded-t-3xl bg-background pb-4 md:pb-6">
       <ThreadScrollToBottom />
 
       <ComposerPrimitive.Root className="aui-composer-root relative flex w-full flex-col">
-        <ComposerPrimitive.AttachmentDropzone className="aui-composer-attachment-dropzone group/input-group flex w-full flex-col rounded-3xl border border-input bg-background px-1 pt-2 shadow-xs transition-[color,box-shadow] outline-none has-[textarea:focus-visible]:border-ring has-[textarea:focus-visible]:ring-[3px] has-[textarea:focus-visible]:ring-ring/50 data-[dragging=true]:border-dashed data-[dragging=true]:border-ring data-[dragging=true]:bg-accent/50 dark:bg-background">
-          <ComposerAttachments />
-          <ComposerPrimitive.Input
-            placeholder={canSend ? "Send a message..." : (isInitializing ? "Initializing chat..." : "Preparing chat...")}
-            className="aui-composer-input mb-1 max-h-32 min-h-16 w-full resize-none bg-transparent px-3.5 pt-1.5 pb-3 text-base outline-none placeholder:text-muted-foreground focus-visible:ring-0"
-            rows={1}
-            autoFocus
-            aria-label="Message input"
-            // Optional: you can also block typing if you want:
-            // disabled={!canSend}
-          />
-          <ComposerAction canSend={canSend} />
-        </ComposerPrimitive.AttachmentDropzone>
+        {attachmentsEnabled ? (
+          <ComposerPrimitive.AttachmentDropzone className="aui-composer-attachment-dropzone group/input-group flex w-full flex-col rounded-3xl border border-input bg-background px-1 pt-2 shadow-xs transition-[color,box-shadow] outline-none has-[textarea:focus-visible]:border-ring has-[textarea:focus-visible]:ring-[3px] has-[textarea:focus-visible]:ring-ring/50 data-[dragging=true]:border-dashed data-[dragging=true]:border-ring data-[dragging=true]:bg-accent/50 dark:bg-background">
+            {contents}
+          </ComposerPrimitive.AttachmentDropzone>
+        ) : (
+          <div className="flex w-full flex-col rounded-3xl border border-input bg-background px-1 pt-2 shadow-xs dark:bg-background">
+            {contents}
+          </div>
+        )}
       </ComposerPrimitive.Root>
     </div>
   );
 };
 
-const ComposerAction: FC<{ canSend: boolean }> = ({ canSend }) => {
+const ComposerAction: FC<{ canSend: boolean; attachmentsEnabled: boolean }> = ({ canSend, attachmentsEnabled }) => {
   return (
     <div className="aui-composer-action-wrapper relative mx-1 mt-2 mb-2 flex items-center justify-between">
-      <ComposerAddAttachment />
+      {attachmentsEnabled && <ComposerAddAttachment />}
 
       <ThreadPrimitive.If running={false}>
         <ComposerPrimitive.Send asChild>
@@ -487,11 +502,13 @@ const IndexingStatusPanel: FC = () => {
 };
 
 const AssistantMessage: FC = () => {
+  const messageId = useAssistantState((s) => s.message.id);
   return (
     <MessagePrimitive.Root asChild>
       <div
         className="aui-assistant-message-root relative mx-auto w-full max-w-[var(--thread-max-width)] animate-in py-4 duration-150 ease-out fade-in slide-in-from-bottom-1 last:mb-24"
         data-role="assistant"
+        data-message-id={messageId}
       >
         <div className="aui-assistant-message-content mx-2 leading-7 break-words text-foreground">
           <MessagePrimitive.Parts
@@ -508,9 +525,100 @@ const AssistantMessage: FC = () => {
         <div className="aui-assistant-message-footer mt-2 ml-2 flex">
           <BranchPicker />
           <AssistantActionBar />
+          <MessageFeedbackControls />
         </div>
       </div>
     </MessagePrimitive.Root>
+  );
+};
+
+const MessageFeedbackControls: FC = () => {
+  const { client, identity } = useApiClient();
+  const threadItem = useAssistantState((s) => s.threadListItem);
+  const message = useAssistantState((s) => s.message);
+  const messageId = message.id;
+  const [rating, setRating] = useState<"positive" | "negative" | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const threadId = threadItem.remoteId;
+
+  useEffect(() => {
+    if (!identity.subject || !threadId || !messageId || messageId.startsWith("__optimistic__")) return;
+    let active = true;
+    void client.getFeedback(threadId, messageId).then(
+      (feedback) => active && setRating(feedback.rating),
+      (feedbackError) => {
+        if (active && !(feedbackError instanceof Error && "status" in feedbackError && feedbackError.status === 404)) {
+          setError("Unable to load feedback.");
+        }
+      },
+    );
+    return () => {
+      active = false;
+    };
+  }, [client, identity.subject, messageId, threadId]);
+
+  const submit = async (next: "positive" | "negative") => {
+    if (!identity.subject || !threadId || !messageId || saving) return;
+    const previous = rating;
+    const retracted = rating === next;
+    setSaving(true);
+    setError(null);
+    setRating(retracted ? null : next);
+    try {
+      if (retracted) {
+        await client.deleteFeedback(threadId, messageId);
+      } else {
+        let feedback;
+        try {
+          feedback = await client.setFeedback(threadId, messageId, next);
+        } catch (requestError) {
+          // A user can rate before the debounced transcript write completes.
+          // Only then append the exact UI message and retry once; appending
+          // after it already exists could conflict on transient UI fields.
+          if (!(requestError instanceof Error && "status" in requestError && requestError.status === 404)) {
+            throw requestError;
+          }
+          await client.appendMessage(threadId, message);
+          feedback = await client.setFeedback(threadId, messageId, next);
+        }
+        setRating(feedback.rating);
+      }
+    } catch {
+      setRating(previous);
+      setError("Unable to save feedback. Try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!identity.subject || !threadId || !messageId || messageId.startsWith("__optimistic__")) return null;
+  return (
+    <div
+      className="ml-1 flex items-center gap-1"
+      aria-label="Message feedback"
+      data-feedback-thread-id={threadId}
+    >
+      <TooltipIconButton
+        tooltip="Helpful"
+        aria-label="Mark response helpful"
+        aria-pressed={rating === "positive"}
+        disabled={saving}
+        onClick={() => void submit("positive")}
+      >
+        <ThumbsUpIcon className={rating === "positive" ? "fill-current" : undefined} />
+      </TooltipIconButton>
+      <TooltipIconButton
+        tooltip="Not helpful"
+        aria-label="Mark response not helpful"
+        aria-pressed={rating === "negative"}
+        disabled={saving}
+        onClick={() => void submit("negative")}
+      >
+        <ThumbsDownIcon className={rating === "negative" ? "fill-current" : undefined} />
+      </TooltipIconButton>
+      {error && <span role="alert" className="sr-only">{error}</span>}
+    </div>
   );
 };
 

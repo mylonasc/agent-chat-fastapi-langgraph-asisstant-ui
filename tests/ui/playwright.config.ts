@@ -4,8 +4,13 @@ const fullBaseURL = process.env.FULL_UI_URL ?? "http://localhost:3001";
 const minimalBaseURL = process.env.MINIMAL_UI_URL ?? "http://localhost:3000";
 const selectedStack = process.env.PLAYWRIGHT_STACK;
 const externalPersistenceStack = process.env.PERSISTENCE_E2E === "1";
+const persistenceCommand = process.env.PERSISTENCE_E2E_COMMAND;
 
-const webServer = externalPersistenceStack ? [] : [
+const webServer = externalPersistenceStack
+  ? persistenceCommand
+    ? [{ command: persistenceCommand, url: fullBaseURL, reuseExistingServer: false, timeout: 60_000 }]
+    : []
+  : [
   selectedStack !== "minimal"
     ? {
         command: "docker compose -f ../../docker-compose.full.yml up --build",
