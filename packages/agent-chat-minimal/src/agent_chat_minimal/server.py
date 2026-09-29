@@ -665,7 +665,32 @@ def _build_app(
         except ConflictError as exc:
             raise _service_error_to_http(exc) from exc
         if stored:
-            return {"messages": [item.payload for item in stored]}
+            payloads = [item.payload for item in stored]
+            if any(item.role.value == "user" for item in stored):
+                return {"messages": payloads}
+
+            # Some stream transports only expose the completed assistant
+            # payload to the transcript synchronizer. Preserve that rich
+            # stored payload (and its feedback ID), but restore missing human
+            # messages from the checkpoint so hydration remains chronological.
+            fallback = await _checkpointer_fallback_messages(thread_id)
+            users = []
+            for message in fallback or []:
+                if not isinstance(message, dict) or message.get("type") != "human":
+                    continue
+                content = message.get("content")
+                if not isinstance(content, str) or not content:
+                    continue
+                users.append(
+                    {
+                        "id": str(message.get("id") or _next_ui_message_id(users)),
+                        "role": "user",
+                        "content": [{"type": "text", "text": content}],
+                    }
+                )
+            if users:
+                return {"messages": [*users, *payloads]}
+            return {"messages": payloads}
         fallback = await _checkpointer_fallback_messages(thread_id)
         return {"messages": fallback or []}
 

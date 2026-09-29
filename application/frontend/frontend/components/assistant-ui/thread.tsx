@@ -191,17 +191,24 @@ const RememberRemoteThread: FC = () => {
   const api = useAssistantApi();
   const threadItem = useAssistantState((s) => s.threadListItem);
   const isLoading = useAssistantState((s) => s.threads.isLoading);
-  const threadIds = useAssistantState((s) => s.threads.threadIds);
+  const threadItems = useAssistantState((s) => s.threads.threadItems);
+  const restoredInitialThread = useRef(false);
 
   useEffect(() => {
     if (threadItem.remoteId) {
       localStorage.setItem(ACTIVE_THREAD_STORAGE_KEY, threadItem.remoteId);
       return;
     }
-    if (isLoading) return;
+    if (isLoading || restoredInitialThread.current) return;
     const saved = localStorage.getItem(ACTIVE_THREAD_STORAGE_KEY);
-    if (saved && threadIds.includes(saved)) api.threads().switchToThread(saved);
-  }, [api, isLoading, threadIds, threadItem.remoteId]);
+    if (!saved) {
+      restoredInitialThread.current = true;
+      return;
+    }
+    if (!threadItems.some((item) => item.remoteId === saved)) return;
+    restoredInitialThread.current = true;
+    api.threads().switchToThread(saved);
+  }, [api, isLoading, threadItems, threadItem.remoteId]);
 
   return null;
 };
@@ -216,14 +223,21 @@ const TranscriptSynchronizer: FC = () => {
 
   useEffect(() => {
     const threadId = threadItem.remoteId;
-    if (!threadId || isRunning || messages.length === 0) return;
+    if (!threadId || messages.length === 0) return;
+    // Transport removes pending user commands after a completed run. Store
+    // user messages while they are still present; assistant payloads remain
+    // deferred until their final immutable state is available.
+    const messagesToSync = isRunning
+      ? messages.filter((message) => message.role === "user")
+      : messages;
+    if (messagesToSync.length === 0) return;
 
     // Assistant UI can publish a final state immediately after isRunning flips.
     // Wait for that burst to settle before storing an immutable transcript row.
     const timer = window.setTimeout(() => {
       void (async () => {
-        for (const message of messages) {
-          if (!message.id) continue;
+        for (const message of messagesToSync) {
+          if (message.id == null) continue;
           const payload = JSON.stringify(message);
           if (syncedPayloads.current.get(message.id) === payload) continue;
           await client.appendMessage(threadId, message);

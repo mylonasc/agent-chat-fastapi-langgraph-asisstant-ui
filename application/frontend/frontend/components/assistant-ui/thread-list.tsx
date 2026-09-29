@@ -1,5 +1,6 @@
 // components/assistant-ui/thread-list.tsx
 import type { FC } from "react";
+import { useRef } from "react";
 import {
   useAssistantApi,
   ThreadListItemPrimitive,
@@ -26,9 +27,28 @@ export const ThreadList: FC = () => {
 };
 
 const ThreadListNew: FC = () => {
+  const api = useAssistantApi();
+  const initializingThreadIds = useRef(new Set<string>());
+
+  const initializeNewThread = () => {
+    queueMicrotask(() => {
+      const threadId = api.threads().getState().newThreadId;
+      if (!threadId || initializingThreadIds.current.has(threadId)) return;
+
+      const item = api.threads().item({ id: threadId });
+      if (item.getState().remoteId) return;
+
+      initializingThreadIds.current.add(threadId);
+      void item.initialize().finally(() => {
+        initializingThreadIds.current.delete(threadId);
+      });
+    });
+  };
+
   return (
     <ThreadListPrimitive.New asChild>
       <Button
+        onClick={initializeNewThread}
         className="aui-thread-list-new flex items-center justify-start gap-1 rounded-lg px-2.5 py-2 text-start hover:bg-muted data-active:bg-muted"
         variant="ghost"
       >

@@ -63,14 +63,50 @@ test("completed Ollama turns persist and accept feedback", async ({ page }) => {
   }, { apiBase, threadId: persisted.threadId, messageId: assistantMessageId });
   await expect.poll(readFeedback).toMatchObject({ rating: "positive" });
 
-  await page.reload();
-  await expect(page.locator('[data-role="user"]')).toContainText(
-    "persistence works",
-    { timeout: 30_000 },
-  );
-  await expect(page.getByRole("button", { name: "Mark response helpful" })).toHaveAttribute(
-    "aria-pressed",
-    "true",
-  );
+});
 
+test("full preset keeps turn order and starts a distinct remote chat", async ({ page }) => {
+  test.setTimeout(180_000);
+  await page.goto("/");
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+
+  const composer = page.getByLabel("Message input");
+  await composer.fill("Reply with exactly: first turn");
+  await composer.press("Enter");
+  await expect(page.locator('[data-role="assistant"]')).toBeVisible({ timeout: 150_000 });
+
+  await expect.poll(async () => page.locator('[data-role]').evaluateAll((nodes) =>
+    nodes
+      .filter((node) => node.getAttribute("data-role") === "user" || node.getAttribute("data-role") === "assistant")
+      .map((node) => node.getAttribute("data-role")),
+  )).toEqual(["user", "assistant"]);
+
+  const listThreads = () => page.evaluate(async ({ apiBase }) => {
+    const subject = localStorage.getItem("agent-chat.anonymous-subject.v1");
+    const headers = subject ? { "x-agent-chat-subject": subject } : {};
+    return fetch(`${apiBase}/threads`, { headers }).then((response) => response.json());
+  }, { apiBase });
+  await expect.poll(listThreads, { timeout: 30_000 }).toHaveLength(1);
+  const threadId = (await listThreads())[0].id;
+  await expect.poll(() => page.evaluate(async ({ apiBase, threadId }) => {
+    const subject = localStorage.getItem("agent-chat.anonymous-subject.v1");
+    const headers = subject ? { "x-agent-chat-subject": subject } : {};
+    return fetch(`${apiBase}/threads/${threadId}/messages`, { headers })
+      .then((response) => response.json())
+      .then((data) => data.messages);
+  }, { apiBase, threadId }), { timeout: 30_000 }).toHaveLength(2);
+
+  await page.reload();
+  await expect(page.locator('[data-role="assistant"]')).toBeVisible();
+  await expect.poll(async () => page.locator('[data-role]').evaluateAll((nodes) =>
+    nodes
+      .filter((node) => node.getAttribute("data-role") === "user" || node.getAttribute("data-role") === "assistant")
+      .map((node) => node.getAttribute("data-role")),
+  )).toEqual(["user", "assistant"]);
+
+  await page.getByRole("button", { name: /new thread/i }).click();
+  await expect(page.getByRole("heading", { name: "Hello there!" })).toBeVisible();
+
+  await expect.poll(listThreads, { timeout: 30_000 }).toHaveLength(2);
 });

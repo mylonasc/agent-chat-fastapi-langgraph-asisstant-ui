@@ -37,10 +37,6 @@ function usePerThreadTransportRuntime() {
     const remoteId = item.remoteId;
     if (!remoteId) return;
 
-    // Skip if messages already exist in state
-    const threadState = (runtime as any).thread?.getState?.();
-    if (threadState?.messages && threadState.messages.length > 0) return;
-
     let isMounted = true;
 
     const fetchAndImport = async () => {
