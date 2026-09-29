@@ -1,5 +1,8 @@
 # LangGraph FastAPI Assistant UI
 
+[![CI](https://github.com/mylonasc/agent-chat-fastapi-langgraph-asisstant-ui/actions/workflows/artifact-workflow.yml/badge.svg)](https://github.com/mylonasc/agent-chat-fastapi-langgraph-asisstant-ui/actions/workflows/artifact-workflow.yml)
+[![PyPI version](https://img.shields.io/pypi/v/agent-chat-fastapi-langgraph-assistant-ui)](https://pypi.org/project/agent-chat-fastapi-langgraph-assistant-ui/)
+
 A reference application for serving LangGraph agents through FastAPI with an
 Assistant UI frontend. It has two intentionally different ways to run:
 
