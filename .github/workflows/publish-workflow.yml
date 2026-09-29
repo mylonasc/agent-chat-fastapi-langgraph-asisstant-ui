@@ -111,7 +111,7 @@ jobs:
               assert not any(name.startswith("agent_chat_minimal/web_full/") for name in names), "wheel must not bundle the removed web_full UI"
 
           print("distributions verified: sdist and wheel bundle the unified UI")
-           EOF
+          EOF
 
       - name: Smoke-test installed archives without Node
         run: |
