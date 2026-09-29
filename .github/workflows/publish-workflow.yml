@@ -89,7 +89,7 @@ jobs:
       - name: Verify distributions
         run: |
           set -euo pipefail
-          python3 -m twine check packages/agent-chat-minimal/dist/*
+          uv run --with twine twine check packages/agent-chat-minimal/dist/*
           python3 - <<'EOF'
           import glob
           import tarfile
