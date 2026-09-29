@@ -1,198 +1,82 @@
-# LangGraph-FastAPI-AssistantUI
+# LangGraph FastAPI Assistant UI
 
-A template for building conversational interfaces for LangGraph agents with FastAPI and Assistant UI.
+A reference application for serving LangGraph agents through FastAPI with an
+Assistant UI frontend. It has two intentionally different ways to run:
 
-## Overview
+| Choose this | When you need | Entry point |
+| --- | --- | --- |
+| **Packaged app** | One Python process that serves a reusable agent API and bundled UI | `minimal-chat-serve` on port 8011 |
+| **Docker Compose** | The repository's split frontend/backend development stacks | `docker-compose.*.yml` |
 
-This repo contains two flavors of a full-stack chat application:
+Start with the packaged app for a new deployment or a new non-RAG agent. Use
+the Compose stacks when developing the legacy split applications, especially
+the full RAG demo.
 
-| Flavor | Description |
-|--------|-------------|
-| **Minimal** | Simple chat-only server with weather + graph visualization tools |
-| **Full** | Full-featured server with thread management, message persistence, and multi-chat support |
+## Quick Start
 
-**Tech Stack:**
-- **Backend**: FastAPI, LangGraph, Assistant Stream CE
-- **Frontend**: Next.js 16, Assistant UI, Tailwind CSS
-- **LLM**: OpenAI (GPT-4o-mini by default)
-
-## Install Minimal From a Local Wheel
-
-The portable minimal flavor serves the prebuilt UI and API from one Python
-process at <http://localhost:8011/>. Node and pnpm are required only once to
-build the UI; they are not needed to install or run the wheel.
+Install the published package (Python 3.11+), configure a model credential,
+and serve the bundled UI and API on one port:
 
 ```bash
-# Build frontend-minimal and the local wheel from the repository root.
-packages/agent-chat-minimal/scripts/build_wheel.sh
-
-python3 -m venv .venv-minimal
-.venv-minimal/bin/pip install packages/agent-chat-minimal/dist/*.whl
+python -m pip install agent-chat-fastapi-langgraph-assistant-ui
 export OPENAI_API_KEY=sk-...
-.venv-minimal/bin/minimal-chat-serve --port 8011
+minimal-chat-serve --port 8011
 ```
 
-The UI, `GET /health`, and `POST /assistant` are all available on port 8011.
-Without `OPENAI_API_KEY`, the UI and health check still work while
-`/assistant` returns a structured 503 response.
+Open <http://localhost:8011/>. `GET /health`, `GET /agents`, and FastAPI's
+interactive API at <http://localhost:8011/docs> are available on the same
+server. See the [packaged app guide](docs/packaged-app.md) for local builds,
+durable SQLite storage, UI presets, configuration, and container use.
 
-Troubleshooting:
+## Documentation
 
-- Re-run `packages/agent-chat-minimal/scripts/build_wheel.sh` if the wheel
-  contains a stale UI; the script
-  replaces staged `web/` content on every build.
-- Set `MINIMAL_WEB_DIR=/absolute/path/to/out` to test a different static export.
-- A 503 from `/assistant` means `OPENAI_API_KEY` was not set before startup.
+Read these in order for the shortest path through the repository:
 
-The two-service `docker-compose.minimal.yml` setup remains available for
-frontend/backend development. The distributable wheel is the single-port,
-Python-only runtime.
+- [Documentation map](docs/README.md): architecture and guide index.
+- [Serve the packaged app](docs/packaged-app.md): install, build, configure,
+  and deploy the canonical portable server.
+- [Run with Docker Compose](docs/docker-compose.md): minimal and full split
+  development stacks, ports, and environment variables.
+- [Implement an agent](docs/implementing-agents.md): embed a graph, register a
+  named agent, or publish an entry-point plugin.
+- [Package README](packages/agent-chat-minimal/README.md): package-specific
+  commands and the documentation shipped inside the wheel.
 
-## Quick Start with Docker
+## Repository Map
 
-### Prerequisites
-- Docker & Docker Compose
-- OpenAI API key
-
-### Setup
-
-1. Copy the environment file:
-```bash
-cp .env.example .env
+```text
+packages/agent-chat-minimal/        Canonical portable Python application
+  src/agent_chat_minimal/           FastAPI composition, agent registry, UI assets
+  scripts/                          Static UI staging, wheel build, artifact smoke test
+application/backend/
+  langgraph-server-minimal/         Compatibility entry point for the package
+  full/                             Separate source-run RAG demo backend
+application/frontend/
+  frontend/                         Unified static UI built into the package
+  frontend-minimal/, frontend-full/ Legacy split Compose frontends
+docs/                               Maintainer and deployment guides
+.agent-recon/                       Architecture reconnaissance and implementation history
 ```
 
-2. Add your API keys to `.env`:
-```
-OPENAI_API_KEY=sk-...
-SERPER_API_KEY=...
-```
+The package owns the minimal server's routes, transport, settings, persistence,
+and static UI behavior. `application/backend/langgraph-server-minimal` is a
+thin compatibility composition root, not a second implementation. The full
+backend is separate because it provides source-run Web Search/RAG tools that
+the portable package does not include.
 
-### Run Minimal Flavor
+## Development Checks
 
-```bash
-docker-compose -f docker-compose.minimal.yml up --build
-```
-
-- Frontend: http://localhost:3000
-- Backend API: http://localhost:8011
-
-### Run Full Flavor
-
-```bash
-docker-compose -f docker-compose.full.yml up --build
-```
-
-- Frontend: http://localhost:3001
-- Backend API: http://localhost:8010
-
-### Stop Services
+Build the packaged artifact from a checkout (Node and pnpm are required only
+for this build step):
 
 ```bash
-# Press Ctrl+C or run:
-docker-compose -f docker-compose.minimal.yml down
-docker-compose -f docker-compose.full.yml down
+packages/agent-chat-minimal/scripts/build_wheel.sh
+python -m pip install "packages/agent-chat-minimal[test]"
+pytest packages/agent-chat-minimal
+packages/agent-chat-minimal/scripts/smoke_test_wheel.sh
 ```
 
-## Running Locally (Without Docker)
-
-### Minimal
-
-```bash
-# Terminal 1 - Backend
-cd application/backend/langgraph-server-minimal
-./start_server.sh
-
-# Terminal 2 - Frontend
-cd application/frontend/frontend-minimal
-pnpm install
-pnpm dev
-```
-
-### Full
-
-```bash
-# Terminal 1 - Backend
-cd application/backend/full
-./start_server.sh
-
-# Terminal 2 - Frontend
-cd application/frontend/frontend-full
-pnpm install
-pnpm dev
-```
-
-## Project Structure
-
-```
-application/
-├── backend/
-│   ├── full/                          # Full-featured server
-│   │   ├── fastlang/                  # Server package
-│   │   └── start_server.sh            # Runs on port 8010
-│   └── langgraph-server-minimal/      # Minimal server
-│       ├── demo_agent/                 # Agent with tools
-│       ├── server.py                   # Main server
-│       └── start_server.sh            # Runs on port 8011
-└── frontend/
-    ├── frontend-full/                  # Full UI (port 3001)
-    └── frontend-minimal/               # Minimal UI (port 3000)
-packages/
-└── agent-chat-minimal/                  # Portable local-wheel distribution
-```
-
-## API Endpoints
-
-### Minimal Backend (port 8011)
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/assistant` | POST | Chat endpoint (SSE streaming) |
-| `/health` | GET | Health check |
-
-### Full Backend (port 8010)
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/assistant` | POST | Chat endpoint (SSE streaming) |
-| `/health` | GET | Health check |
-| `/threads` | GET | List all threads |
-| `/threads` | POST | Create new thread |
-| `/threads/{id}` | GET | Get thread details |
-| `/threads/{id}/messages` | GET | Get thread messages |
-| `/threads/{id}/messages` | POST | Append message |
-
-## Environment Variables
-
-| Variable | Description |
-|----------|-------------|
-| `OPENAI_API_KEY` | OpenAI key required for chat; UI and health work without it |
-| `SERPER_API_KEY` | Serper API key (required for `web_search` tool in full backend) |
-| `EMBEDDING_PROVIDER` | Full-backend embedding provider (`fastembed` or `openai`) |
-| `EMBEDDING_MODEL` | Optional embedding model override |
-| `RAG_STARTUP_VALIDATION` | Set to `1` to run the network/model-dependent RAG preflight |
-| `NEXT_PUBLIC_API_URL` | Minimal frontend backend URL |
-| `NEXT_PUBLIC_API_BASE` | Full frontend backend base URL |
-| `MINIMAL_WEB_DIR` | Optional static UI directory override for the minimal backend |
-
-## Portable Minimal Follow-ups
-
-The local-wheel epic intentionally leaves these as future work:
-
-- Package the full flavor.
-- Support `create_app(custom_graph)` graph injection.
-- Publish releases to PyPI.
-
-See [RUNNING.md](./RUNNING.md) for more detailed documentation.
-
-## DOM-only UI Testing
-
-Playwright tests and machine-readable inspection scripts for both frontends
-live in [`tests/ui`](./tests/ui). They inspect DOM structure, ARIA, computed
-styles, and layout geometry without screenshots or visual snapshots.
-
-```bash
-cd tests/ui
-pnpm install
-pnpm install:browsers
-pnpm test
-pnpm inspect:full
-pnpm inspect:minimal
-```
+The UI inspection and Playwright tests are documented in
+[`tests/ui/README.md`](tests/ui/README.md). Historical design decisions and
+implementation status live in [`.agent-recon/README.md`](.agent-recon/README.md);
+they are maintainer context rather than the deployment guide.

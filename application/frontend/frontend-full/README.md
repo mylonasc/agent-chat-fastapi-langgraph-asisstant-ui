@@ -1,25 +1,16 @@
-This is the [assistant-ui](https://github.com/Yonom/assistant-ui) starter project.
+# Legacy Full Frontend
 
-## Getting Started
+This frontend is used by `docker-compose.full.yml` with the separate RAG demo
+backend at `application/backend/full`. It is not the static UI bundled in the
+portable package.
 
-First, add your OpenAI API key to `.env.local` file:
-
-```
-OPENAI_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-```
-
-Then, run the development server:
+Run the complete development stack from the repository root:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+docker-compose -f docker-compose.full.yml up --build
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+The UI is available at <http://localhost:3001> and calls the backend at port
+8010. For standalone frontend work, set
+`NEXT_PUBLIC_API_BASE=http://localhost:8010` before `pnpm dev`. Do not put
+provider secrets in the frontend. See the [Docker Compose guide](../../../docs/docker-compose.md).

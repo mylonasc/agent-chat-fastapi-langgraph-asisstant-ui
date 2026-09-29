@@ -1,25 +1,19 @@
-This is the [assistant-ui](https://github.com/Yonom/assistant-ui) starter project.
+# Unified Packaged Frontend
 
-## Getting Started
+This Next.js application is the canonical frontend built into
+`agent-chat-minimal`. Its static export is staged into the Python package by
+`packages/agent-chat-minimal/scripts/stage_ui.sh`; a built wheel serves it from
+the FastAPI application at `/`.
 
-First, add your OpenAI API key to `.env.local` file:
-
-```
-OPENAI_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-```
-
-Then, run the development server:
+Run it against a backend during frontend development:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+pnpm install --frozen-lockfile
+NEXT_PUBLIC_API_BASE=http://localhost:8011 pnpm dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Do not put provider secrets in this frontend. The browser talks to the backend,
+which owns model credentials. `GET /api/config` selects runtime UI capabilities
+and the `UI_PRESET` layout. See the [packaged app guide](../../../docs/packaged-app.md)
+and [Docker Compose guide](../../../docs/docker-compose.md) for supported run
+configurations.
