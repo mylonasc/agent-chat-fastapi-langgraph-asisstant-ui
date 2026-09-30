@@ -363,8 +363,17 @@ with `ui_preset: minimal|full` in `agent_chat.yaml`, then restart.
 
 ```bash
 {project}-serve --check   # build the helper agent graph and exit
-pytest                    # offline tests, no network
+pytest                       # offline tests, no network
 ```
+
+## Troubleshooting
+
+`model '...' does not support tool calling` means the configured model
+cannot use tools (tool binding succeeds locally, so `--check` passes and
+only a real conversation fails). Set `model:` in `agent_chat.yaml` to a
+tool-capable model for your provider (e.g. `ollama:llama3.1` instead of
+`ollama:llama3`), or edit `src/{package}/agents/helper.py` to answer
+without tools.
 
 ## Layout
 
@@ -416,8 +425,9 @@ def _render_helper_agent(options: StarterOptions) -> str:
     return f'''"""Example agent owned by this project (edit freely).
 
 Uses the library tool-agent factory; no persistence or transport code lives
-here. Requires a tool-capable chat model for tool calls — with any other
-chat model the agent still answers, just without calling tools.
+here. Requires a tool-capable chat model: a model without tool support
+fails requests with ToolsNotSupportedError naming the model (e.g. use
+'ollama:llama3.1' instead of 'ollama:llama3').
 """
 
 from langchain_core.language_models.chat_models import BaseChatModel

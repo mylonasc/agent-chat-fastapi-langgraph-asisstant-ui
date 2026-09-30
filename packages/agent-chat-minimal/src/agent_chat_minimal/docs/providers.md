@@ -55,6 +55,19 @@ with that proxy's `base_url`. Credential requirements depend on the upstream
 provider. Model construction and the package's offline checks do not prove that
 an endpoint is reachable or supports tool calls.
 
+## Tool support
+
+Binding tools succeeds client-side for any model, so graph construction and
+`minimal-chat-serve --check` pass even for models that cannot use tools. The
+provider rejects the request at invoke time instead: for example, the original
+Ollama `llama3` predates tool calling and answers HTTP 400 `... does not
+support tools`, while `llama3.1` and newer work. The agent factory converts
+such rejections into `ToolsNotSupportedError` naming the configured model
+(`agent_chat_minimal.ToolsNotSupportedError`), which the server forwards as a
+stream error event. Only a real conversation proves tool support — offline
+checks cannot. Pick a tool-capable model for tool agents, or build the agent
+without tools.
+
 ## Instances and offline tests
 
 Pass any `BaseChatModel` (streaming or fake) straight in:

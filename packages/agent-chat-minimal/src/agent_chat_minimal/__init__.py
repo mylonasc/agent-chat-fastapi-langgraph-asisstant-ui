@@ -38,6 +38,7 @@ from .runtime_config import (
     parse_runtime_config,
 )
 from .services import SessionService, TranscriptService
+from .demo_agent.agent_factory import ToolsNotSupportedError
 from .starter import StarterError, generate_starter, plan_starter, render_starter_files
 from .setup import (
     SETUP_CONTRACT_VERSION,
@@ -116,6 +117,7 @@ __all__ = [
     "parse_runtime_config",
     "ThreadManager",
     "ThreadMessageStore",
+    "ToolsNotSupportedError",
     "ThreadMetadata",
     "create_app",
     "create_default_app",

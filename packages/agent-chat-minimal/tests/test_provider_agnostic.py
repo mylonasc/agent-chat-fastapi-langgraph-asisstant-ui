@@ -4,8 +4,12 @@ from types import ModuleType
 from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
 from langchain_core.messages import AIMessage
 
-from agent_chat_minimal.demo_agent.agent_factory import resolve_llm
-from agent_chat_minimal.demo_agent.get_graph import make_agent_with_weather_tool
+from agent_chat_minimal import ToolsNotSupportedError
+from agent_chat_minimal.demo_agent.agent_factory import make_tool_agent, resolve_llm
+from agent_chat_minimal.demo_agent.get_graph import (
+    get_weather,
+    make_agent_with_weather_tool,
+)
 from agent_chat_minimal.models import ModelConfig
 
 
@@ -120,3 +124,84 @@ def test_litellm_uses_optional_langchain_integration(monkeypatch):
         "api_base": "https://proxy.example.test",
         "api_key": "secret",
     }
+
+
+class _NoToolsError(Exception):
+    """Mimics e.g. ollama.ResponseError for a model without tool support."""
+
+
+class _ToolRejectingModel:
+    """Stand-in chat model whose provider rejects tools at invoke time."""
+
+    def bind_tools(self, *args, **kwargs):
+        return self
+
+    def invoke(self, messages):
+        raise _NoToolsError(
+            "registry.ollama.ai/library/llama3:latest does not support tools"
+        )
+
+
+class _FlakyModel(_ToolRejectingModel):
+    def invoke(self, messages):
+        raise RuntimeError("connection reset by peer")
+
+
+def test_tool_rejection_becomes_actionable_error_naming_the_model():
+    from agent_chat_minimal.demo_agent import agent_factory
+
+    original = agent_factory.resolve_llm
+    agent_factory.resolve_llm = lambda model: _ToolRejectingModel()
+    try:
+        graph = make_tool_agent("ollama:llama3", [get_weather])
+    finally:
+        agent_factory.resolve_llm = original
+
+    try:
+        graph.invoke({"messages": [{"role": "user", "content": "hi"}]})
+    except ToolsNotSupportedError as exc:
+        assert "'ollama:llama3'" in str(exc)
+        assert "does not support tools" in str(exc)
+        assert "tool-capable model" in str(exc)
+    else:  # pragma: no cover - assertion helper
+        raise AssertionError("tool rejection was not converted")
+
+
+def test_unrelated_invoke_errors_pass_through_unchanged():
+    from agent_chat_minimal.demo_agent import agent_factory
+
+    original = agent_factory.resolve_llm
+    agent_factory.resolve_llm = lambda model: _FlakyModel()
+    try:
+        graph = make_tool_agent("ollama:llama3", [get_weather])
+    finally:
+        agent_factory.resolve_llm = original
+
+    try:
+        graph.invoke({"messages": [{"role": "user", "content": "hi"}]})
+    except RuntimeError as exc:
+        assert str(exc) == "connection reset by peer"
+        assert not isinstance(exc, ToolsNotSupportedError)
+    else:  # pragma: no cover - assertion helper
+        raise AssertionError("unrelated error was swallowed")
+
+
+def test_tool_rejection_names_structured_model_configs():
+    from agent_chat_minimal.demo_agent import agent_factory
+
+    original = agent_factory.resolve_llm
+    agent_factory.resolve_llm = lambda model: _ToolRejectingModel()
+    try:
+        graph = make_tool_agent(
+            ModelConfig(provider="ollama", model="llama3.1:8b"), [get_weather]
+        )
+    finally:
+        agent_factory.resolve_llm = original
+
+    try:
+        graph.invoke({"messages": [{"role": "user", "content": "hi"}]})
+    except ToolsNotSupportedError as exc:
+        # The namespaced model id stays opaque in the message.
+        assert "ollama:llama3.1:8b" in str(exc)
+    else:  # pragma: no cover - assertion helper
+        raise AssertionError("tool rejection was not converted")

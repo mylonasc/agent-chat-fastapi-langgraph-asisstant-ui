@@ -106,6 +106,10 @@ def test_generated_project_runs_outside_checkout(tmp_path, monkeypatch):
     client = TestClient(create_agent_app(str(target / "agent_chat.yaml")))
     assert client.get("/agents").json() == {"agents": ["helper"], "default": "helper"}
     assert client.get("/api/config").status_code == 200
+    # --check constructs the real configured model, so it needs a credential
+    # present; a dummy key keeps it offline (newer langchain-openai versions
+    # require a key at construction time, not just at invoke time).
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
     assert project_main(["--config", str(target / "agent_chat.yaml"), "--check"]) == 0
 
 
