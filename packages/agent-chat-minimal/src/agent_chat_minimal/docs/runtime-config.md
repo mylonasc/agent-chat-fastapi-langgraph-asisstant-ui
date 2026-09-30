@@ -13,6 +13,7 @@ rebuilding.
   "api_base": "",
   "ui_preset": "minimal",
   "identity_mode": "anonymous",
+  "server_mode": "prod",
   "features": {"agents": true, "assistant": true, "threads": true, "transcripts": true},
   "tools": {
     "web_rag": {"enabled": false, "status_path": "/tools/web_rag/status"},
@@ -29,6 +30,9 @@ rebuilding.
 - `identity_mode`: `anonymous` (default header subject) or `delegated`
   (a custom `principal_resolver` owns identity; set `IDENTITY_MODE`
   accordingly).
+- `server_mode`: `prod` (thread failures render a generic message) or
+  `debug` (the thread surfaces the backend error code, message, and hint).
+  Set `SERVER_MODE` / `server_mode:`; nothing else reads it yet.
 - `features`: baseline capabilities backed by the composition root.
 - `tools`: optional tool UIs. `enabled: false` means the backend does not
   serve them — discoverable before a widget mounts or polls.

@@ -13,6 +13,7 @@
     "ui_preset": {"enum": ["minimal", "full"]},
     "api_base": {"type": "string"},
     "identity_mode": {"enum": ["anonymous", "delegated"]},
+    "server_mode": {"enum": ["prod", "debug"]},
     "ui": {
       "type": "object",
       "additionalProperties": false,

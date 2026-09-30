@@ -12,6 +12,8 @@ export const RUNTIME_CONFIG_VERSION = 1;
 
 export type UiPreset = "minimal" | "full";
 export type IdentityMode = "anonymous" | "delegated";
+/** "debug" lets the thread surface backend error detail; "prod" stays generic. */
+export type ServerMode = "prod" | "debug";
 
 export interface ToolCapability {
   enabled: boolean;
@@ -23,6 +25,7 @@ export interface RuntimeConfig {
   api_base: string;
   ui_preset: UiPreset;
   identity_mode: IdentityMode;
+  server_mode: ServerMode;
   features: {
     agents: boolean;
     assistant: boolean;
@@ -49,6 +52,7 @@ export const DEFAULT_RUNTIME_CONFIG: RuntimeConfig = {
   api_base: "",
   ui_preset: "minimal",
   identity_mode: "anonymous",
+  server_mode: "prod",
   features: { agents: true, assistant: true, threads: true, transcripts: true },
   tools: {
     web_rag: { enabled: false, status_path: "/tools/web_rag/status" },
@@ -113,6 +117,7 @@ export function parseRuntimeConfig(payload: unknown): RuntimeConfig {
 
   const uiPreset = asString(data.ui_preset, "minimal");
   const identityMode = asString(data.identity_mode, "anonymous");
+  const serverMode = asString(data.server_mode, "prod");
   const rawPresentation = asRecord(data.presentation);
   const defaults = DEFAULT_RUNTIME_CONFIG.presentation;
   const questions = Array.isArray(rawPresentation.questions)
@@ -127,6 +132,7 @@ export function parseRuntimeConfig(payload: unknown): RuntimeConfig {
     api_base: asString(data.api_base, ""),
     ui_preset: uiPreset === "full" ? "full" : "minimal",
     identity_mode: identityMode === "delegated" ? "delegated" : "anonymous",
+    server_mode: serverMode === "debug" ? "debug" : "prod",
     features,
     tools: {
       web_rag: tool("web_rag"),

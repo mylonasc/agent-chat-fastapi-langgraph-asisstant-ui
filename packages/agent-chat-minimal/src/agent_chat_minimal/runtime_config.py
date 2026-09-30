@@ -21,6 +21,7 @@ DEFAULT_RUNTIME_CONFIG: dict[str, Any] = {
     "api_base": "",
     "ui_preset": "minimal",
     "identity_mode": "anonymous",
+    "server_mode": "prod",
     "features": {"agents": True, "assistant": True, "threads": True, "transcripts": True},
     "tools": {
         "web_rag": {"enabled": False, "status_path": "/tools/web_rag/status"},
@@ -60,6 +61,7 @@ class RuntimeConfig:
     api_base: str = ""
     ui_preset: str = "minimal"
     identity_mode: str = "anonymous"
+    server_mode: str = "prod"
     features: dict[str, bool] = field(default_factory=dict)
     tools: dict[str, dict[str, Any]] = field(default_factory=dict)
     presentation: dict[str, Any] = field(default_factory=dict)
@@ -70,6 +72,7 @@ class RuntimeConfig:
             "api_base": self.api_base,
             "ui_preset": self.ui_preset,
             "identity_mode": self.identity_mode,
+            "server_mode": self.server_mode,
             "features": dict(self.features),
             "tools": {name: dict(info) for name, info in self.tools.items()},
             "presentation": {
@@ -106,6 +109,7 @@ def build_runtime_config(
         api_base=settings.api_base,
         ui_preset=settings.ui_preset,
         identity_mode=settings.identity_mode,
+        server_mode=settings.server_mode,
         features=features,
         tools=provider.tool_capabilities(),
         presentation=presentation,
@@ -160,6 +164,9 @@ def parse_runtime_config(payload: Any) -> RuntimeConfig:
     identity_mode = _as_str(data.get("identity_mode"), "anonymous")
     if identity_mode not in {"anonymous", "delegated"}:
         identity_mode = "anonymous"
+    server_mode = _as_str(data.get("server_mode"), "prod")
+    if server_mode not in {"prod", "debug"}:
+        server_mode = "prod"
     api_base = _as_str(data.get("api_base"), "")
     raw_presentation = _as_dict(data.get("presentation"))
     default_presentation = DEFAULT_RUNTIME_CONFIG["presentation"]
@@ -177,6 +184,7 @@ def parse_runtime_config(payload: Any) -> RuntimeConfig:
         api_base=api_base,
         ui_preset=ui_preset,
         identity_mode=identity_mode,
+        server_mode=server_mode,
         features=features,
         tools=tools,
         presentation=presentation,

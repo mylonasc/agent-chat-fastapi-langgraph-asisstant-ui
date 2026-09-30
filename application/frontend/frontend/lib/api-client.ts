@@ -175,6 +175,10 @@ export class ApiClient {
     );
   }
 
+  listAgents(): Promise<{ agents: string[]; default: string | null }> {
+    return this.request("/agents");
+  }
+
   toolUrl(path: string): string {
     return `${this.apiBase}${path}`;
   }

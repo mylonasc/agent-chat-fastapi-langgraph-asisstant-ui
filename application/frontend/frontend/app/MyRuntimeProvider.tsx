@@ -13,6 +13,7 @@ import {
 import { converter } from "./MyMessageConverter";
 import { useApiClient } from "@/hooks/use-api-client";
 import type { ApiClient } from "@/lib/api-client";
+import { failedUserText, setRunError } from "@/lib/run-errors";
 
 // ------------------------------------------------------------------
 // RUNTIME HOOK
@@ -20,7 +21,11 @@ import type { ApiClient } from "@/lib/api-client";
 function usePerThreadTransportRuntime() {
   const item = useThreadListItem();
   const backendThreadId = item.remoteId ?? item.id;
-  const { client } = useApiClient();
+  // Never touch the backend before the deployment config resolves: the
+  // pre-load client points at the build-time fallback base, and a foreign
+  // server there happily answers message fetches (even with 200s), which
+  // would poison hydration and transcript sync with the wrong backend.
+  const { client, loaded } = useApiClient();
   // Threads already imported in this mount must not be re-imported: runtime
   // or client identity churn would otherwise clobber fresh turns with the
   // stale fetch that triggered this effect.
@@ -39,11 +44,22 @@ function usePerThreadTransportRuntime() {
       messages: [],
       thread_id: backendThreadId,
     },
+    // A failed run drops the in-flight user message, leaving no message
+    // behind to host the error. Record it per thread so the thread can
+    // surface it (debug detail vs generic message is decided at render).
+    onError: (error: Error, params: { commands: readonly unknown[] }) => {
+      const text = error instanceof Error ? error.message : String(error ?? "Unknown error");
+      setRunError(backendThreadId, {
+        text,
+        userText: failedUserText(params.commands),
+      });
+    },
   }), [backendThreadId, client]);
 
   const runtime = useAssistantTransportRuntime(runtimeConfig);
 
   useEffect(() => {
+    if (!loaded) return;
     const remoteId = item.remoteId;
     if (!remoteId || importedForRef.current === remoteId) return;
 
@@ -80,7 +96,7 @@ function usePerThreadTransportRuntime() {
 
     fetchAndImport();
     return () => { isMounted = false; };
-  }, [item.remoteId, runtime, client]);
+  }, [item.remoteId, runtime, client, loaded]);
 
   return runtime;
 }

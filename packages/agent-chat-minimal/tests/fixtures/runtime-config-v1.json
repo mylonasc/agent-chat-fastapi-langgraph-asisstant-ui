@@ -3,6 +3,7 @@
   "api_base": "http://localhost:8010",
   "ui_preset": "full",
   "identity_mode": "delegated",
+  "server_mode": "prod",
   "features": {
     "agents": true,
     "assistant": true,

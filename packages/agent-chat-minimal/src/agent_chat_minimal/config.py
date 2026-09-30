@@ -15,9 +15,9 @@ _CONFIG_FIELDS = frozenset(
     field
     for field in (
         "host", "port", "model", "default_agent", "web_dir", "web_full_dir",
-        "ui_preset", "api_base", "identity_mode", "database_url", "database_path",
-        "checkpoint_database_url", "checkpoint_database_path", "auto_migrate",
-        "persistence_enabled", "ui", "app_title", "welcome_heading",
+        "ui_preset", "api_base", "identity_mode", "server_mode", "database_url",
+        "database_path", "checkpoint_database_url", "checkpoint_database_path",
+        "auto_migrate", "persistence_enabled", "ui", "app_title", "welcome_heading",
         "welcome_description", "composer_placeholder", "proposed_questions",
     )
 )
@@ -67,6 +67,9 @@ class Settings:
     ui_preset: Literal["minimal", "full"] = "minimal"
     api_base: str = ""
     identity_mode: Literal["anonymous", "delegated"] = "anonymous"
+    # "debug" lets the bundled UI surface backend error detail in the thread;
+    # "prod" keeps a generic failure message. It changes nothing else.
+    server_mode: Literal["prod", "debug"] = "prod"
     database_url: str | None = None
     database_path: str = "agent-chat.db"
     checkpoint_database_url: str | None = None
@@ -93,6 +96,8 @@ class Settings:
             raise ValueError("ui_preset must be 'minimal' or 'full'")
         if self.identity_mode not in {"anonymous", "delegated"}:
             raise ValueError("identity_mode must be 'anonymous' or 'delegated'")
+        if self.server_mode not in {"prod", "debug"}:
+            raise ValueError("server_mode must be 'prod' or 'debug'")
         _validate_api_base(self.api_base)
         if self.database_url is not None and not self.database_url.strip():
             raise ValueError("database_url must not be empty")
@@ -132,6 +137,7 @@ class Settings:
             ui_preset=os.getenv("UI_PRESET", "minimal"),
             api_base=os.getenv("API_BASE", ""),
             identity_mode=os.getenv("IDENTITY_MODE", "anonymous"),
+            server_mode=os.getenv("SERVER_MODE", "prod"),
             database_url=os.getenv("DATABASE_URL") or None,
             database_path=os.getenv("DATABASE_PATH", "agent-chat.db"),
             checkpoint_database_url=os.getenv("CHECKPOINT_DATABASE_URL") or None,
@@ -244,6 +250,7 @@ def _present_env_overrides(environ: Mapping[str, str]) -> dict[str, Any]:
         "HOST": "host", "MODEL": "model", "DEFAULT_AGENT": "default_agent",
         "MINIMAL_WEB_DIR": "web_dir", "FULL_WEB_DIR": "web_full_dir",
         "UI_PRESET": "ui_preset", "API_BASE": "api_base", "IDENTITY_MODE": "identity_mode",
+        "SERVER_MODE": "server_mode",
         "DATABASE_URL": "database_url", "DATABASE_PATH": "database_path",
         "CHECKPOINT_DATABASE_URL": "checkpoint_database_url",
         "CHECKPOINT_DATABASE_PATH": "checkpoint_database_path",
@@ -312,6 +319,7 @@ FULL_WEB_DIR=               # override bundled web_full/ (empty = bundled)
 UI_PRESET=minimal           # runtime UI preset: minimal or full
 API_BASE=                   # same-origin default; absolute http(s) URL for split-port dev
 IDENTITY_MODE=anonymous     # anonymous or delegated (custom principal resolver)
+SERVER_MODE=prod            # prod hides backend error detail in the UI; debug surfaces it
 DATABASE_PATH=agent-chat.db # default application SQLite file
 DATABASE_URL=               # SQLAlchemy URL; overrides DATABASE_PATH
 CHECKPOINT_DATABASE_PATH=agent-chat-checkpoints.db # separate graph state file

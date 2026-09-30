@@ -28,13 +28,18 @@ import {
 } from "@assistant-ui/react";
 
 import type { FC } from "react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { LazyMotion, MotionConfig, domAnimation } from "motion/react";
 import * as m from "motion/react-m";
 
 import { Button } from "@/components/ui/button";
 import { useApiClient } from "@/hooks/use-api-client";
 import { ApiError } from "@/lib/api-client";
+import {
+  clearRunError,
+  getRunError,
+  subscribeRunErrors,
+} from "@/lib/run-errors";
 import { MarkdownText } from "@/components/assistant-ui/markdown-text";
 import { Reasoning, ReasoningGroup } from "@/components/assistant-ui/reasoning";
 import {
@@ -86,7 +91,7 @@ export const Thread: FC = () => {
 
           <ThreadPrimitive.Viewport className="aui-thread-viewport relative flex flex-1 flex-col overflow-x-auto overflow-y-scroll px-4">
             <ThreadPrimitive.If empty>
-              <ThreadWelcome />
+              <StarterPage />
             </ThreadPrimitive.If>
 
             <ThreadPrimitive.Messages
@@ -102,6 +107,8 @@ export const Thread: FC = () => {
             <ThreadPrimitive.If empty={false}>
               <div className="aui-thread-viewport-spacer min-h-8 grow" />
             </ThreadPrimitive.If>
+
+            <ThreadRunError />
 
             <Composer />
           </ThreadPrimitive.Viewport>
@@ -147,7 +154,11 @@ function deriveThreadTitle(messages: readonly any[]): string | null {
   const userMessages = messages.filter((m) => m?.role === "user");
   const assistantMessages = messages.filter((m) => m?.role === "assistant");
 
-  if (userMessages.length < 2 || assistantMessages.length < 2) {
+  // Title the chat as soon as the first response arrives: one user turn to
+  // derive from plus one assistant turn proving the exchange completed.
+  // (An LLM-provided name can replace this heuristic later; the rename path
+  // it will use — threadListItem().rename() — stays the same.)
+  if (userMessages.length < 1 || assistantMessages.length < 1) {
     return null;
   }
 
@@ -208,8 +219,16 @@ const RememberRemoteThread: FC = () => {
       restoredInitialThread.current = true;
       return;
     }
-    if (!threadItems.some((item) => item.remoteId === saved)) return;
+    const match = threadItems.find((item) => item.remoteId === saved);
+    if (!match) return;
     restoredInitialThread.current = true;
+    if (match.status === "archived") {
+      // Never resurrect an archived thread: switching to it would unarchive
+      // it server-side and drag it back into the list. Forget the saved id
+      // so the UI settles on a fresh thread instead.
+      localStorage.removeItem(ACTIVE_THREAD_STORAGE_KEY);
+      return;
+    }
     api.threads().switchToThread(saved);
   }, [api, isLoading, threadItems, threadItem.remoteId]);
 
@@ -271,12 +290,15 @@ const OrphanBranchPruner: FC = () => {
 
 /** Persist only completed turns; stable message IDs make retries idempotent. */
 const TranscriptSynchronizer: FC = () => {
-  const { client, identity } = useApiClient();
+  // Gated on loaded: pre-config appends would land on the build-time
+  // fallback base instead of the deployment backend.
+  const { client, identity, loaded } = useApiClient();
   const threadItem = useAssistantState((s) => s.threadListItem);
   const messages = useAssistantState((s) => s.thread.messages);
   const isRunning = useAssistantState((s) => s.thread.isRunning);
 
   useEffect(() => {
+    if (!loaded) return;
     const threadId = threadItem.remoteId;
     if (!threadId || messages.length === 0) return;
     const syncedPayloads = syncedPayloadsFor(
@@ -316,7 +338,7 @@ const TranscriptSynchronizer: FC = () => {
       });
     }, 300);
     return () => window.clearTimeout(timer);
-  }, [client, identity.subject, isRunning, messages, threadItem.id, threadItem.remoteId]);
+  }, [client, identity.subject, isRunning, loaded, messages, threadItem.id, threadItem.remoteId]);
 
   return null;
 };
@@ -343,8 +365,13 @@ const ThreadScrollToBottom: FC = () => {
  * turns on ids the rest of the UI never sees again.
  */
 function useEnsureThreadInitialized() {
-  const { config } = useApiClient();
+  const { config, loaded } = useApiClient();
   const threadItem = useAssistantState((s) => s.threadListItem);
+  // Block sends until the deployment config resolves: the pre-load
+  // transport targets the build-time fallback base, not the backend.
+  if (!loaded) {
+    return { canSend: false, isInitializing: true };
+  }
   if (config.ui_preset !== "full" || !threadItem) {
     return { canSend: true, isInitializing: false };
   }
@@ -415,43 +442,67 @@ const EnsureThreadInitialized: FC = () => {
   return null;
 }
 
-const ThreadWelcome: FC = () => {
+/**
+ * Starter page: every empty thread (launch, New Thread, post-archive
+ * landing) shows this hero panel instead of an empty chat, naming the
+ * agent the first message will go to. Suggestion cards send into the
+ * pending thread.
+ */
+const StarterPage: FC = () => {
   const { canSend, isInitializing } = useEnsureThreadInitialized();
-  const { config } = useApiClient();
+  const { config, client, loaded } = useApiClient();
   const presentation = config.presentation;
+  const [defaultAgent, setDefaultAgent] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!loaded || !config.features.agents) {
+      setDefaultAgent(null);
+      return;
+    }
+    let live = true;
+    void client.listAgents().then(
+      (data) => {
+        if (live) {
+          setDefaultAgent(
+            typeof data?.default === "string" ? data.default : null,
+          );
+        }
+      },
+      () => {
+        if (live) setDefaultAgent(null);
+      },
+    );
+    return () => {
+      live = false;
+    };
+  }, [client, loaded, config.features.agents]);
 
   return (
-    <div className="aui-thread-welcome-root mx-auto my-auto flex w-full max-w-[var(--thread-max-width)] flex-grow flex-col">
-      <div className="aui-thread-welcome-center flex w-full flex-grow flex-col items-center justify-center">
-        <div className="aui-thread-welcome-message flex size-full flex-col justify-center px-8">
-          <m.h1
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 10 }}
-            className="aui-thread-welcome-message-motion-1 text-2xl font-semibold"
-          >
-            {presentation.welcome_heading}
-          </m.h1>
-          <m.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 10 }}
-            transition={{ delay: 0.1 }}
-            className="aui-thread-welcome-message-motion-2 text-2xl text-muted-foreground/65"
-          >
-            {presentation.welcome_description}
-          </m.div>
-
-          {!canSend && (
-            <div className="mt-4 text-sm text-muted-foreground">
-              {isInitializing ? "Initializing chat…" : "Preparing chat…"}
-            </div>
-          )}
-        </div>
+    <div className="aui-starter-page mx-auto my-auto flex w-full max-w-[var(--thread-max-width)] flex-grow flex-col items-center justify-center px-8">
+      <div className="aui-starter-page-card flex w-full flex-col items-center gap-3 rounded-3xl border bg-muted/40 px-8 py-10 text-center">
+        <p className="aui-starter-page-eyebrow text-xs font-semibold tracking-widest text-muted-foreground uppercase">
+          New conversation
+        </p>
+        <h1 className="aui-starter-page-heading text-3xl font-semibold">
+          Start chatting with agent:{" "}
+          <span className="aui-starter-page-agent rounded-md bg-background px-2 py-0.5 font-mono">
+            {defaultAgent ?? (loaded ? "default" : "…")}
+          </span>
+        </h1>
+        <p className="aui-starter-page-description max-w-md text-sm text-muted-foreground">
+          {presentation.welcome_description}
+        </p>
       </div>
 
-      {/* We’ll disable suggestion send until init completes */}
-      <ThreadSuggestions disabled={!canSend} questions={presentation.questions} />
+      {!canSend && (
+        <div className="aui-starter-page-status mt-4 text-sm text-muted-foreground">
+          {isInitializing ? "Initializing chat…" : "Preparing chat…"}
+        </div>
+      )}
+
+      <div className="aui-starter-page-suggestions mt-6 w-full">
+        <ThreadSuggestions disabled={!canSend} questions={presentation.questions} />
+      </div>
     </div>
   );
 };
@@ -570,13 +621,111 @@ const ComposerAction: FC<{ canSend: boolean; attachmentsEnabled: boolean }> = ({
   );
 };
 
+/**
+ * Split a transport failure into a short title and backend detail. The
+ * transport throws `Status <code>: <body>` where the body is the JSON
+ * error payload the backend served (error/message/hint).
+ */
+function formatBackendError(raw: unknown): { title: string; detail: string | null } {
+  const text = raw instanceof Error ? raw.message : String(raw ?? "");
+  const match = text.match(/^Status (\d+):\s*([\s\S]*)$/);
+  if (!match) return { title: "Assistant error", detail: text || null };
+  const [, status, body] = match;
+  try {
+    const payload = JSON.parse(body);
+    const detailObj = payload?.detail ?? payload;
+    const code = typeof detailObj?.error === "string" ? detailObj.error : null;
+    const message = typeof detailObj?.message === "string" ? detailObj.message : null;
+    const hint = typeof detailObj?.hint === "string" ? detailObj.hint : null;
+    const detail = [message, hint].filter(Boolean).join("\n") || body;
+    return {
+      title: `Request failed (${status})${code ? ` · ${code}` : ""}`,
+      detail,
+    };
+  } catch {
+    return { title: `Request failed (${status})`, detail: body || null };
+  }
+}
+
+const RunErrorBody: FC<{ error: unknown; debug: boolean }> = ({ error, debug }) => {
+  if (!debug) {
+    return (
+      <span className="aui-message-error-generic">
+        The assistant is unavailable right now. Please try again later.
+      </span>
+    );
+  }
+  const { title, detail } = formatBackendError(error);
+  return (
+    <span className="aui-message-error-debug flex flex-col gap-1">
+      <span className="aui-message-error-title font-medium">{title}</span>
+      {detail && (
+        <pre className="aui-message-error-detail overflow-x-auto rounded bg-background/60 p-2 font-mono text-xs whitespace-pre-wrap">
+          {detail}
+        </pre>
+      )}
+    </span>
+  );
+};
+
 const MessageError: FC = () => {
+  const { config } = useApiClient();
+  const debug = config.server_mode === "debug";
+  const messageError = useAssistantState((s) => {
+    const status = (s.message as unknown as { status?: unknown })?.status as
+      | { error?: unknown }
+      | undefined;
+    return status?.error;
+  });
   return (
     <MessagePrimitive.Error>
       <ErrorPrimitive.Root className="aui-message-error-root mt-2 rounded-md border border-destructive bg-destructive/10 p-3 text-sm text-destructive dark:bg-destructive/5 dark:text-red-200">
-        <ErrorPrimitive.Message className="aui-message-error-message line-clamp-2" />
+        <div className="aui-message-error-message">
+          <RunErrorBody error={messageError} debug={debug} />
+        </div>
       </ErrorPrimitive.Root>
     </MessagePrimitive.Error>
+  );
+};
+
+/**
+ * A failed run drops the in-flight user message, so no message is left to
+ * host the error. The transport records failures per thread (see
+ * lib/run-errors); surface the latest one thread-wide with the same
+ * debug/prod policy as message errors. A new run clears it.
+ */
+const ThreadRunError: FC = () => {
+  const { config } = useApiClient();
+  const debug = config.server_mode === "debug";
+  const threadItem = useAssistantState((s) => s.threadListItem);
+  const isRunning = useAssistantState((s) => s.thread.isRunning);
+  const threadKey = threadItem?.remoteId ?? threadItem?.id ?? "";
+  const failure = useSyncExternalStore(
+    subscribeRunErrors,
+    () => (threadKey ? getRunError(threadKey) : null),
+  );
+  const wasRunning = useRef(isRunning);
+  useEffect(() => {
+    if (isRunning && !wasRunning.current && threadKey) {
+      clearRunError(threadKey);
+    }
+    wasRunning.current = isRunning;
+  }, [isRunning, threadKey]);
+  if (!failure || isRunning) return null;
+  return (
+    <div className="aui-thread-error mx-auto w-full max-w-[var(--thread-max-width)] px-2 pb-2">
+      <div
+        role="alert"
+        className="aui-thread-error-root rounded-md border border-destructive bg-destructive/10 p-3 text-sm text-destructive dark:bg-destructive/5 dark:text-red-200"
+      >
+        {failure.userText && (
+          <p className="aui-thread-error-usertext mb-1 font-medium">
+            Could not send: “{failure.userText}”
+          </p>
+        )}
+        <RunErrorBody error={failure.text} debug={debug} />
+      </div>
+    </div>
   );
 };
 
@@ -674,7 +823,9 @@ const AssistantMessage: FC = () => {
 };
 
 const MessageFeedbackControls: FC = () => {
-  const { client, identity } = useApiClient();
+  // Gated on loaded: the pre-config client points at the build-time
+  // fallback base, whose 404s would mask real stored ratings.
+  const { client, identity, loaded } = useApiClient();
   const threadItem = useAssistantState((s) => s.threadListItem);
   const message = useAssistantState((s) => s.message);
   const messageId = message.id;
@@ -684,7 +835,7 @@ const MessageFeedbackControls: FC = () => {
   const threadId = threadItem.remoteId;
 
   useEffect(() => {
-    if (!identity.subject || !threadId || !messageId || messageId.startsWith("__optimistic__")) return;
+    if (!loaded || !identity.subject || !threadId || !messageId || messageId.startsWith("__optimistic__")) return;
     let active = true;
     void client.getFeedback(threadId, messageId).then(
       (feedback) => active && setRating(feedback.rating),
@@ -697,10 +848,10 @@ const MessageFeedbackControls: FC = () => {
     return () => {
       active = false;
     };
-  }, [client, identity.subject, messageId, threadId]);
+  }, [client, identity.subject, loaded, messageId, threadId]);
 
   const submit = async (next: "positive" | "negative") => {
-    if (!identity.subject || !threadId || !messageId || saving) return;
+    if (!loaded || !identity.subject || !threadId || !messageId || saving) return;
     const previous = rating;
     const retracted = rating === next;
     setSaving(true);

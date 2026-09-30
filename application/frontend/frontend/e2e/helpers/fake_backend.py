@@ -46,11 +46,26 @@ def _is_human(message) -> bool:
     return getattr(message, "type", "") == "human"
 
 
+def _bomb_factory():
+    """Factory that always fails, like a misconfigured provider backend."""
+    raise RuntimeError(
+        "E2E bomb: agent factory failed: "
+        "Initializing ChatOllama requires the langchain-ollama package. "
+        "Please install it with `pip install langchain-ollama`"
+    )
+
+
 def main() -> None:
     port = int(os.environ.get("E2E_PORT", "18099"))
     web_dir = FRONTEND_DIR / "out"
-    settings = Settings(ui_preset="full")
-    app = create_app(graph=EchoFake(), settings=settings, web_dir=web_dir)
+    settings = Settings(
+        ui_preset="full",
+        server_mode=os.environ.get("E2E_SERVER_MODE", "prod"),
+    )
+    if os.environ.get("E2E_BOMB") == "1":
+        app = create_app(graph_factory=_bomb_factory, settings=settings, web_dir=web_dir)
+    else:
+        app = create_app(graph=EchoFake(), settings=settings, web_dir=web_dir)
     import uvicorn
 
     uvicorn.run(app, host="127.0.0.1", port=port, log_level="info")

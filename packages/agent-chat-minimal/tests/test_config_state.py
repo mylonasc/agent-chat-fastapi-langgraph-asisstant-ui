@@ -161,6 +161,53 @@ def test_settings_from_env(monkeypatch):
     assert settings.auto_migrate is False
 
 
+def test_server_mode_defaults_and_validation(monkeypatch):
+    import pytest
+
+    monkeypatch.delenv("SERVER_MODE", raising=False)
+    assert Settings.from_env().server_mode == "prod"
+    assert Settings().server_mode == "prod"
+
+    monkeypatch.setenv("SERVER_MODE", "debug")
+    assert Settings.from_env().server_mode == "debug"
+
+    with pytest.raises(ValueError, match="server_mode"):
+        Settings(server_mode="verbose")
+    monkeypatch.setenv("SERVER_MODE", "verbose")
+    with pytest.raises(ValueError, match="server_mode"):
+        Settings.from_env()
+
+
+def test_server_mode_yaml_and_overrides(tmp_path, monkeypatch):
+    config = tmp_path / "agent_chat.yaml"
+    config.write_text("version: 1\nserver_mode: debug\n")
+    monkeypatch.delenv("SERVER_MODE", raising=False)
+    assert Settings.from_yaml(config).server_mode == "debug"
+
+    monkeypatch.setenv("SERVER_MODE", "prod")
+    assert Settings.from_yaml(config).server_mode == "prod"
+
+    config.write_text("version: 1\nserver_mode: verbose\n")
+    monkeypatch.delenv("SERVER_MODE", raising=False)
+    import pytest
+
+    with pytest.raises(ValueError, match="server_mode"):
+        Settings.from_yaml(config)
+
+
+def test_runtime_config_serves_server_mode():
+    from agent_chat_minimal import Settings
+    from agent_chat_minimal.capabilities import CapabilityProvider
+    from agent_chat_minimal.runtime_config import build_runtime_config
+
+    provider = CapabilityProvider(preset="full", enabled=set())
+    assert build_runtime_config(Settings(), provider).as_dict()["server_mode"] == "prod"
+    debug = build_runtime_config(
+        Settings(server_mode="debug"), provider
+    ).as_dict()
+    assert debug["server_mode"] == "debug"
+
+
 def test_settings_from_yaml_applies_only_present_environment_values(tmp_path):
     config = tmp_path / "agent_chat.yaml"
     config.write_text(

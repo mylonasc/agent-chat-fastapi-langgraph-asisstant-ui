@@ -15,6 +15,7 @@ FULL_WEB_DIR=               # deprecated mount hook (no bundle ships)
 UI_PRESET=minimal           # runtime UI preset: minimal or full
 API_BASE=                   # same-origin default; absolute http(s) URL for split-port dev
 IDENTITY_MODE=anonymous     # anonymous or delegated (custom principal resolver)
+SERVER_MODE=prod            # prod hides backend error detail in the UI; debug surfaces it
 DATABASE_PATH=agent-chat.db # default application SQLite file
 DATABASE_URL=               # SQLAlchemy URL; overrides DATABASE_PATH
 CHECKPOINT_DATABASE_PATH=agent-chat-checkpoints.db # separate graph state file
@@ -51,6 +52,19 @@ as `create_app`, validates `default_agent` membership, and passes
 environment state, so independent app instances can use different models in one
 process. Legacy no-argument factories that read `MODEL` themselves keep working
 through the documented environment fallback.
+
+## Server mode
+
+`server_mode` (`SERVER_MODE` env, `server_mode:` YAML key) is `"prod"` or
+`"debug"` (default `"prod"`). For the time being it changes exactly one
+thing: whether the bundled UI surfaces backend error detail inside the
+thread. A failed run (misconfigured provider, factory error, 503 from
+`POST /assistant`) renders a thread-level alert; in `"debug"` it shows the
+backend's error code, message, and hint (e.g. the missing-package remedy),
+while in `"prod"` it shows a generic "assistant is unavailable" message.
+The mode is served via `GET /api/config` (`server_mode`), so no UI rebuild
+is needed to flip it. Anything else the setting may gate in the future
+(logging verbosity, stack traces) is explicitly out of scope for now.
 
 ## Message id contract
 
