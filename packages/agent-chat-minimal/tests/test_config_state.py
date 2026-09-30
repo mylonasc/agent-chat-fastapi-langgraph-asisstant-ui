@@ -63,10 +63,14 @@ def test_default_prepare_state_folds_commands():
     assert msgs[0]["id"] == "m1"
 
 
-def test_default_prepare_state_matches_ui_fallback_message_ids():
+def test_default_prepare_state_mints_unique_non_integer_human_ids():
+    # Human echo ids must never be bare integers: integer-like ids repeat in
+    # every conversation (transcript 409s across threads) and the Assistant
+    # UI runtime reorders integer-like keys before string keys (users grouped
+    # before assistants in multi-turn threads).
     state = {
         "messages": [
-            {"type": "human", "id": "0", "content": "first"},
+            {"type": "human", "id": "u-aaa", "content": "first"},
             {"type": "ai", "id": "tool-call", "content": ""},
             {"type": "tool", "tool_call_id": "call-1", "content": "2"},
             {"type": "ai", "id": "final", "content": "done"},
@@ -74,9 +78,15 @@ def test_default_prepare_state_matches_ui_fallback_message_ids():
     }
     request = ScopedChatRequest.model_validate(_cmd("second"))
 
-    messages = default_prepare_state(state, request)
+    first = default_prepare_state(state, request)
+    second = default_prepare_state(state, request)
 
-    assert messages[-1]["id"] == "2"
+    for folded in (first, second):
+        echo_id = folded[-1]["id"]
+        assert echo_id.startswith("u-")
+        # Hex suffix: unique per message and never a bare integer index.
+        int(echo_id.removeprefix("u-"), 16)
+    assert first[-1]["id"] != second[-1]["id"]
 
 
 def test_custom_prepare_state_hook_used(monkeypatch):

@@ -94,19 +94,28 @@ def _feedback_payload(feedback: Feedback) -> dict[str, Any]:
     }
 
 
-def _next_ui_message_id(messages: list) -> str:
-    """Match assistant-ui's index after joining AI/tool/AI sequences."""
-    count = 0
-    assistant_group_open = False
-    for message in messages:
-        message_type = message.get("type") if isinstance(message, dict) else None
-        if message_type in {"human", "system"}:
-            count += 1
-            assistant_group_open = False
-        elif message_type == "ai" and not assistant_group_open:
-            count += 1
-            assistant_group_open = True
-    return str(count)
+def _new_human_message_id() -> str:
+    """Mint a human message id that is globally unique and never bare-integer.
+
+    Message ids are opaque keys shared by the UI runtime, transcript rows,
+    and feedback rows — but two shapes break that contract:
+
+    - Bare-integer ids (``"0"``, ``"2"``, ...) repeat in every conversation,
+      so transcript appends/fetches collide across threads (409s) and
+      feedback can resolve to another thread's row.
+    - The Assistant UI runtime keys its message resources through plain JS
+      objects, whose key ordering puts integer-like keys first regardless
+      of insertion order — mixing ``"0"``/``"2"`` user ids with ``"ai-…"``
+      assistant ids silently reorders multi-turn threads (users grouped
+      before assistants).
+
+    A ``u-``-prefixed random suffix is unique per message and never parses
+    as an integer index, so chronological order survives both the database
+    (sequence column) and the UI runtime (insertion order).
+    """
+    from .domain import new_id
+
+    return f"u-{new_id().replace('-', '')[:12]}"
 
 
 def default_prepare_state(state: dict, request: ChatRequest) -> list:
@@ -120,7 +129,10 @@ def default_prepare_state(state: dict, request: ChatRequest) -> list:
             if text:
                 message_id = getattr(command.message, "id", None)
                 if not message_id:
-                    message_id = _next_ui_message_id(messages)
+                    # The transport sends no client id: mint one. Client-sent
+                    # ids are kept verbatim (custom reducers own that contract
+                    # and must likewise avoid bare-integer ids).
+                    message_id = _new_human_message_id()
                 message = HumanMessage(content=text, id=message_id)
                 messages.append(message.model_dump())
     return messages
@@ -683,7 +695,7 @@ def _build_app(
                     continue
                 users.append(
                     {
-                        "id": str(message.get("id") or _next_ui_message_id(users)),
+                        "id": str(message.get("id") or _new_human_message_id()),
                         "role": "user",
                         "content": [{"type": "text", "text": content}],
                     }

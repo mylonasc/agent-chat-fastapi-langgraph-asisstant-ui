@@ -175,13 +175,16 @@ export async function fetchRuntimeConfig(
  * Resolve the API base for backend calls. Runtime config wins (it is the
  * deployment contract); the build-time value covers split-port development
  * before the config loads; localhost is the last resort.
+ *
+ * An explicitly configured "" means same-origin and must win over any
+ * build-time default, so the check is for null/undefined, not falsiness.
  */
 export function resolveApiBase(
   config: RuntimeConfig | null,
   buildTimeFallback: string | undefined,
   localhostDefault: string,
 ): string {
-  if (config?.api_base) return config.api_base;
+  if (config?.api_base != null) return config.api_base;
   if (buildTimeFallback) return buildTimeFallback;
   return localhostDefault;
 }

@@ -34,6 +34,7 @@ import * as m from "motion/react-m";
 
 import { Button } from "@/components/ui/button";
 import { useApiClient } from "@/hooks/use-api-client";
+import { ApiError } from "@/lib/api-client";
 import { MarkdownText } from "@/components/assistant-ui/markdown-text";
 import { Reasoning, ReasoningGroup } from "@/components/assistant-ui/reasoning";
 import {
@@ -79,6 +80,8 @@ export const Thread: FC = () => {
            <WebRAGStatusToolUI />
            <AutoThreadTitle />
            <RememberRemoteThread />
+           <EnsureThreadInitialized />
+           <OrphanBranchPruner />
            <TranscriptSynchronizer />
 
           <ThreadPrimitive.Viewport className="aui-thread-viewport relative flex flex-1 flex-col overflow-x-auto overflow-y-scroll px-4">
@@ -213,17 +216,72 @@ const RememberRemoteThread: FC = () => {
   return null;
 };
 
+/**
+ * Already-synced message payloads, shared across remounts and keyed by
+ * owner + thread. A per-mount ref forgets everything on every thread switch
+ * or runtime recreation, turning each revisit into a full re-append storm.
+ */
+const syncedPayloadsByThread = new Map<string, Map<string, string>>();
+
+function syncedPayloadsFor(key: string): Map<string, string> {
+  let seen = syncedPayloadsByThread.get(key);
+  if (!seen) {
+    seen = new Map<string, string>();
+    syncedPayloadsByThread.set(key, seen);
+  }
+  return seen;
+}
+
+/**
+ * Drop orphaned pending nodes left behind when a server echo replaces the
+ * optimistic pending message under a different id. Such orphans linger as
+ * alternate branches (branch picker appears on the first message) because
+ * the repository only ever adds — nothing removes. Rebuilding from the
+ * active branch is safe here: message edit/reload adapters are not
+ * configured, so no legitimate alternate branches can exist.
+ */
+const OrphanBranchPruner: FC = () => {
+  const api = useAssistantApi();
+  const messages = useAssistantState((s) => s.thread.messages);
+  const isRunning = useAssistantState((s) => s.thread.isRunning);
+  const wasRunning = useRef(false);
+
+  useEffect(() => {
+    const ended = wasRunning.current && !isRunning;
+    wasRunning.current = isRunning;
+    if (!ended || messages.length === 0) return;
+    try {
+      const importer = (api.thread() as unknown as {
+        import?: (data: unknown) => void;
+      })?.import;
+      if (typeof importer !== "function") return;
+      importer.call(api.thread(), {
+        messages: messages.map((message: { id: string }, index: number) => ({
+          message: messages[index],
+          parentId: index > 0 ? (messages[index - 1] as { id: string }).id : null,
+        })),
+      });
+    } catch {
+      // Pruning is cosmetic cleanup; a failure must never break the thread.
+    }
+  }, [api, isRunning, messages]);
+
+  return null;
+};
+
 /** Persist only completed turns; stable message IDs make retries idempotent. */
 const TranscriptSynchronizer: FC = () => {
-  const { client } = useApiClient();
+  const { client, identity } = useApiClient();
   const threadItem = useAssistantState((s) => s.threadListItem);
   const messages = useAssistantState((s) => s.thread.messages);
   const isRunning = useAssistantState((s) => s.thread.isRunning);
-  const syncedPayloads = useRef(new Map<string, string>());
 
   useEffect(() => {
     const threadId = threadItem.remoteId;
     if (!threadId || messages.length === 0) return;
+    const syncedPayloads = syncedPayloadsFor(
+      `${identity.subject ?? ""}::${threadId}`,
+    );
     // Transport removes pending user commands after a completed run. Store
     // user messages while they are still present; assistant payloads remain
     // deferred until their final immutable state is available.
@@ -239,16 +297,26 @@ const TranscriptSynchronizer: FC = () => {
         for (const message of messagesToSync) {
           if (message.id == null) continue;
           const payload = JSON.stringify(message);
-          if (syncedPayloads.current.get(message.id) === payload) continue;
-          await client.appendMessage(threadId, message);
-          syncedPayloads.current.set(message.id, payload);
+          if (syncedPayloads.get(message.id) === payload) continue;
+          try {
+            await client.appendMessage(threadId, message);
+          } catch (error) {
+            // 409 means the server already stores this id: the durability
+            // goal is met, so record it instead of retrying forever.
+            const status =
+              error instanceof ApiError
+                ? error.status
+                : (error as { status?: unknown })?.status;
+            if (status !== 409) throw error;
+          }
+          syncedPayloads.set(message.id, payload);
         }
       })().catch(() => {
         // The next completed turn retries unchanged message IDs without duplicates.
       });
     }, 300);
     return () => window.clearTimeout(timer);
-  }, [client, isRunning, messages, threadItem.id, threadItem.remoteId]);
+  }, [client, identity.subject, isRunning, messages, threadItem.id, threadItem.remoteId]);
 
   return null;
 };
@@ -268,11 +336,83 @@ const ThreadScrollToBottom: FC = () => {
 };
 
 /**
- * Ensure the current thread is initialized before allowing any send.
- * This prevents POST /assistant with thread_id="new".
+ * Ensure the current thread is server-bound before allowing any send.
+ *
+ * In the full preset, message sync, feedback, and hydration all key off the
+ * bound remote thread id. Sending before initialize() completes strands
+ * turns on ids the rest of the UI never sees again.
  */
 function useEnsureThreadInitialized() {
-  return { canSend: true, isInitializing: false };
+  const { config } = useApiClient();
+  const threadItem = useAssistantState((s) => s.threadListItem);
+  if (config.ui_preset !== "full" || !threadItem) {
+    return { canSend: true, isInitializing: false };
+  }
+  const ready = !!threadItem.remoteId;
+  return { canSend: ready, isInitializing: !ready };
+}
+
+/**
+ * Local ids already being bound (module scope: survives remounts, so a
+ * re-created component never double-initializes the same thread — each
+ * initialize() prepends the id again without dedup).
+ */
+const initializingThreadIds = new Set<string>();
+
+/**
+ * Bind the current local thread to the server as soon as it exists.
+ *
+ * The thread-list runtime creates the local `__LOCALID_` entry on its own,
+ * but only an explicit initialize() call creates the server session. Without
+ * this, the first thread on a fresh load never gets a remoteId (binding then
+ * depends on accidental list reconciliation), so syncing, feedback, and
+ * hydration silently no-op while the transport happily sends elsewhere.
+ *
+ * Initialization waits for the initial thread list to finish loading: this
+ * effect runs deeper in the tree than the runtime's own load effect, so
+ * initializing first would settle its optimistic prepend into a base that
+ * already lists the just-created server thread — duplicating the row.
+ */
+const EnsureThreadInitialized: FC = () => {
+  const api = useAssistantApi();
+  const { config } = useApiClient();
+  const threadItem = useAssistantState((s) => s.threadListItem);
+  const threadsLoading = useAssistantState((s) => s.threads.isLoading);
+  const loadingRef = useRef(threadsLoading);
+  loadingRef.current = threadsLoading;
+
+  useEffect(() => {
+    if (config.ui_preset !== "full") return;
+    const localId = threadItem?.id;
+    if (!localId || threadItem?.remoteId) return;
+    if (initializingThreadIds.has(localId)) return;
+    let cancelled = false;
+    void (async () => {
+      // This effect runs deeper in the tree than the runtime's own initial
+      // load, so without waiting it would initialize first and its settle
+      // prepend would duplicate the row once the load lists the new thread.
+      // Yield past the mount flush, then wait for the (single, cached)
+      // initial load to resolve before binding.
+      await new Promise((resolve) => window.setTimeout(resolve, 250));
+      const deadline = Date.now() + 15000;
+      while (!cancelled && loadingRef.current && Date.now() < deadline) {
+        await new Promise((resolve) => window.setTimeout(resolve, 100));
+      }
+      if (cancelled) return;
+      if (initializingThreadIds.has(localId)) return;
+      initializingThreadIds.add(localId);
+      try {
+        await api.threads().item({ id: localId }).initialize();
+      } catch {
+        initializingThreadIds.delete(localId);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [api, config.ui_preset, threadsLoading, threadItem?.id, threadItem?.remoteId]);
+
+  return null;
 }
 
 const ThreadWelcome: FC = () => {
@@ -361,6 +501,7 @@ const Composer: FC = () => {
     <>
       {attachmentsEnabled && <ComposerAttachments />}
       <ComposerPrimitive.Input
+        disabled={!canSend}
         placeholder={canSend ? config.presentation.composer_placeholder : (isInitializing ? "Initializing chat..." : "Preparing chat...")}
         className="aui-composer-input mb-1 max-h-32 min-h-16 w-full resize-none bg-transparent px-3.5 pt-1.5 pb-3 text-base outline-none placeholder:text-muted-foreground focus-visible:ring-0"
         rows={1}

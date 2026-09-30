@@ -5,12 +5,14 @@ import type { AssistantStreamChunk } from "assistant-stream";
 import {
   AssistantRuntimeProvider,
   unstable_useRemoteThreadListRuntime as useRemoteThreadListRuntime,
+  useAssistantState,
   useAssistantTransportRuntime,
   useThreadListItem,
 } from "@assistant-ui/react";
 
 import { converter } from "./MyMessageConverter";
 import { useApiClient } from "@/hooks/use-api-client";
+import type { ApiClient } from "@/lib/api-client";
 
 // ------------------------------------------------------------------
 // RUNTIME HOOK
@@ -19,6 +21,14 @@ function usePerThreadTransportRuntime() {
   const item = useThreadListItem();
   const backendThreadId = item.remoteId ?? item.id;
   const { client } = useApiClient();
+  // Threads already imported in this mount must not be re-imported: runtime
+  // or client identity churn would otherwise clobber fresh turns with the
+  // stale fetch that triggered this effect.
+  const importedForRef = React.useRef<string | null>(null);
+  // Live UI message count (mirrored into a ref for the async import below).
+  const messageCount = useAssistantState((s) => s.thread.messages.length);
+  const messageCountRef = React.useRef(messageCount);
+  messageCountRef.current = messageCount;
 
   // Memoize config to prevent runtime recreation on re-renders
   const runtimeConfig = useMemo(() => ({
@@ -35,27 +45,33 @@ function usePerThreadTransportRuntime() {
 
   useEffect(() => {
     const remoteId = item.remoteId;
-    if (!remoteId) return;
+    if (!remoteId || importedForRef.current === remoteId) return;
 
     let isMounted = true;
 
     const fetchAndImport = async () => {
       try {
         const data = await client.getMessages(remoteId);
+        const incoming = data.messages ?? [];
 
-        if (!isMounted || !data.messages) return;
+        if (!isMounted) return;
+        importedForRef.current = remoteId;
 
         const threadRuntime = (runtime as any).thread;
-        if (threadRuntime?.unstable_loadExternalState) {
-          try {
-            threadRuntime.unstable_loadExternalState({
-              thread_id: backendThreadId,
-              messages: data.messages ?? [],
-            });
-          } catch (importErr) {
-             console.error("[Hydration:CRASH]", importErr);
-             // This catch block prevents the entire app from white-screening
-          }
+        if (!threadRuntime?.unstable_loadExternalState) return;
+        // Never clobber fresh local turns with a stale fetch: an import
+        // that raced a completed send would wipe the just-finished
+        // messages. Stored rows are only appended to, so skipping a fetch
+        // that holds fewer rows than the UI already shows is always safe.
+        if (incoming.length < messageCountRef.current) return;
+        try {
+          threadRuntime.unstable_loadExternalState({
+            thread_id: backendThreadId,
+            messages: incoming,
+          });
+        } catch (importErr) {
+           console.error("[Hydration:CRASH]", importErr);
+           // This catch block prevents the entire app from white-screening
         }
       } catch (e) {
         if (isMounted) console.error("[Hydration:NetworkError]", e);
@@ -73,12 +89,57 @@ function usePerThreadTransportRuntime() {
 // PROVIDER
 // ------------------------------------------------------------------
 function ProviderInner({ children }: { children: ReactNode }) {
-  const { client } = useApiClient();
+  // Gate the whole runtime on the loaded deployment config. The thread-list
+  // runtime fires its (cached, never-refreshed) initial load on mount: if
+  // the adapter existed before /api/config resolves it would permanently
+  // bind the build-time fallback base instead of the deployment backend.
+  // NOTE: every useApiClient() instance has its own loading window, so the
+  // gate is re-checked in ProviderReady with its own instance, and the
+  // post-load client is passed down as a prop (never re-derived below).
+  const { loaded } = useApiClient();
+  if (!loaded) {
+    return (
+      <main className="flex h-dvh items-center justify-center text-sm text-muted-foreground">
+        Loading chat configuration…
+      </main>
+    );
+  }
+  return <ProviderReady>{children}</ProviderReady>;
+}
+
+function ProviderReady({ children }: { children: ReactNode }) {
+  const { client, loaded } = useApiClient();
+  if (!loaded) {
+    return (
+      <main className="flex h-dvh items-center justify-center text-sm text-muted-foreground">
+        Loading chat configuration…
+      </main>
+    );
+  }
+  // Pass the post-load client down as a prop: a fresh useApiClient() call
+  // inside ProviderRuntime would start in its own loading window (build-time
+  // fallback base) and the cached initial load would pin that wrong backend.
+  return <ProviderRuntime client={client}>{children}</ProviderRuntime>;
+}
+
+function ProviderRuntime({
+  children,
+  client,
+}: {
+  children: ReactNode;
+  client: ApiClient;
+}) {
   const [apiError, setApiError] = useState<string | null>(null);
+  // Late-bound client: the adapter object is created once and must always
+  // call with the *current* client. Closing over the render-time client
+  // would pin the build-time fallback base for the cached initial load
+  // whenever this mounts during any instance's config loading window.
+  const clientRef = React.useRef(client);
+  clientRef.current = client;
   const adapter = useMemo(() => ({
       async list() {
         try {
-          const data = await client.listThreads();
+          const data = await clientRef.current.listThreads();
           return {
             threads: (data || []).map((t: any) => ({
               remoteId: t.id,
@@ -92,7 +153,7 @@ function ProviderInner({ children }: { children: ReactNode }) {
         }
       },
       async fetch(threadId: string) {
-        const data = await client.getThread(threadId);
+        const data = await clientRef.current.getThread(threadId);
         return {
           remoteId: data.id,
           title: data.title,
@@ -100,25 +161,25 @@ function ProviderInner({ children }: { children: ReactNode }) {
         };
       },
       async initialize(localId: string) {
-        const data = await client.createThread(localId);
+        const data = await clientRef.current.createThread(localId);
         return { remoteId: data.id };
       },
       async generateTitle() {
         return new ReadableStream<AssistantStreamChunk>();
       },
       async rename(threadId: string, newTitle: string) {
-        await client.renameThread(threadId, newTitle);
+        await clientRef.current.renameThread(threadId, newTitle);
       },
       async archive(threadId: string) {
-        await client.archiveThread(threadId, true);
+        await clientRef.current.archiveThread(threadId, true);
       },
       async unarchive(threadId: string) {
-        await client.archiveThread(threadId, false);
+        await clientRef.current.archiveThread(threadId, false);
       },
       async delete(threadId: string) {
-        await client.deleteThread(threadId);
+        await clientRef.current.deleteThread(threadId);
       },
-    }), [client]);
+    }), []);
 
   const runtime = useRemoteThreadListRuntime({
     adapter: adapter as any, 

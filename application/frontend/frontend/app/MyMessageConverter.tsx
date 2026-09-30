@@ -53,15 +53,24 @@ export const converter = (
     isSending && !hasHumanInServer
       ? [...pendingHumanMessages, ...serverMessages]
       : serverMessages;
-  const threadMessages = LangChainMessageConverter.toThreadMessages(
-    allMessages,
-  ).map((message, index) => ({
+  const converted = LangChainMessageConverter.toThreadMessages(allMessages);
+  // toThreadMessages may merge/split entries (e.g. tool-call round trips),
+  // so converted[i] is NOT allMessages[i]. Only borrow a source ID when the
+  // conversion preserved cardinality 1:1; otherwise pair by position would
+  // attach ids to the wrong messages (wrong order, orphaned feedback rows).
+  const positional = converted.length === allMessages.length;
+  const threadMessages = converted.map((message, index) => ({
     ...message,
     // Prefer the source LangChain ID even if a converter omits it. This keeps
     // stored UI rows, feedback targets, and hydration stable across reloads.
     id:
       message.id ||
-      String((allMessages[index] as { id?: string } | undefined)?.id ?? `legacy-${index}`),
+      (positional
+        ? String(
+            (allMessages[index] as { id?: string } | undefined)?.id ??
+              `legacy-${index}`,
+          )
+        : `legacy-${index}`),
   }));
 
   return {

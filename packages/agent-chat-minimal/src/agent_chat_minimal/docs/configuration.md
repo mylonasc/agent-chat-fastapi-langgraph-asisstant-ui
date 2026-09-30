@@ -52,6 +52,21 @@ environment state, so independent app instances can use different models in one
 process. Legacy no-argument factories that read `MODEL` themselves keep working
 through the documented environment fallback.
 
+## Message id contract
+
+Message ids are opaque strings shared by the UI runtime, transcript rows,
+and feedback rows — and they must be unique per message and never bare
+integers. The server mints human echo ids as `u-<hex>` for exactly this
+reason: per-conversation counters (`"0"`, `"2"`, …) repeat in every thread,
+so transcript appends collide across threads (409) and feedback can resolve
+to another thread's row; worse, the Assistant UI runtime keys its message
+resources through plain JS objects, whose key ordering puts integer-like
+keys first regardless of insertion order — mixing `"0"`/`"2"` user ids with
+`"ai-…"` assistant ids silently reorders multi-turn threads (users grouped
+before assistants). Custom `prepare_state` reducers that assign their own
+human ids must follow the same contract (unique, non-bare-integer); ids
+supplied on `add-message` commands are kept verbatim.
+
 `GET /api/config` serves the versioned runtime UI contract derived from these
 settings and the capability provider (see [runtime-config.md](runtime-config.md)).
 It is computed per request with `Cache-Control: no-store` so deployments stay

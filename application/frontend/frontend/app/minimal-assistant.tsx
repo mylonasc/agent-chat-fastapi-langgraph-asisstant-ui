@@ -51,9 +51,23 @@ const converter = (
   const allMessages = hasHumanInServer
     ? serverMessages
     : [...pendingHumanMessages, ...serverMessages];
-  const threadMessages = LangChainMessageConverter.toThreadMessages(
-    allMessages,
-  ).map((message, index) => ({ ...message, id: String(index) }));
+  const converted = LangChainMessageConverter.toThreadMessages(allMessages);
+  // Keep converter/source IDs stable across renders; re-indexing on every
+  // render would remap identities whenever pending messages shift positions.
+  // Synthetic fallbacks use an "m-" prefix: bare-integer ids reorder inside
+  // the UI runtime (integer-like keys sort before string keys).
+  const positional = converted.length === allMessages.length;
+  const threadMessages = converted.map((message, index) => ({
+    ...message,
+    id:
+      message.id ||
+      (positional
+        ? String(
+            (allMessages[index] as { id?: string } | undefined)?.id ??
+              `m-${index}`,
+          )
+        : `m-${index}`),
+  }));
 
   return {
     messages: threadMessages,
