@@ -7,8 +7,8 @@ usage, then use the reports here when changing architecture.
 
 ## Current Architecture Snapshot
 
-- Snapshot refreshed: 2026-09-29
-- Package version: `0.5.1`
+- Snapshot refreshed: 2026-10-18
+- Package version: `0.6.2`
 - Canonical non-RAG runtime: `packages/agent-chat-minimal`
 - Portable entry point: `minimal-chat-serve` (single FastAPI/UI server, port
   8011)
@@ -19,6 +19,10 @@ usage, then use the reports here when changing architecture.
   `FULL_ADMIN_TOKEN` or a trusted `app.state.admin_principal_resolver` is required.
   This does not authenticate legacy chat or agent-invoked tools; see the
   [full backend guide](../application/backend/full/README.md#http-tool-administration).
+- `GET /threads/{id}/messages` requires an owned session before reading
+  graph checkpoints (404 unknown/deleted/orphaned, 403 foreign; #62 fixed).
+- PR #9 (key-free default agent) closed as superseded; re-propose from
+  current `main` if still needed.
 
 The portable package builds one unified static frontend from
 `application/frontend/frontend`, selects its minimal or full layout at runtime
