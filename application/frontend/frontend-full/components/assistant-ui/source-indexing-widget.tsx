@@ -13,6 +13,10 @@ import { useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { useRuntimeConfig } from "@/hooks/use-runtime-config";
+import {
+  identityHeaders,
+  resolveBrowserSubject,
+} from "@/lib/identity";
 
 type JsonObj = Record<string, unknown>;
 
@@ -215,7 +219,9 @@ function SourceIndexingPanel({
     return "none";
   }, [fromRetrievalSources.length, fromSearchSources.length, liveJobSources.length, sources.length]);
 
-  const userId = String(args.user_id ?? result.user_id ?? "default_user");
+  const userId = String(
+    args.user_id ?? result.user_id ?? resolveBrowserSubject(),
+  );
   const { config, apiBase } = useRuntimeConfig();
   const ragCapability = config.tools.web_rag;
   const statusPath = ragCapability.status_path ?? "/tools/web_rag/status";
@@ -261,9 +267,14 @@ function SourceIndexingPanel({
 
     const run = async () => {
       try {
+        // Namespace comes from the tool result; the subject header is
+        // always the browser identity, never tool-provided data.
         const statusRes = await fetch(
           `${apiBase}${statusPath}?user_id=${encodeURIComponent(userId)}`,
-          { cache: "no-store" }
+          {
+            cache: "no-store",
+            headers: identityHeaders({ subject: resolveBrowserSubject() }),
+          },
         );
 
         if (!statusRes.ok || cancelled) return;

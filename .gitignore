@@ -10,7 +10,9 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
+# Python build output at the repository root (scoped: must not ignore
+# frontend `lib/` source directories, see #40).
+/lib/
 !tests/ui/lib/
 !tests/ui/lib/**
 lib64/

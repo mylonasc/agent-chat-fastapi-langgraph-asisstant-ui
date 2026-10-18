@@ -32,6 +32,10 @@ import * as m from "motion/react-m";
 
 import { Button } from "@/components/ui/button";
 import { useRuntimeConfig } from "@/hooks/use-runtime-config";
+import {
+  identityHeaders,
+  resolveBrowserSubject,
+} from "@/lib/identity";
 import { MarkdownText } from "@/components/assistant-ui/markdown-text";
 import { Reasoning, ReasoningGroup } from "@/components/assistant-ui/reasoning";
 import {
@@ -379,6 +383,9 @@ const IndexingStatusPanel: FC = () => {
   const { config, apiBase } = useRuntimeConfig();
   const rag = config.tools.web_rag;
   const statusPath = rag.status_path ?? "/tools/web_rag/status";
+  // Per-browser namespace (never the shared `default_user`); the RAG
+  // status endpoint is admin-gated, so this only succeeds for admins.
+  const subject = resolveBrowserSubject();
 
   useEffect(() => {
     // Capability-gated: no polling when the backend does not serve RAG.
@@ -391,8 +398,11 @@ const IndexingStatusPanel: FC = () => {
     const fetchStatus = async () => {
       try {
         const res = await fetch(
-          `${apiBase}${statusPath}?user_id=default_user`,
-          { cache: "no-store" }
+          `${apiBase}${statusPath}?user_id=${encodeURIComponent(subject)}`,
+          {
+            cache: "no-store",
+            headers: identityHeaders({ subject }),
+          },
         );
         if (!res.ok || cancelled) return;
         const data = await res.json();
@@ -415,7 +425,7 @@ const IndexingStatusPanel: FC = () => {
       cancelled = true;
       window.clearInterval(id);
     };
-  }, [rag.enabled, statusPath, apiBase]);
+  }, [rag.enabled, statusPath, apiBase, subject]);
 
   if (!jobs.length) return null;
 

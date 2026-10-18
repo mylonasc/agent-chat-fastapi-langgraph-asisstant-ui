@@ -11,6 +11,18 @@ import {
 
 import { converter } from "./MyMessageConverter";
 import { useRuntimeConfig } from "@/hooks/use-runtime-config";
+import {
+  identityHeaders,
+  resolveBrowserSubject,
+} from "@/lib/identity";
+
+// ------------------------------------------------------------------
+// IDENTITY
+// ------------------------------------------------------------------
+// Stable anonymous subject per browser (shared storage key with the
+// unified frontend). Sent as `x-agent-chat-subject` so the packaged app
+// enforces ownership (#62, #63); also used as the legacy `user_id`
+// namespace for the full backend, which has no principal concept.
 
 // ------------------------------------------------------------------
 // RUNTIME HOOK
@@ -19,18 +31,23 @@ function usePerThreadTransportRuntime() {
   const item = useThreadListItem();
   const backendThreadId = item.remoteId ?? item.id;
   const { apiBase } = useRuntimeConfig();
+  const subject = React.useMemo(() => resolveBrowserSubject(), []);
+  const headers = React.useMemo(
+    () => identityHeaders({ subject }),
+    [subject],
+  );
 
   // Memoize config to prevent runtime recreation on re-renders
   const runtimeConfig = useMemo(() => ({
     api: `${apiBase}/assistant`,
-    headers: {},
+    headers,
     converter,
     initialState: {
       messages: [],
       thread_id: backendThreadId,
-      user_id: "default_user",
+      user_id: subject,
     },
-  }), [backendThreadId, apiBase]);
+  }), [backendThreadId, apiBase, headers, subject]);
 
   const runtime = useAssistantTransportRuntime(runtimeConfig);
 
@@ -47,6 +64,7 @@ function usePerThreadTransportRuntime() {
       try {
         const res = await fetch(`${apiBase}/threads/${item.remoteId}/messages`, {
           cache: "no-store",
+          headers,
         });
         const data = await res.json();
 
@@ -57,7 +75,7 @@ function usePerThreadTransportRuntime() {
           try {
             threadRuntime.unstable_loadExternalState({
               thread_id: backendThreadId,
-              user_id: "default_user",
+              user_id: subject,
               messages: data.messages ?? [],
             });
           } catch (importErr) {
@@ -72,7 +90,7 @@ function usePerThreadTransportRuntime() {
 
     fetchAndImport();
     return () => { isMounted = false; };
-  }, [item.remoteId, runtime]);
+  }, [item.remoteId, runtime, apiBase, headers, subject]);
 
   return runtime;
 }
@@ -82,12 +100,21 @@ function usePerThreadTransportRuntime() {
 // ------------------------------------------------------------------
 function ProviderInner({ children }: { children: ReactNode }) {
   const { apiBase } = useRuntimeConfig();
+  const subject = React.useMemo(() => resolveBrowserSubject(), []);
+  const headers = React.useMemo(
+    () => identityHeaders({ subject }),
+    [subject],
+  );
   const adapter = useMemo(() => ({
       async list() {
         try {
-          const res = await fetch(`${apiBase}/threads?user_id=default_user`, {
-            cache: "no-store",
-          });
+          const res = await fetch(
+            `${apiBase}/threads?user_id=${encodeURIComponent(subject)}`,
+            {
+              cache: "no-store",
+              headers,
+            },
+          );
           const data = await res.json();
           return {
             threads: (data || []).map((t: any) => ({
@@ -99,7 +126,10 @@ function ProviderInner({ children }: { children: ReactNode }) {
         } catch (e) { return { threads: [] }; }
       },
       async fetch(threadId: string) {
-        const res = await fetch(`${apiBase}/threads/${threadId}`, { cache: "no-store" });
+        const res = await fetch(`${apiBase}/threads/${threadId}`, {
+          cache: "no-store",
+          headers,
+        });
         const data = await res.json();
         return {
           remoteId: data.id,
@@ -110,8 +140,8 @@ function ProviderInner({ children }: { children: ReactNode }) {
       async initialize(localId: string) {
         const res = await fetch(`${apiBase}/threads`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ localId, user_id: "default_user", title: "New Chat" }),
+          headers: { ...headers, "Content-Type": "application/json" },
+          body: JSON.stringify({ localId, user_id: subject, title: "New Chat" }),
         });
         const data = await res.json();
         return { remoteId: data.id };
@@ -122,7 +152,7 @@ function ProviderInner({ children }: { children: ReactNode }) {
       async rename(threadId: string, newTitle: string) {
         const res = await fetch(`${apiBase}/threads/${threadId}`, {
           method: "PATCH",
-          headers: { "Content-Type": "application/json" },
+          headers: { ...headers, "Content-Type": "application/json" },
           body: JSON.stringify({ title: newTitle }),
         });
         if (!res.ok) throw new Error("Failed to rename thread");
@@ -130,22 +160,25 @@ function ProviderInner({ children }: { children: ReactNode }) {
       async archive(threadId: string) {
         const res = await fetch(`${apiBase}/threads/${threadId}/archive`, {
           method: "POST",
+          headers,
         });
         if (!res.ok) throw new Error("Failed to archive thread");
       },
       async unarchive(threadId: string) {
         const res = await fetch(`${apiBase}/threads/${threadId}/unarchive`, {
           method: "POST",
+          headers,
         });
         if (!res.ok) throw new Error("Failed to unarchive thread");
       },
       async delete(threadId: string) {
         const res = await fetch(`${apiBase}/threads/${threadId}`, {
           method: "DELETE",
+          headers,
         });
         if (!res.ok) throw new Error("Failed to delete thread");
       },
-    }), [apiBase]);
+    }), [apiBase, headers, subject]);
 
   const runtime = useRemoteThreadListRuntime({
     adapter: adapter as any, 
