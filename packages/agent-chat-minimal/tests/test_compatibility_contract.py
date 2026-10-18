@@ -69,6 +69,10 @@ def _sqlite_client(tmp_path, **kwargs):
             session_service=sessions,
             transcript_service=transcripts,
             graph=kwargs.pop("graph", ToyGraph()),
+            # These routes never touch graph checkpoints; opt out of graph
+            # memory explicitly so the bundle validator holds this suite to
+            # the same no-mixing rule as deployments (#65).
+            checkpointer=None,
             **kwargs,
         )
     )

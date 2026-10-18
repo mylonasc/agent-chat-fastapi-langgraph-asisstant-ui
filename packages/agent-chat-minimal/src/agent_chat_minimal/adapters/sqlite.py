@@ -22,6 +22,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    delete,
     event,
     select,
     text,
@@ -260,6 +261,11 @@ class SQLAlchemySessionRepository:
             await db.delete(row)
             return True
 
+    async def delete_cascade(self, session_id: str) -> bool:
+        # One transaction: ON DELETE CASCADE removes messages and feedback
+        # atomically (foreign_keys PRAGMA is enabled per connection).
+        return await self.delete(session_id)
+
 
 class SQLAlchemyTranscriptRepository:
     def __init__(self, sessions: async_sessionmaker[AsyncSession]) -> None:
@@ -312,6 +318,24 @@ class SQLAlchemyTranscriptRepository:
             )
             for row in rows:
                 await db.delete(row)
+
+    async def trim_session(self, session_id: str, keep: int) -> int:
+        if keep < 1:
+            raise ValueError("keep must be at least 1")
+        async with self._sessions.begin() as db:
+            keeper_ids = (
+                select(MessageRow.id)
+                .where(MessageRow.session_id == session_id)
+                .order_by(MessageRow.sequence.desc())
+                .limit(keep)
+            )
+            result = await db.execute(
+                delete(MessageRow).where(
+                    MessageRow.session_id == session_id,
+                    MessageRow.id.not_in(keeper_ids),
+                )
+            )
+            return result.rowcount
 
 
 class SQLAlchemyFeedbackRepository:

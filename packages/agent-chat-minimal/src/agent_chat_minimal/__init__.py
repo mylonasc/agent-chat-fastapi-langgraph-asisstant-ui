@@ -28,6 +28,7 @@ from .domain import (
 )
 from .identity import DefaultPrincipalResolver
 from .models import ModelConfig, resolve_model
+from .persistence import validate_persistence_bundle
 from .ports import PrincipalResolver
 from .registry import AGENT_REGISTRY, discover_agents
 from .runtime_config import (
@@ -140,4 +141,5 @@ __all__ = [
     "resolve_thread_id",
     "resolve_model",
     "validate_options",
+    "validate_persistence_bundle",
 ]

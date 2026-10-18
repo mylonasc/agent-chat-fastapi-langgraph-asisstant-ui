@@ -17,7 +17,8 @@ _CONFIG_FIELDS = frozenset(
         "host", "port", "model", "default_agent", "web_dir", "web_full_dir",
         "ui_preset", "api_base", "identity_mode", "server_mode", "database_url",
         "database_path", "checkpoint_database_url", "checkpoint_database_path",
-        "auto_migrate", "persistence_enabled", "ui", "app_title", "welcome_heading",
+        "auto_migrate", "persistence_enabled", "max_transcript_messages",
+        "ui", "app_title", "welcome_heading",
         "welcome_description", "composer_placeholder", "proposed_questions",
     )
 )
@@ -76,6 +77,9 @@ class Settings:
     checkpoint_database_path: str = "agent-chat-checkpoints.db"
     auto_migrate: bool = True
     persistence_enabled: bool = False
+    # Growth/trim policy for durable transcripts (#65): keep the newest N
+    # stored messages per session, matching the legacy 500-message trim.
+    max_transcript_messages: int = 500
     app_title: str = "Agent Chat"
     welcome_heading: str = "How can I help?"
     welcome_description: str = "Ask a question to get started."
@@ -110,6 +114,8 @@ class Settings:
             raise ValueError("checkpoint_database_url must not be empty")
         if not self.checkpoint_database_path.strip():
             raise ValueError("checkpoint_database_path must not be empty")
+        if self.max_transcript_messages < 1:
+            raise ValueError("max_transcript_messages must be at least 1")
         for name in ("app_title", "welcome_heading", "welcome_description", "composer_placeholder"):
             value = getattr(self, name)
             if not value.strip() or len(value) > 500:
@@ -127,6 +133,11 @@ class Settings:
         auto_migrate_raw = os.getenv("AUTO_MIGRATE", "true").lower()
         if auto_migrate_raw not in {"true", "false", "1", "0"}:
             raise ValueError("AUTO_MIGRATE must be true or false")
+        max_messages_raw = os.getenv("MAX_TRANSCRIPT_MESSAGES", "500")
+        try:
+            max_transcript_messages = int(max_messages_raw)
+        except ValueError as exc:
+            raise ValueError("MAX_TRANSCRIPT_MESSAGES must be an integer") from exc
         return cls(
             host=os.getenv("HOST", "0.0.0.0"),
             port=port,
@@ -145,6 +156,7 @@ class Settings:
                 "CHECKPOINT_DATABASE_PATH", "agent-chat-checkpoints.db"
             ),
             auto_migrate=auto_migrate_raw in {"true", "1"},
+            max_transcript_messages=max_transcript_messages,
             persistence_enabled=(
                 os.getenv("PERSISTENCE_ENABLED", "false").lower()
                 in {"true", "1"}
@@ -266,6 +278,11 @@ def _present_env_overrides(environ: Mapping[str, str]) -> dict[str, Any]:
     for env_name, field_name in (("AUTO_MIGRATE", "auto_migrate"), ("PERSISTENCE_ENABLED", "persistence_enabled")):
         if env_name in environ:
             values[field_name] = _parse_bool(environ[env_name], env_name)
+    if "MAX_TRANSCRIPT_MESSAGES" in environ:
+        try:
+            values["max_transcript_messages"] = int(environ["MAX_TRANSCRIPT_MESSAGES"])
+        except ValueError as exc:
+            raise ValueError("MAX_TRANSCRIPT_MESSAGES must be an integer") from exc
     return values
 
 
@@ -326,6 +343,7 @@ CHECKPOINT_DATABASE_PATH=agent-chat-checkpoints.db # separate graph state file
 CHECKPOINT_DATABASE_URL=    # SQLite URL; overrides CHECKPOINT_DATABASE_PATH
 AUTO_MIGRATE=true           # composition roots may upgrade before opening repos
 PERSISTENCE_ENABLED=false   # open SQLite repos/checkpoints in supported entry points
+MAX_TRANSCRIPT_MESSAGES=500 # newest stored messages kept per session (trim policy)
 AGENT_CHAT_CONFIG=           # explicit versioned YAML configuration path
 OPENAI_API_KEY=             # credential for the default openai model
 ANTHROPIC_API_KEY=          # credential when MODEL uses anthropic:

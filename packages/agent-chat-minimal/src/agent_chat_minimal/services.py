@@ -1,5 +1,6 @@
 """Authorization-enforcing application services."""
 
+import warnings
 from dataclasses import replace
 from typing import Any
 
@@ -120,11 +121,20 @@ class SessionService:
 
     async def delete(self, principal: Principal, session_id: str) -> None:
         await self._owned(principal, session_id)
+        # The checkpoint store is separate by design: fail fast before
+        # touching the application store so a checkpoint failure leaves the
+        # session intact and retry-safe.
         if self._checkpoint_deleter is not None:
             await self._checkpoint_deleter.delete_session(session_id)
         await self._feedback.delete_by_session(session_id)
         await self._transcripts.delete_by_session(session_id)
-        if not await self._sessions.delete(session_id):
+        # Prefer the atomic cascade path; foreign adapters without it fall
+        # back to the plain row delete (children were removed above, and the
+        # session row still gates ownership).
+        delete_session = getattr(self._sessions, "delete_cascade", None)
+        if delete_session is None:
+            delete_session = self._sessions.delete
+        if not await delete_session(session_id):
             raise ConflictError(f"session {session_id!r} changed during deletion")
 
     async def _owned(self, principal: Principal, session_id: str) -> Session:
@@ -144,10 +154,16 @@ class SessionService:
 
 class TranscriptService:
     def __init__(
-        self, sessions: SessionRepository, transcripts: TranscriptRepository
+        self,
+        sessions: SessionRepository,
+        transcripts: TranscriptRepository,
+        max_messages: int = 500,
     ) -> None:
+        if max_messages < 1:
+            raise ValueError("max_messages must be at least 1")
         self._sessions = sessions
         self._transcripts = transcripts
+        self._max_messages = max_messages
 
     async def list(
         self, principal: Principal, session_id: str
@@ -195,6 +211,20 @@ class TranscriptService:
             )
             try:
                 await self._transcripts.add(message)
+                # Growth/trim policy (#65): keep the newest N messages so
+                # long-lived sessions cannot grow without bound. Foreign
+                # adapters predating the trim_session port keep the old
+                # unbounded behavior with a warning instead of failing.
+                trim_session = getattr(self._transcripts, "trim_session", None)
+                if trim_session is None:
+                    warnings.warn(
+                        "transcript repository lacks trim_session; "
+                        "transcripts grow without bound",
+                        RuntimeWarning,
+                        stacklevel=2,
+                    )
+                else:
+                    await trim_session(session_id, self._max_messages)
                 return message
             except ValueError as exc:
                 if message_id:

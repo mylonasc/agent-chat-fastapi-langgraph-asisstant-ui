@@ -17,6 +17,7 @@ from .capabilities import CapabilityProvider
 from .config import Settings
 from .domain import Feedback, FeedbackRating, MessageRole, Principal, Session, SessionStatus
 from .identity import DefaultPrincipalResolver
+from .persistence import validate_persistence_bundle
 from .services import (
     ConflictError,
     ForbiddenError,
@@ -479,11 +480,19 @@ def _build_app(
             checkpoint_deleter,
         )
         base_transcripts = transcript_service or TranscriptService(
-            owned_repositories.sessions, owned_repositories.transcripts
+            owned_repositories.sessions,
+            owned_repositories.transcripts,
+            settings.max_transcript_messages,
         )
     else:
         base_sessions = session_service
         base_transcripts = transcript_service
+    if owned_repositories is not None:
+        # Fail fast on silently mixed durable/ephemeral stores (#65);
+        # injected services without a known bundle skip validation.
+        validate_persistence_bundle(
+            owned_repositories, checkpointer, checkpoint_deleter
+        )
     sessions = base_sessions
     transcripts = base_transcripts
     feedback = FeedbackService(

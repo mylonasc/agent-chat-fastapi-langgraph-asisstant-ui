@@ -29,12 +29,18 @@ comment, and metadata again returns the existing record unchanged. Ratings are
 `positive` or `negative`.
 
 `SessionService.delete` verifies ownership, invokes an optional
-`CheckpointDeleter`, then removes feedback, transcript entries, and session
-metadata. The service calls
-multiple repository methods and is therefore not a cross-repository unit
-of work. The SQL session repository's
-database foreign keys atomically cascade to messages and feedback. Do
-not claim that the application-service sequence itself is atomic.
+`CheckpointDeleter` first (failing fast so the application store stays
+untouched and retry-safe), then removes feedback and transcript entries
+explicitly, and finally removes the session row through the
+`delete_cascade` port. That port runs in one lock acquisition (memory) or
+one SQL transaction relying on `ON DELETE CASCADE` (SQLite), so children
+can never outlive the session row even if an earlier explicit delete left a
+residue. The checkpoint store itself remains separate by design.
+
+`TranscriptService` enforces a growth/trim policy: after every append it
+trims the session to the newest `max_messages` entries (default `500`,
+matching the legacy trim; deployments set `MAX_TRANSCRIPT_MESSAGES`), so
+long-lived sessions cannot grow without bound.
 
 `InMemoryRepositories` supplies reference adapters for composition and fast
 tests. New repository adapters should run the reusable repository contract tests

@@ -12,6 +12,7 @@ from fastapi import FastAPI
 
 from .capabilities import CapabilityProvider
 from .config import Settings
+from .persistence import _DeferredCheckpointer
 from .server import ChatGraph, _build_app
 from .services import SessionService, TranscriptService
 from .threads import ThreadManager, ThreadMessageStore
@@ -79,31 +80,6 @@ def create_app(
         checkpoint_deleter=checkpoint_deleter,
         lifespan=lifespan,
     )
-
-
-class _DeferredCheckpointer:
-    """Expose the lifespan-owned saver to lazily constructed graph factories."""
-
-    def __init__(self) -> None:
-        self._adapter: Any | None = None
-
-    def set_adapter(self, adapter: Any) -> None:
-        self._adapter = adapter
-
-    def clear_adapter(self) -> None:
-        self._adapter = None
-
-    @property
-    def checkpointer(self) -> Any:
-        if self._adapter is None:
-            raise RuntimeError("checkpoint store is not available before application startup")
-        return self._adapter.checkpointer
-
-    async def delete_session(self, session_id: str) -> None:
-        await self.checkpointer.adelete_thread(session_id)
-
-    def __getattr__(self, name: str) -> Any:
-        return getattr(self.checkpointer, name)
 
 
 def _durable_dependencies(settings: Settings) -> tuple[Any, Any, Any]:

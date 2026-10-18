@@ -191,3 +191,129 @@ def test_session_delete_removes_transcript_feedback_and_calls_checkpoint_port():
             await sessions.delete(owner, "s1")
 
     asyncio.run(scenario())
+
+
+def test_transcript_append_enforces_max_messages_trim_policy():
+    async def scenario():
+        repos = InMemoryRepositories()
+        sessions = SessionService(
+            repos.sessions, repos.transcripts, repos.feedback
+        )
+        transcripts = TranscriptService(
+            repos.sessions, repos.transcripts, max_messages=3
+        )
+        owner = Principal("owner")
+        await sessions.create(owner, session_id="s1")
+        for index in range(5):
+            await transcripts.append(
+                owner,
+                "s1",
+                role=MessageRole.USER,
+                payload={"text": f"message {index}"},
+            )
+        remaining = await transcripts.list(owner, "s1")
+        assert [message.payload["text"] for message in remaining] == [
+            "message 2",
+            "message 3",
+            "message 4",
+        ]
+        with pytest.raises(ValueError, match="max_messages must be at least 1"):
+            TranscriptService(repos.sessions, repos.transcripts, max_messages=0)
+
+    asyncio.run(scenario())
+
+
+def test_session_delete_prefers_cascade_and_falls_back_for_foreign_adapters():
+    async def scenario():
+        repos = InMemoryRepositories()
+        sessions = SessionService(
+            repos.sessions, repos.transcripts, repos.feedback
+        )
+        owner = Principal("owner")
+        await sessions.create(owner, session_id="s1")
+        # Memory sessions expose delete_cascade: children removed above, the
+        # session row removed through the cascade path.
+        await sessions.delete(owner, "s1")
+        assert await repos.sessions.get("s1") is None
+
+        class LegacySessions:
+            """Foreign adapter without delete_cascade (pre-#65 contract)."""
+
+            def __init__(self, wrapped):
+                self._wrapped = wrapped
+
+            def __getattr__(self, name):
+                if name == "delete_cascade":
+                    raise AttributeError(name)
+                return getattr(self._wrapped, name)
+
+        legacy_repos = InMemoryRepositories()
+        legacy_sessions = SessionService(
+            LegacySessions(legacy_repos.sessions),
+            legacy_repos.transcripts,
+            legacy_repos.feedback,
+        )
+        await legacy_sessions.create(owner, session_id="s2")
+        await legacy_sessions.delete(owner, "s2")
+        assert await legacy_repos.sessions.get("s2") is None
+
+    asyncio.run(scenario())
+
+
+def test_transcript_append_warns_but_works_without_trim_session():
+    class LegacyTranscripts:
+        """Foreign adapter predating the trim_session port."""
+
+        def __init__(self, wrapped):
+            self._wrapped = wrapped
+
+        def __getattr__(self, name):
+            if name == "trim_session":
+                raise AttributeError(name)
+            return getattr(self._wrapped, name)
+
+    async def scenario():
+        repos = InMemoryRepositories()
+        sessions = SessionService(
+            repos.sessions, repos.transcripts, repos.feedback
+        )
+        transcripts = TranscriptService(
+            repos.sessions, LegacyTranscripts(repos.transcripts)
+        )
+        owner = Principal("owner")
+        await sessions.create(owner, session_id="s1")
+        with pytest.warns(RuntimeWarning, match="lacks trim_session"):
+            message = await transcripts.append(
+                owner, "s1", role=MessageRole.USER, payload={"text": "one"}
+            )
+        assert message.payload == {"text": "one"}
+
+    asyncio.run(scenario())
+
+
+def test_session_delete_fails_fast_when_checkpoint_cleanup_fails():
+    class BombDeleter:
+        async def delete_session(self, session_id):
+            raise RuntimeError("checkpoint store unavailable")
+
+    async def scenario():
+        repos = InMemoryRepositories()
+        sessions = SessionService(
+            repos.sessions,
+            repos.transcripts,
+            repos.feedback,
+            BombDeleter(),
+        )
+        transcripts = TranscriptService(repos.sessions, repos.transcripts)
+        owner = Principal("owner")
+        await sessions.create(owner, session_id="s1")
+        await transcripts.append(
+            owner, "s1", role=MessageRole.USER, payload={"text": "one"}
+        )
+        with pytest.raises(RuntimeError, match="checkpoint store unavailable"):
+            await sessions.delete(owner, "s1")
+        # The application store is untouched: deletion is retry-safe.
+        assert await repos.sessions.get("s1") is not None
+        assert len(await repos.transcripts.list_by_session("s1")) == 1
+
+    asyncio.run(scenario())
