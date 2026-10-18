@@ -158,9 +158,39 @@ async def test_archive_and_delete_thread_endpoints_persist_changes():
 
 
 @pytest.mark.anyio
-async def test_tools_overview_endpoint_returns_tool_and_docling_info():
+@pytest.mark.parametrize("access", ["disabled", "anonymous", "invalid", "non-admin"])
+async def test_tools_overview_requires_admin(monkeypatch, access):
+    from tools.authorization import AdminPrincipal
+
+    monkeypatch.setenv("FULL_ADMIN_TOKEN", "test-admin-token")
+    headers = {"x-agent-chat-subject": "admin", "x-role": "admin"}
+    expected = 401
+    if access == "disabled":
+        monkeypatch.delenv("FULL_ADMIN_TOKEN")
+        expected = 503
+    elif access == "invalid":
+        headers["Authorization"] = "Bearer incorrect"
+    elif access == "non-admin":
+        monkeypatch.setattr(
+            app.state,
+            "admin_principal_resolver",
+            lambda request: AdminPrincipal("reader"),
+            raising=False,
+        )
+        expected = 403
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
-        resp = await ac.get("/tools/overview?user_id=default_user")
+        resp = await ac.get("/tools/overview", headers=headers)
+    assert resp.status_code == expected
+
+
+@pytest.mark.anyio
+async def test_tools_overview_endpoint_returns_tool_and_docling_info(monkeypatch):
+    monkeypatch.setenv("FULL_ADMIN_TOKEN", "test-admin-token")
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        resp = await ac.get(
+            "/tools/overview?user_id=default_user",
+            headers={"Authorization": "Bearer test-admin-token"},
+        )
         assert resp.status_code == 200
         payload = resp.json()
 

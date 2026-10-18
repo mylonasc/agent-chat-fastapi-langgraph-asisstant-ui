@@ -49,6 +49,14 @@ The full backend accepts `SERPER_API_KEY`, `EMBEDDING_PROVIDER`,
 tool data, but its chat/checkpoint behavior is not the packaged app's durable
 SQLite composition.
 
+HTTP tool/admin APIs are disabled by default. For local administration only,
+set the backend-only `FULL_ADMIN_TOKEN` in `.env` and send it as a bearer
+credential. Do not expose it through frontend environment variables. The legacy
+UI does not send admin credentials. See the
+[full backend authorization guide](../application/backend/full/README.md#http-tool-administration)
+for the trusted-principal hook and limitations: chat and agent-invoked tools
+still require an external authentication boundary before any public deployment.
+
 ## Stop A Stack
 
 ```bash

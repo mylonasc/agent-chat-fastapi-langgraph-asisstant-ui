@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 from langchain_core.messages import HumanMessage
 from .thread_manager import ThreadManager, ThreadMetadata
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 import asyncio
 import uuid
@@ -55,12 +55,13 @@ def _next_ui_message_id(messages: list) -> str:
 
 # Mount tool routers
 from tools.registry import TOOL_REGISTRY
+from tools.authorization import require_admin
 
 for router in TOOL_REGISTRY.get_routers():
     app.include_router(router)
 
 
-@app.get("/tools/overview")
+@app.get("/tools/overview", dependencies=[Depends(require_admin)])
 async def get_tools_overview(user_id: str = "default_user"):
     from tools.web_rag.background_jobs import INDEXING_MANAGER
     from tools.web_rag.status import get_index_status

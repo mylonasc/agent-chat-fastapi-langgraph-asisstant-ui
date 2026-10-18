@@ -15,6 +15,10 @@ usage, then use the reports here when changing architecture.
 - Split development stacks: `docker-compose.minimal.yml` and
   `docker-compose.full.yml`
 - Separate RAG demo: `application/backend/full` (source-run, port 8010)
+- Full demo HTTP tool administration is fail-closed: backend-only
+  `FULL_ADMIN_TOKEN` or a trusted `app.state.admin_principal_resolver` is required.
+  This does not authenticate legacy chat or agent-invoked tools; see the
+  [full backend guide](../application/backend/full/README.md#http-tool-administration).
 
 The portable package builds one unified static frontend from
 `application/frontend/frontend`, selects its minimal or full layout at runtime

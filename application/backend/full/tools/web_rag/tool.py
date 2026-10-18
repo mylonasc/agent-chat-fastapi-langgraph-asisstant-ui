@@ -5,7 +5,7 @@ import time
 from pathlib import Path
 from typing import Any, cast
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 from langchain_core.callbacks.manager import adispatch_custom_event
 from langchain_core.runnables import RunnableConfig
@@ -13,6 +13,7 @@ from langchain_core.tools import StructuredTool
 from pydantic import BaseModel, Field
 
 from tools.config import CONFIG_STORE
+from tools.authorization import require_admin
 from tools.web_search.service import SerperSearchService
 from .background_jobs import INDEXING_MANAGER
 from .indexer import WebRAGIndexer
@@ -45,7 +46,9 @@ class WebRAGTool:
     name = "web_rag"
 
     def __init__(self):
-        self.router = APIRouter(prefix="/tools/web_rag")
+        self.router = APIRouter(
+            prefix="/tools/web_rag", dependencies=[Depends(require_admin)]
+        )
         self._register_routes()
 
     @staticmethod
