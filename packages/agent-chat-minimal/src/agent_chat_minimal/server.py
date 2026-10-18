@@ -667,15 +667,13 @@ def _build_app(
 
     @app.get("/threads/{thread_id}/messages")
     async def get_thread_messages(thread_id: str, principal: PrincipalDep):
-        """Owned transcript payloads, else legacy checkpointer hydration."""
+        """Owned transcript payloads, else checkpointer hydration for an owned session."""
         try:
             stored = await transcripts.list(principal, thread_id)
-        except ForbiddenError as exc:
+        except (NotFoundError, ForbiddenError, ConflictError) as exc:
             raise _service_error_to_http(exc) from exc
-        except NotFoundError:
-            stored = None
-        except ConflictError as exc:
-            raise _service_error_to_http(exc) from exc
+        # Checkpoints can outlive sessions and carry no ownership information.
+        # Only hydrate after the transcript service has authorized the session.
         if stored:
             payloads = [item.payload for item in stored]
             if any(item.role.value == "user" for item in stored):

@@ -127,6 +127,7 @@ def test_cross_principal_access_is_rejected(backend):
 
     # Bob cannot read, rename, archive, message, or delete Alice's session.
     assert client.get("/threads/alice-t", headers=_as("bob")).status_code == 403
+    assert client.get("/threads/alice-t/messages", headers=_as("bob")).status_code == 403
     assert (
         client.patch("/threads/alice-t", json={"title": "stolen"}, headers=_as("bob")).status_code
         == 403
@@ -170,12 +171,14 @@ def test_messages_round_trip_and_delete_cascades(backend):
     assert client.post("/threads/t1/messages", json={"message": msg}).json() == {"ok": True}
     assert client.get("/threads/t1/messages").json() == {"messages": [msg]}
 
-    # Unknown sessions have no transcript to append to.
+    # Unknown sessions cannot be hydrated or appended to.
+    assert client.get("/threads/missing/messages").status_code == 404
     assert (
         client.post("/threads/missing/messages", json={"message": msg}).status_code == 404
     )
 
     client.delete("/threads/t1")
+    assert client.get("/threads/t1/messages").status_code == 404
     client.post("/threads", json={"localId": "t1"})
     assert client.get("/threads/t1/messages").json() == {"messages": []}
 

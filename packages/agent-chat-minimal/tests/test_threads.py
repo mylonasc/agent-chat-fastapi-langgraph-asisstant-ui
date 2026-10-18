@@ -1,5 +1,6 @@
 """Tests for full-stack thread support in the portable server."""
 
+import pytest
 from fastapi.testclient import TestClient
 from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
 from langchain_core.messages import AIMessage
@@ -103,9 +104,45 @@ def test_checkpointer_fallback_for_thread_messages():
             return type("S", (), {"values": {"messages": [m]}})()
 
     client = TestClient(create_app(graph=StatefulGraph()))
-    assert client.get("/threads/any/messages").json()["messages"][0][
+    headers = {"x-agent-chat-subject": "owner"}
+    assert client.post(
+        "/threads", json={"localId": "owned"}, headers=headers
+    ).status_code == 200
+    assert client.get("/threads/owned/messages", headers=headers).json()["messages"][0][
         "content"
     ] == "from-checkpointer"
+
+
+@pytest.mark.parametrize("session", ["missing", "orphaned", "foreign", "deleted"])
+def test_checkpoint_hydration_requires_an_owned_session(session):
+    class StatefulGraph(ToyGraph):
+        def __init__(self):
+            super().__init__()
+            self.state_reads = []
+
+        def get_state(self, config):
+            self.state_reads.append(config)
+            messages = [] if session == "missing" else [AIMessage(content="private")]
+            return type("S", (), {"values": {"messages": messages}})()
+
+    graph = StatefulGraph()
+    client = TestClient(create_app(graph=graph))
+    owner = {"x-agent-chat-subject": "owner"}
+    if session in {"foreign", "deleted"}:
+        assert client.post(
+            "/threads", json={"localId": "private-thread"}, headers=owner
+        ).status_code == 200
+    if session == "deleted":
+        # No checkpoint deleter is injected: graph state can outlive the session.
+        assert client.delete("/threads/private-thread", headers=owner).status_code == 200
+
+    response = client.get(
+        "/threads/private-thread/messages",
+        headers={"x-agent-chat-subject": "other"},
+    )
+    assert response.status_code == (403 if session == "foreign" else 404)
+    assert "messages" not in response.json()
+    assert graph.state_reads == []
 
 
 def test_scoped_assistant_auto_creates_thread_and_streams():
