@@ -47,6 +47,30 @@ test("a2ui card renders in-thread and Confirm round-trips as chat text @packaged
     .filter({ hasText: "a2ui-action confirm_booking" });
   await expect(actionUser).toBeVisible({ timeout: 30_000 });
 
+  // Durable-first: the dedicated endpoint stored the canonical message
+  // server-side (not just locally), in the canonical compact-JSON form.
+  const subject = await page.evaluate(() =>
+    window.localStorage.getItem("agent-chat.anonymous-subject.v1"),
+  );
+  const threads = await page.request
+    .get("/threads", { headers: { "x-agent-chat-subject": String(subject) } })
+    .then((r) => r.json());
+  const messages = await page.request
+    .get(`/threads/${threads[0].id}/messages`, {
+      headers: { "x-agent-chat-subject": String(subject) },
+    })
+    .then((r) => r.json());
+  const texts = (messages.messages as unknown[])
+    .flatMap((m) =>
+      Array.isArray((m as { content?: unknown }).content)
+        ? (m as { content: { text?: string }[] }).content
+        : [],
+    )
+    .map((p) => p.text ?? "");
+  expect(texts).toContain(
+    '[a2ui-action confirm_booking] {"name":"confirm_booking","context":{"surfaceId":"demo-card"}}',
+  );
+
   await expect(errors).toEqual([]);
 });
 

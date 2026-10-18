@@ -92,3 +92,10 @@ Two SDK-dialect gotchas the protocol docs won't tell you: Button actions are
 flat `{name, context?}` (not `{event: {name}}`) and the style flag is
 `primary: true` (not `variant`). Button clicks arrive back as ordinary
 `[a2ui-action <name>] {...}` user chat text on the next turn.
+
+For production use, dispatch through `POST /threads/{id}/a2ui-action`
+(`surface_id`, `component_id`, `action: {name, context?}`, optional
+`action_id`): the server validates, stores one canonical message, and
+returns `{ok, message_id, text}` for the UI to mirror. Retries with the
+same `action_id` are idempotent; bad shapes get 422. The bundled UI falls
+back to chat-text append on servers without the endpoint.

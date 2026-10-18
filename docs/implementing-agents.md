@@ -146,5 +146,29 @@ Contract rules:
 6. Sanitize server-side (ids, weights) and keep payloads small and
    JSON-serializable; reuse the `_clamp_0_100` precedent in `graph_tool.py`.
 
+## 5. A2UI Action Endpoint (durable-first dispatch)
+
+Button/form actions should go through `POST /threads/{id}/a2ui-action`
+instead of free-text chat:
+
+```json
+{"surface_id": "demo-card", "component_id": "submit-btn",
+ "action": {"name": "confirm_booking", "context": {"surfaceId": "demo-card"}},
+ "action_id": "client-generated-uuid"}
+```
+
+The server validates the shape, stores one canonical
+`[a2ui-action {name}] {compact-json}` user message, and returns
+`{ok, message_id, text}`; the UI mirrors that exact message locally so run
+behavior is unchanged. Benefits over chat-text: validation before storage,
+one transcript format across client versions, durability even if the
+follow-up run fails, and idempotent retries via `action_id` (the transcript
+store dedupes stable IDs). Unknown/foreign/archived sessions are rejected
+exactly like verbatim appends (404/403/409); oversized or malformed actions
+get 422. The bundled UI tries the endpoint first and falls back to local
+chat-text append on old servers, so mixed deployments keep working.
+Reference: `agent_chat_minimal/a2ui_actions.py`,
+`tests/test_a2ui_actions.py`.
+
 The package's in-wheel version of this guide is
 [`agents.md`](../packages/agent-chat-minimal/src/agent_chat_minimal/docs/agents.md).

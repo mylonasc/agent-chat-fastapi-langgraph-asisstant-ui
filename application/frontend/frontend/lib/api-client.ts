@@ -179,6 +179,22 @@ export class ApiClient {
     return this.request("/agents");
   }
 
+  postA2UIAction(
+    threadId: string,
+    body: {
+      surface_id: string;
+      component_id: string;
+      action: { name: string; context: Record<string, unknown> };
+      action_id: string;
+    },
+  ): Promise<{ ok: boolean; message_id: string; text: string }> {
+    return this.request(`/threads/${encodeURIComponent(threadId)}/a2ui-action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  }
+
   toolUrl(path: string): string {
     return `${this.apiBase}${path}`;
   }
