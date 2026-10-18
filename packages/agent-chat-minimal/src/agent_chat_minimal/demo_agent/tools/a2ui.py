@@ -160,8 +160,9 @@ def build_network_envelope(
 ) -> dict:
     """Envelope for the custom ``NetworkGraph`` catalog extension.
 
-    Nodes/edges are literals (not ``{"path": ...}`` bindings) so the
-    component renders without data-model resolution on first paint.
+    Props are ``{"path": ...}`` bindings into ``/graph`` (snapshot included
+    as ``updateDataModel``), so later model updates re-render without
+    regenerating layout. The frontend also tolerates literal props.
     """
     surface_id = make_surface_id(surface_id)
     clean_nodes = [
@@ -207,11 +208,23 @@ def build_network_envelope(
                         {
                             "id": "graph",
                             "component": "NetworkGraph",
-                            "nodes": clean_nodes,
-                            "edges": clean_edges,
-                            "directed": bool(directed),
+                            "nodes": {"path": "/graph/nodes"},
+                            "edges": {"path": "/graph/edges"},
+                            "directed": {"path": "/graph/directed"},
                         },
                     ],
+                },
+            },
+            {
+                "version": A2UI_VERSION,
+                "updateDataModel": {
+                    "surfaceId": surface_id,
+                    "path": "/graph",
+                    "value": {
+                        "nodes": clean_nodes,
+                        "edges": clean_edges,
+                        "directed": bool(directed),
+                    },
                 },
             },
         ],

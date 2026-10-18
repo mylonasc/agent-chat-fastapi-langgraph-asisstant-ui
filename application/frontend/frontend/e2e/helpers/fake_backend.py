@@ -93,6 +93,39 @@ def _a2ui_graph():
                 return False
         return True
 
+    def _last_human_text(messages) -> str:
+        for m in reversed(list(messages or [])):
+            if isinstance(m, dict):
+                if m.get("type") == "human" or m.get("role") == "user":
+                    content = m.get("content", "")
+            else:
+                if getattr(m, "type", "") != "human":
+                    continue
+                content = getattr(m, "content", "")
+            if isinstance(content, list):
+                content = " ".join(
+                    str(p.get("text", "")) for p in content if isinstance(p, dict)
+                )
+            return str(content)
+        return ""
+
+    def _tool_call_graph() -> AIMessage:
+        return AIMessage(
+            content="rendering graph",
+            tool_calls=[
+                {
+                    "name": "render_network_a2ui",
+                    "args": {
+                        "nodes": [{"id": "a"}, {"id": "b"}],
+                        "edges": [{"source": "a", "target": "b"}],
+                        "directed": False,
+                    },
+                    "id": f"call-{uuid.uuid4().hex[:8]}",
+                    "type": "tool_call",
+                }
+            ],
+        )
+
     def _tool_call_card() -> AIMessage:
         return AIMessage(
             content="rendering card",
@@ -117,9 +150,12 @@ def _a2ui_graph():
 
         def _next(self, messages) -> AIMessage:
             # Stateless per thread: a fresh thread (no AI/tool messages yet)
-            # gets the card; follow-ups get acks. Never depends on process
-            # global position, so parallel/sequential tests are isolated.
+            # gets the card, or the network graph when asked; follow-ups get
+            # acks. Never depends on process global position, so
+            # parallel/sequential tests are isolated.
             if _is_fresh_thread(messages):
+                if "graph" in _last_human_text(messages).lower():
+                    return _tool_call_graph()
                 return _tool_call_card()
             return next(self.script)  # type: ignore[arg-type]
 

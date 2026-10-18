@@ -29,10 +29,17 @@ def test_network_envelope_uses_custom_component():
     components = env["messages"][1]["updateComponents"]["components"]
     graph = next(c for c in components if c["id"] == "graph")
     assert graph["component"] == "NetworkGraph"
-    assert graph["nodes"] == [
+    # Path-bound props with a data-model snapshot (literals tolerated too).
+    assert graph["nodes"] == {"path": "/graph/nodes"}
+    assert graph["edges"] == {"path": "/graph/edges"}
+    assert graph["directed"] == {"path": "/graph/directed"}
+    model = env["messages"][2]["updateDataModel"]
+    assert model["path"] == "/graph"
+    assert model["value"]["nodes"] == [
         {"id": "a", "label": "a"},
         {"id": "b", "label": "b"},
     ]
+    assert model["value"]["edges"] == [{"source": "a", "target": "b"}]
 
 
 def test_extract_handles_json_string_and_rejects_junk():

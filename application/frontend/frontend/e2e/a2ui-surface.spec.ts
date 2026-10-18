@@ -70,3 +70,28 @@ test("a2ui surface survives transcript reload @packaged", async ({ page }) => {
     page.locator('[data-role="assistant"]').last().getByText("Book Your Table"),
   ).toBeVisible({ timeout: 60_000 });
 });
+
+test("custom NetworkGraph resolves path bindings and renders D3 svg @packaged", async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(`pageerror: ${e.message}`));
+
+  await page.goto("/");
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+  await expect(page.getByLabel("Message input")).toBeVisible();
+
+  await sendMessage(page, "show me a network graph");
+  const assistant = page.locator('[data-role="assistant"]').last();
+  await expect(assistant.getByText(/Network \(2 nodes, 1 edges\)/)).toBeVisible({
+    timeout: 60_000,
+  });
+  // ForceGraph paints nodes as svg circles; two nodes expected.
+  await expect
+    .poll(async () => assistant.locator("svg circle").count(), {
+      timeout: 30_000,
+    })
+    .toBe(2);
+  await expect(errors).toEqual([]);
+});
