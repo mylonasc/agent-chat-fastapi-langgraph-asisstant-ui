@@ -71,6 +71,15 @@ class AppendMessageBody(BaseModel):
     message: dict[str, Any]
 
 
+class A2UIActionBody(BaseModel):
+    """Structured A2UI component action (see ``a2ui_actions``)."""
+
+    surface_id: str
+    component_id: str
+    action: dict[str, Any]
+    action_id: Optional[str] = None
+
+
 class RenameThreadBody(BaseModel):
     title: str
 
@@ -725,6 +734,57 @@ def _build_app(
         except (NotFoundError, ForbiddenError, ConflictError) as exc:
             raise _service_error_to_http(exc) from exc
         return {"ok": True}
+
+    @app.post("/threads/{thread_id}/a2ui-action")
+    async def record_a2ui_action(
+        thread_id: str, body: A2UIActionBody, principal: PrincipalDep
+    ):
+        """Persist a dispatched A2UI action as one canonical user message.
+
+        Durable-first: the action survives even if the client's follow-up run
+        fails. Retries with the same ``action_id`` return the stored message
+        instead of duplicating it. Unknown/foreign/archived sessions are
+        rejected exactly like verbatim message appends.
+        """
+        from . import a2ui_actions
+        from .domain import new_id
+
+        action = body.action if isinstance(body.action, dict) else {}
+        name = action.get("name")
+        context = action.get("context")
+        if not isinstance(name, str):
+            raise HTTPException(status_code=422, detail="action.name must be a string")
+        if context is None:
+            context = {}
+        if not isinstance(context, dict):
+            raise HTTPException(
+                status_code=422, detail="action.context must be an object"
+            )
+        try:
+            a2ui_actions.check_action_shape(
+                name=name,
+                surface_id=body.surface_id,
+                component_id=body.component_id,
+                context=context,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        canonical = {"name": name, "context": context}
+        message_id = body.action_id or new_id()
+        message = a2ui_actions.build_action_message(
+            name=name, action=canonical, message_id=message_id
+        )
+        try:
+            stored = await transcripts.append(
+                principal,
+                thread_id,
+                role=MessageRole.USER,
+                payload=message,
+                message_id=message_id,
+            )
+        except (NotFoundError, ForbiddenError, ConflictError) as exc:
+            raise _service_error_to_http(exc) from exc
+        return {"ok": True, "message_id": stored.id, "text": message["content"][0]["text"]}
 
     @app.get("/threads/{thread_id}/messages/{message_id}/feedback")
     async def get_message_feedback(
