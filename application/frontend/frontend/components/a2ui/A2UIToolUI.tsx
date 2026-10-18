@@ -39,7 +39,7 @@ function useActionForwarder() {
 function makeA2UIToolUI(toolName: string) {
   return makeAssistantToolUI({
     toolName,
-    render: ({ result, status, ...rest }) => {
+    render: ({ result, status, toolName: _ignored, ...rest }) => {
       const forward = useActionForwarder();
       if (status.type === "running" && result === undefined) {
         return (
