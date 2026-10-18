@@ -47,6 +47,10 @@ import {
   WebRAGToolUI,
   WebSearchToolUI,
 } from "@/components/assistant-ui/source-indexing-widget";
+import {
+  RenderA2UIDemoToolUI,
+  RenderNetworkA2UIToolUI,
+} from "@/components/a2ui/A2UIToolUI";
 import { ToolFallback } from "@/components/assistant-ui/tool-fallback";
 import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button";
 import {
@@ -83,6 +87,8 @@ export const Thread: FC = () => {
           <WebSearchToolUI />
            <WebRAGToolUI />
            <WebRAGStatusToolUI />
+           <RenderA2UIDemoToolUI />
+           <RenderNetworkA2UIToolUI />
            <AutoThreadTitle />
            <RememberRemoteThread />
            <EnsureThreadInitialized />
