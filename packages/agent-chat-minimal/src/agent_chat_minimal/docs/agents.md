@@ -79,3 +79,16 @@ the plugin and package in the same environment, then choose it with
 - [ ] Offline test with a fake model (see `tests/test_provider_agnostic.py`).
 - [ ] `minimal-chat-serve --agent shout --check` builds without network creds
       only if the model is fake/local; otherwise expect a credential error.
+
+## 4. Render A2UI surfaces from tools (optional)
+
+The chat UI renders A2UI v0.9 surfaces from tool results — no graph changes
+needed. Return a self-contained envelope (`createSurface` +
+`updateComponents` + optional `updateDataModel` snapshot, each message tagged
+`"version": "v0.9"`) with a per-call `surfaceId`; the transcript stores it
+verbatim and replays it on reload. See `demo_agent/tools/a2ui.py`.
+
+Two SDK-dialect gotchas the protocol docs won't tell you: Button actions are
+flat `{name, context?}` (not `{event: {name}}`) and the style flag is
+`primary: true` (not `variant`). Button clicks arrive back as ordinary
+`[a2ui-action <name>] {...}` user chat text on the next turn.

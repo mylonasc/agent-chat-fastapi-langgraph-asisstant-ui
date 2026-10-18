@@ -95,5 +95,56 @@ assembled in source, primarily under `fastlang/server/` and `tools/`. Change it
 only when extending the separate RAG demo; do not expect those tools to ship in
 the portable package.
 
+## 4. Render A2UI Surfaces From Tools
+
+The chat UI renders [A2UI v0.9](https://a2ui.org/specification/v0.9-a2ui/)
+surfaces from tool results via `@a2ui-sdk/react/0.9`. No graph changes are
+needed: any `@tool` returning the envelope below gets a rich card instead of
+the generic tool fallback. Reference: `demo_agent/tools/a2ui.py`,
+`tests/test_a2ui_envelope.py`, `tests/test_a2ui_graph.py`.
+
+```python
+@tool("render_a2ui_demo")
+def render_a2ui_demo(title: str, body: str) -> dict:
+    return {
+        "a2ui_version": "v0.9",
+        "surfaceId": "demo-card",
+        "catalogId": "https://a2ui.org/specification/v0_9/basic_catalog.json",
+        "messages": [
+            {"version": "v0.9",
+             "createSurface": {"surfaceId": "demo-card",
+                               "catalogId": ".../basic_catalog.json"}},
+            {"version": "v0.9",
+             "updateComponents": {"surfaceId": "demo-card", "components": [...]}},
+            {"version": "v0.9",
+             "updateDataModel": {"surfaceId": "demo-card",
+                                 "path": "/booking", "value": {...}}},
+        ],
+    }
+```
+
+Contract rules:
+
+1. Every message carries `"version": "v0.9"`. Keep components a flat list
+   with `id` refs (`Column.children: [...]`).
+2. **SDK dialect, not protocol-docs dialect.** `@a2ui-sdk/react` 0.9 Button
+   props are `{child, primary?, action: {name, context?}}` — flat `name`,
+   not `{event: {name}}`, and `primary: true`, not `variant: "primary"`.
+   (The docs-shaped action renders but silently drops the action name;
+   `test_a2ui_envelope.py` pins the SDK shape.)
+3. Prefer `{"path": "/..."}` bindings plus `dataModel` over literals, so
+   updates re-render without regenerating layout. Custom components
+   (e.g. `NetworkGraph`, see `render_network_a2ui`) take literal props.
+4. One self-contained envelope per call: `createSurface` +
+   `updateComponents` (+ `dataModel` snapshot) every time, with a per-call
+   `surfaceId`. The transcript stores results verbatim and replays them on
+   reload, so shared mutable surfaces across turns break determinism.
+5. Actions round-trip as ordinary chat text: a `confirm_booking` click
+   arrives as a `[a2ui-action confirm_booking] {...}` user message on the
+   next turn. Document stable action names in the tool docstring — the
+   model only sees that.
+6. Sanitize server-side (ids, weights) and keep payloads small and
+   JSON-serializable; reuse the `_clamp_0_100` precedent in `graph_tool.py`.
+
 The package's in-wheel version of this guide is
 [`agents.md`](../packages/agent-chat-minimal/src/agent_chat_minimal/docs/agents.md).
