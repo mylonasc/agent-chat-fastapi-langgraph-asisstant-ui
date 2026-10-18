@@ -115,8 +115,15 @@ def build_demo_card_envelope(
                             "id": "submit-btn",
                             "component": "Button",
                             "child": "submit-label",
-                            "variant": "primary",
-                            "action": {"event": {"name": "confirm_booking"}},
+                            # NOTE: @a2ui-sdk/react 0.9 dialect: flat
+                            # {"name", "context?"} (NOT {"event": {"name"}}
+                            # from the a2ui.org protocol docs) and
+                            # "primary" instead of variant="primary".
+                            "primary": True,
+                            "action": {
+                                "name": "confirm_booking",
+                                "context": {"surfaceId": surface_id},
+                            },
                         },
                     ],
                 },

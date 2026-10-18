@@ -14,6 +14,11 @@ def test_demo_card_envelope_is_valid_v09():
     assert is_a2ui_envelope(env)
     kinds = {k for m in env["messages"] for k in m if k != "version"}
     assert {"createSurface", "updateComponents", "updateDataModel"} <= kinds
+    components = env["messages"][1]["updateComponents"]["components"]
+    button = next(c for c in components if c["id"] == "submit-btn")
+    # @a2ui-sdk/react 0.9 dialect: flat action + primary flag.
+    assert button["action"]["name"] == "confirm_booking"
+    assert button.get("primary") is True
 
 
 def test_network_envelope_uses_custom_component():

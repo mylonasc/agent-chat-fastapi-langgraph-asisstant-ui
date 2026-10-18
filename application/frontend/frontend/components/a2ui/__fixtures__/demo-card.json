@@ -1,0 +1,71 @@
+{
+  "a2ui_version": "v0.9",
+  "surfaceId": "demo-card",
+  "catalogId": "https://a2ui.org/specification/v0_9/basic_catalog.json",
+  "messages": [
+    {
+      "version": "v0.9",
+      "createSurface": {
+        "surfaceId": "demo-card",
+        "catalogId": "https://a2ui.org/specification/v0_9/basic_catalog.json"
+      }
+    },
+    {
+      "version": "v0.9",
+      "updateComponents": {
+        "surfaceId": "demo-card",
+        "components": [
+          {
+            "id": "root",
+            "component": "Column",
+            "children": [
+              "title",
+              "body",
+              "submit-btn"
+            ]
+          },
+          {
+            "id": "title",
+            "component": "Text",
+            "text": "Book Your Table",
+            "variant": "h1"
+          },
+          {
+            "id": "body",
+            "component": "Text",
+            "text": "Pick a date, then confirm.",
+            "variant": "body"
+          },
+          {
+            "id": "submit-label",
+            "component": "Text",
+            "text": "Confirm"
+          },
+          {
+            "id": "submit-btn",
+            "component": "Button",
+            "child": "submit-label",
+            "primary": true,
+            "action": {
+              "name": "confirm_booking",
+              "context": {
+                "surfaceId": "demo-card"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "version": "v0.9",
+      "updateDataModel": {
+        "surfaceId": "demo-card",
+        "path": "/booking",
+        "value": {
+          "title": "Book Your Table",
+          "confirmed": false
+        }
+      }
+    }
+  ]
+}
