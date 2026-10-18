@@ -4,6 +4,7 @@ from langgraph.graph import StateGraph
 
 from ..models import ModelConfig
 from .agent_factory import AgentState, make_tool_agent
+from .tools.a2ui import render_a2ui_demo, render_network_a2ui
 from .tools.graph_tool import render_graph
 
 
@@ -32,5 +33,5 @@ def make_agent_with_weather_tool(
     """
     if model == "gpt-4o-mini":  # backward compat: bare legacy default
         model = "openai:gpt-4o-mini"
-    tools = [get_weather, render_graph]
+    tools = [get_weather, render_graph, render_a2ui_demo, render_network_a2ui]
     return make_tool_agent(model, tools, checkpointer=checkpointer)
