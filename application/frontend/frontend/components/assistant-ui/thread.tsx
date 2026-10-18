@@ -624,13 +624,13 @@ const ComposerAction: FC<{ canSend: boolean; attachmentsEnabled: boolean }> = ({
 /**
  * Split a transport failure into a short title and backend detail. The
  * transport throws `Status <code>: <body>` where the body is the JSON
- * error payload the backend served (error/message/hint).
+ * error payload the backend served (error/message/hint); mid-stream
+ * provider failures arrive as the same JSON without the Status prefix.
  */
-function formatBackendError(raw: unknown): { title: string; detail: string | null } {
-  const text = raw instanceof Error ? raw.message : String(raw ?? "");
-  const match = text.match(/^Status (\d+):\s*([\s\S]*)$/);
-  if (!match) return { title: "Assistant error", detail: text || null };
-  const [, status, body] = match;
+function parseErrorPayload(body: string): {
+  code: string | null;
+  detail: string;
+} | null {
   try {
     const payload = JSON.parse(body);
     const detailObj = payload?.detail ?? payload;
@@ -638,13 +638,30 @@ function formatBackendError(raw: unknown): { title: string; detail: string | nul
     const message = typeof detailObj?.message === "string" ? detailObj.message : null;
     const hint = typeof detailObj?.hint === "string" ? detailObj.hint : null;
     const detail = [message, hint].filter(Boolean).join("\n") || body;
-    return {
-      title: `Request failed (${status})${code ? ` · ${code}` : ""}`,
-      detail,
-    };
+    return { code, detail };
   } catch {
-    return { title: `Request failed (${status})`, detail: body || null };
+    return null;
   }
+}
+
+function formatBackendError(raw: unknown): { title: string; detail: string | null } {
+  const text = raw instanceof Error ? raw.message : String(raw ?? "");
+  const match = text.match(/^Status (\d+):\s*([\s\S]*)$/);
+  if (!match) {
+    const parsed = parseErrorPayload(text);
+    if (!parsed) return { title: "Assistant error", detail: text || null };
+    return {
+      title: `Assistant error${parsed.code ? ` · ${parsed.code}` : ""}`,
+      detail: parsed.detail,
+    };
+  }
+  const [, status, body] = match;
+  const parsed = parseErrorPayload(body);
+  if (!parsed) return { title: `Request failed (${status})`, detail: body || null };
+  return {
+    title: `Request failed (${status})${parsed.code ? ` · ${parsed.code}` : ""}`,
+    detail: parsed.detail,
+  };
 }
 
 const RunErrorBody: FC<{ error: unknown; debug: boolean }> = ({ error, debug }) => {

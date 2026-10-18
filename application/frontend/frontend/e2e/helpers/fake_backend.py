@@ -55,6 +55,18 @@ def _bomb_factory():
     )
 
 
+class StreamBombFake:
+    """Graph that fails mid-stream, like an exhausted-credits provider call."""
+
+    async def astream(self, *args, **kwargs):
+        raise RuntimeError(
+            "E2E stream bomb: You exceeded your current quota, "
+            "please check your plan and billing details"
+        )
+        if False:  # pragma: no cover - keep async-generator shape
+            yield ()
+
+
 def main() -> None:
     port = int(os.environ.get("E2E_PORT", "18099"))
     web_dir = FRONTEND_DIR / "out"
@@ -64,6 +76,8 @@ def main() -> None:
     )
     if os.environ.get("E2E_BOMB") == "1":
         app = create_app(graph_factory=_bomb_factory, settings=settings, web_dir=web_dir)
+    elif os.environ.get("E2E_STREAM_BOMB") == "1":
+        app = create_app(graph=StreamBombFake(), settings=settings, web_dir=web_dir)
     else:
         app = create_app(graph=EchoFake(), settings=settings, web_dir=web_dir)
     import uvicorn

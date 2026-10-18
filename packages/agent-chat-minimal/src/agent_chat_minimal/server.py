@@ -845,32 +845,52 @@ def _build_app(
                 reducer(controller.state, request)
             )
             input_message = {"messages": list(controller.state["messages"])}
-            async for namespace, event_type, chunk in instance.astream(
-                input_message,
-                config=config,
-                stream_mode=["messages", "updates", "custom"],
-                subgraphs=True,
-            ):
-                if event_type == "custom":
-                    _append_tool_update(controller.state, chunk)
-                    continue
-                if event_type == "updates":
-                    _append_updates_from_graph_chunk(controller.state, chunk)
-                if event_type == "messages":
-                    try:
-                        msg = chunk[0]
-                        if getattr(msg, "type", None) == "tool":
-                            _append_tool_update(
-                                controller.state,
-                                {
-                                    "tool": getattr(msg, "name", None),
-                                    "tool_call_id": getattr(msg, "tool_call_id", None),
-                                    "status": "completed",
-                                },
-                            )
-                    except Exception:
-                        pass
-                append_graph_event(controller.state, namespace, event_type, chunk)
+            try:
+                async for namespace, event_type, chunk in instance.astream(
+                    input_message,
+                    config=config,
+                    stream_mode=["messages", "updates", "custom"],
+                    subgraphs=True,
+                ):
+                    if event_type == "custom":
+                        _append_tool_update(controller.state, chunk)
+                        continue
+                    if event_type == "updates":
+                        _append_updates_from_graph_chunk(controller.state, chunk)
+                    if event_type == "messages":
+                        try:
+                            msg = chunk[0]
+                            if getattr(msg, "type", None) == "tool":
+                                _append_tool_update(
+                                    controller.state,
+                                    {
+                                        "tool": getattr(msg, "name", None),
+                                        "tool_call_id": getattr(msg, "tool_call_id", None),
+                                        "status": "completed",
+                                    },
+                                )
+                        except Exception:
+                            pass
+                    append_graph_event(controller.state, namespace, event_type, chunk)
+            except Exception as exc:
+                # Provider failures (missing key, exhausted credits, rate
+                # limits) surface here mid-stream. Emit a structured,
+                # mode-aware error chunk and end the run cleanly: raising
+                # here would abort the connection, and browsers then report
+                # only "network error", losing the payload. ``create_run``
+                # forwards the chunk to the UI red error box (detail in
+                # dev/SERVER_MODE=debug, generic in prod).
+                from .provider_errors import format_stream_error
+
+                logger.warning(
+                    "assistant stream failed agent=%s thread=%s: %s",
+                    agent_id,
+                    thread_id,
+                    exc,
+                )
+                debug = settings.server_mode == "debug"
+                controller.add_error(format_stream_error(exc, debug=debug))
+                return
 
         stream = create_run(run_callback, state=request.state)
         return create_response(stream)

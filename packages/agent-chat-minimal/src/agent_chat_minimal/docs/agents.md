@@ -79,3 +79,11 @@ the plugin and package in the same environment, then choose it with
 - [ ] Offline test with a fake model (see `tests/test_provider_agnostic.py`).
 - [ ] `minimal-chat-serve --agent shout --check` builds without network creds
       only if the model is fake/local; otherwise expect a credential error.
+
+## Dev Mode
+
+Run with `SERVER_MODE=debug` while developing: mid-stream provider
+failures (missing/invalid key, exhausted credits, rate limits) render as a
+red error box with a stable code (`auth_missing_key`, `auth_invalid_key`,
+`quota_exhausted`, `rate_limited`, `provider_error`) plus a fix hint.
+`prod` shows only a generic message. Details: `provider_errors.py`.

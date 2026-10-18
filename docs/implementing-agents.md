@@ -97,3 +97,24 @@ the portable package.
 
 The package's in-wheel version of this guide is
 [`agents.md`](../packages/agent-chat-minimal/src/agent_chat_minimal/docs/agents.md).
+
+## Dev Mode: Surfacing Provider Errors
+
+`SERVER_MODE=debug` is the agent dev mode. When the model provider fails
+mid-stream (missing/invalid API key, exhausted credits, rate limit), the
+server classifies the exception into a stable code (`auth_missing_key`,
+`auth_invalid_key`, `quota_exhausted`, `rate_limited`, `provider_error`)
+and emits it as an error chunk so the chat shows a red error box with the
+code, what happened, and a fix hint — instead of a hang or a generic
+"network error".
+
+In `prod` (the default) the same failure shows only a generic message:
+provider internals never reach the browser. Server logs always carry the
+full traceback regardless of mode.
+
+```bash
+SERVER_MODE=debug minimal-chat-serve --port 8011
+```
+
+Reference: `agent_chat_minimal/provider_errors.py`,
+`tests/test_provider_errors.py`, `e2e/provider-error.spec.ts`.
