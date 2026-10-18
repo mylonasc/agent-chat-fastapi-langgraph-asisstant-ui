@@ -2,12 +2,20 @@ import { expect, test } from "@playwright/test";
 
 const API_BASE = process.env.API_BASE_URL ?? "http://localhost:8010";
 
-test("web_search and web_rag are available from chat UI", async ({
+/** Bearer credential for the fail-closed tool administration APIs (#36).
+ * Absent/unauthorized backends answer 503/401 and these specs skip. */
+function adminHeaders(): Record<string, string> {
+  const token = process.env.FULL_ADMIN_TOKEN;
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+test("web_search and web_rag are available from chat UI @full-backend", async ({
   page,
   request,
 }) => {
   const overviewRes = await request.get(
-    `${API_BASE}/tools/overview?user_id=default_user`
+    `${API_BASE}/tools/overview?user_id=default_user`,
+    { headers: adminHeaders() }
   );
   test.skip(!overviewRes.ok(), "tools overview endpoint is not reachable");
 
@@ -18,6 +26,7 @@ test("web_search and web_rag are available from chat UI", async ({
 
   await test.step("Prepare RAG index and tool config", async () => {
     const ragConfig = await request.post(`${API_BASE}/tools/web_rag/configuration`, {
+      headers: adminHeaders(),
       data: {
         embedding_provider: "fastembed",
       },
@@ -27,12 +36,14 @@ test("web_search and web_rag are available from chat UI", async ({
     const webSearchConfig = await request.post(
       `${API_BASE}/tools/web_search/configuration`,
       {
+        headers: adminHeaders(),
         data: { max_results: 3 },
       }
     );
     expect(webSearchConfig.ok()).toBeTruthy();
 
     const ragIndexResponse = await request.post(`${API_BASE}/tools/web_rag/tools`, {
+      headers: adminHeaders(),
       data: {
         action: "index",
         url: "https://example.com",
