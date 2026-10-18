@@ -14,6 +14,7 @@ own server through the config's `webServer` entry.
 | `thread-sync.spec.ts` | `e2e/thread-sync.config.ts` | Turn ordering, feedback + thread switching across reload |
 | `backend-base.spec.ts` | `e2e/backend-base.config.ts` | Same-origin backend I/O, titles, archive, starter page |
 | `error-surfacing.spec.ts` | `e2e/error-debug.config.ts` / `e2e/error-prod.config.ts` | Backend-error surfacing per `server_mode` |
+| `a2ui-surface.spec.ts` | `e2e/a2ui-surface.config.ts` | A2UI card render in-thread, Confirm action round-trip, transcript-reload replay (fake backend `E2E_A2UI` mode serves the real `render_a2ui_demo` tool) |
 
 ```bash
 cd application/frontend/frontend
@@ -24,6 +25,7 @@ pnpm playwright test -c e2e/thread-sync.config.ts
 pnpm playwright test -c e2e/backend-base.config.ts
 pnpm playwright test -c e2e/error-debug.config.ts
 pnpm playwright test -c e2e/error-prod.config.ts
+pnpm playwright test -c e2e/a2ui-surface.config.ts
 ```
 
 These suites run in CI on every artifact build
