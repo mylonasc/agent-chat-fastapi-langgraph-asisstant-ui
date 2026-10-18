@@ -43,6 +43,12 @@ class InMemorySessionRepository:
         async with self._lock:
             return self._items.pop(session_id, None) is not None
 
+    async def delete_cascade(self, session_id: str) -> bool:
+        # Session-row removal; the service deletes transcript/feedback
+        # explicitly first, and SQLite's ON DELETE CASCADE (or this row
+        # removal, for memory) guarantees no child outlives the session.
+        return await self.delete(session_id)
+
 
 class InMemoryTranscriptRepository:
     def __init__(self) -> None:
@@ -81,6 +87,28 @@ class InMemoryTranscriptRepository:
                 for key, item in self._items.items()
                 if item.session_id != session_id
             }
+
+    async def trim_session(self, session_id: str, keep: int) -> int:
+        if keep < 1:
+            raise ValueError("keep must be at least 1")
+        async with self._lock:
+            ordered = sorted(
+                (
+                    item
+                    for item in self._items.values()
+                    if item.session_id == session_id
+                ),
+                key=lambda item: item.sequence,
+            )
+            doomed = (
+                {item.id for item in ordered[:-keep]} if len(ordered) > keep else set()
+            )
+            self._items = {
+                key: item
+                for key, item in self._items.items()
+                if item.id not in doomed
+            }
+            return len(doomed)
 
 
 class InMemoryFeedbackRepository:

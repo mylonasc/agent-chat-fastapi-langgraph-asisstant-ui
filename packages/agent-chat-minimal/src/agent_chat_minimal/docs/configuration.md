@@ -22,6 +22,7 @@ CHECKPOINT_DATABASE_PATH=agent-chat-checkpoints.db # separate graph state file
 CHECKPOINT_DATABASE_URL=    # SQLite URL; overrides CHECKPOINT_DATABASE_PATH
 AUTO_MIGRATE=true           # migration policy for a composition root
 PERSISTENCE_ENABLED=false   # explicitly open durable SQLite app/checkpoint stores
+MAX_TRANSCRIPT_MESSAGES=500 # newest stored messages kept per session (trim policy)
 OPENAI_API_KEY=             # credential for the default openai model
 ANTHROPIC_API_KEY=          # credential when MODEL uses anthropic:
 ```
@@ -122,6 +123,32 @@ Missing optional dependencies fail startup with the exact persistence-extra
 install command. The legacy `application/backend/full` remains a development
 implementation and is not made durable by its current data volume; migrate
 deployments to the packaged app.
+
+### Persistence hardening (#65)
+
+- **Trim policy:** `TranscriptService` keeps the newest
+  `MAX_TRANSCRIPT_MESSAGES` (default `500`, matching the legacy trim) stored
+  messages per session and deletes older ones on every append. Set
+  `MAX_TRANSCRIPT_MESSAGES` to bound transcript growth.
+- **Atomic delete:** session deletion removes feedback and transcript rows
+  explicitly, then removes the session row through the
+  `delete_cascade` port, which runs in one lock acquisition (memory) or one
+  SQL transaction relying on `ON DELETE CASCADE` (SQLite). Children can never
+  outlive the session row; a checkpoint-store failure aborts before the
+  application store is touched, so deletion stays retry-safe. The checkpoint
+  store itself is separate by design: without an injected
+  `checkpoint_deleter`, graph state outlives deleted sessions.
+- **Validated bundle:** composition rejects silently mixed stores —
+  durable SQLite repositories with an ephemeral memory checkpointer (or vice
+  versa), and a durable checkpointer with an ephemeral deleter — with a
+  `ValueError` at startup. `checkpointer=None` explicitly opts out of graph
+  memory. Custom adapter types the validator cannot classify are left alone.
+- **Lifespan ownership:** only `create_configured_app` (and the
+  `minimal-chat-serve` entry point built on it) owns adapter lifecycles: it
+  opens migrated SQLite repositories and checkpoints during FastAPI lifespan
+  and disposes them at shutdown. Explicit `create_app(repositories=...,
+  checkpointer=...)` injection remains caller-opened and caller-disposed, for
+  tests and embedding applications.
 
 ```python
 from agent_chat_minimal.adapters.langgraph_sqlite import LangGraphSQLiteCheckpoints

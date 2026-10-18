@@ -161,6 +161,23 @@ def test_settings_from_env(monkeypatch):
     assert settings.auto_migrate is False
 
 
+def test_max_transcript_messages_defaults_and_validation(monkeypatch):
+    import pytest
+
+    monkeypatch.delenv("MAX_TRANSCRIPT_MESSAGES", raising=False)
+    assert Settings.from_env().max_transcript_messages == 500
+    assert Settings().max_transcript_messages == 500
+
+    monkeypatch.setenv("MAX_TRANSCRIPT_MESSAGES", "50")
+    assert Settings.from_env().max_transcript_messages == 50
+
+    with pytest.raises(ValueError, match="max_transcript_messages"):
+        Settings(max_transcript_messages=0)
+    monkeypatch.setenv("MAX_TRANSCRIPT_MESSAGES", "not-a-number")
+    with pytest.raises(ValueError, match="MAX_TRANSCRIPT_MESSAGES must be an integer"):
+        Settings.from_env()
+
+
 def test_server_mode_defaults_and_validation(monkeypatch):
     import pytest
 

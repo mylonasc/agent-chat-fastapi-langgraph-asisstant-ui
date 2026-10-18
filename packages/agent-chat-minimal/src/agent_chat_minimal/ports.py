@@ -27,6 +27,15 @@ class SessionRepository(Protocol):
 
     async def delete(self, session_id: str) -> bool: ...
 
+    async def delete_cascade(self, session_id: str) -> bool:
+        """Delete a session row and its transcript/feedback atomically.
+
+        Bundled adapters implement this over one lock acquisition (memory)
+        or one SQL transaction relying on ``ON DELETE CASCADE`` (SQLite),
+        so a failed deletion never leaves orphaned children behind.
+        """
+        ...
+
 
 class TranscriptRepository(Protocol):
     async def add(self, message: StoredMessage) -> None: ...
@@ -36,6 +45,10 @@ class TranscriptRepository(Protocol):
     async def list_by_session(self, session_id: str) -> list[StoredMessage]: ...
 
     async def delete_by_session(self, session_id: str) -> None: ...
+
+    async def trim_session(self, session_id: str, keep: int) -> int:
+        """Delete all but the newest ``keep`` messages; return removed count."""
+        ...
 
 
 class FeedbackRepository(Protocol):

@@ -120,3 +120,57 @@ class RepositoryContract:
             await self.close_repositories(repos)
 
         asyncio.run(scenario())
+
+    def test_transcript_trim_keeps_newest_messages(self):
+        async def scenario():
+            repos = await self.make_repositories()
+            now = utc_now()
+            await repos.sessions.add(Session("s1", "owner", "Chat", now, now))
+            for index in range(1, 6):
+                await repos.transcripts.add(
+                    StoredMessage(
+                        f"m{index}",
+                        "s1",
+                        index,
+                        MessageRole.USER,
+                        {"text": f"message {index}"},
+                        now,
+                    )
+                )
+            assert await repos.transcripts.trim_session("s1", 10) == 0
+            assert len(await repos.transcripts.list_by_session("s1")) == 5
+            assert await repos.transcripts.trim_session("s1", 2) == 3
+            remaining = await repos.transcripts.list_by_session("s1")
+            assert [message.id for message in remaining] == ["m4", "m5"]
+            with pytest.raises(ValueError, match="keep must be at least 1"):
+                await repos.transcripts.trim_session("s1", 0)
+            await self.close_repositories(repos)
+
+        asyncio.run(scenario())
+
+    def test_session_delete_cascade_removes_the_session_row(self):
+        async def scenario():
+            repos = await self.make_repositories()
+            now = utc_now()
+            await repos.sessions.add(Session("s1", "owner", "Chat", now, now))
+            await repos.transcripts.add(
+                StoredMessage(
+                    "m1", "s1", 1, MessageRole.USER, {"text": "one"}, now
+                )
+            )
+            await repos.feedback.upsert(
+                Feedback(
+                    "f1", "s1", "m1", "owner", FeedbackRating.POSITIVE, now, now
+                )
+            )
+            # Row-level cascade: the session row is gone and the call reports
+            # whether it existed. Cross-repository child cleanup is the
+            # service's job (covered by the service and compatibility
+            # suites); the SQLite adapter additionally cascades children
+            # through foreign keys (see the SQLite cascade test).
+            assert await repos.sessions.delete_cascade("s1") is True
+            assert await repos.sessions.get("s1") is None
+            assert await repos.sessions.delete_cascade("s1") is False
+            await self.close_repositories(repos)
+
+        asyncio.run(scenario())
