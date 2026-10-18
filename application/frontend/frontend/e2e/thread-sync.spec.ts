@@ -92,7 +92,7 @@ async function orderedRoles(page: Page): Promise<string[]> {
   return out;
 }
 
-test("two turns render in order and survive reload without sync errors", async ({
+test("two turns render in order and survive reload without sync errors @packaged", async ({
   page,
 }) => {
   const bad = trackResponses(page);
@@ -122,7 +122,7 @@ test("two turns render in order and survive reload without sync errors", async (
   expect(bad).toEqual([]);
 });
 
-test("feedback persists across reload", async ({ page }) => {
+test("feedback persists across reload @packaged", async ({ page }) => {
   const bad = trackResponses(page);
   await freshPage(page);
 
@@ -144,7 +144,7 @@ test("feedback persists across reload", async ({ page }) => {
   expect(bad).toEqual([]);
 });
 
-test("switching threads preserves each transcript", async ({ page }) => {
+test("switching threads preserves each transcript @packaged", async ({ page }) => {
   const bad = trackResponses(page);
   await freshPage(page);
 

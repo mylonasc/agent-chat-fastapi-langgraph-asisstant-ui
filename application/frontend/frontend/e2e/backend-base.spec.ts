@@ -50,7 +50,7 @@ async function apiHeaders(page: Page): Promise<Record<string, string>> {
   return { "x-agent-chat-subject": String(subject) };
 }
 
-test("all backend I/O targets the deployment backend, never the fallback base", async ({
+test("all backend I/O targets the deployment backend, never the fallback base @packaged", async ({
   page,
 }) => {
   const guard = await guardFallbackBase(page);
@@ -73,7 +73,7 @@ test("all backend I/O targets the deployment backend, never the fallback base", 
   expect(bad).toEqual([]);
 });
 
-test("chat title updates when the first response arrives", async ({ page }) => {
+test("chat title updates when the first response arrives @packaged", async ({ page }) => {
   await guardFallbackBase(page);
   await page.goto("/");
   await expect(page.locator(".aui-starter-page")).toBeVisible();
@@ -89,7 +89,7 @@ test("chat title updates when the first response arrives", async ({ page }) => {
   ]);
 });
 
-test("archiving removes the thread from the list, permanently", async ({
+test("archiving removes the thread from the list, permanently @packaged", async ({
   page,
 }) => {
   await guardFallbackBase(page);
@@ -150,7 +150,7 @@ test("archiving removes the thread from the list, permanently", async ({
   expect(await sidebarTitles(page)).toEqual(["New Chat", "Thread ALPHA"]);
 });
 
-test("starter page names the agent and starts a chat from a suggestion", async ({
+test("starter page names the agent and starts a chat from a suggestion @packaged", async ({
   page,
 }) => {
   await guardFallbackBase(page);

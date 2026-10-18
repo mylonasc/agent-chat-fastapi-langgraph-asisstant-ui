@@ -41,3 +41,39 @@ jobs:
         with:
           name: agent-chat-minimal-dist
           path: packages/agent-chat-minimal/dist/
+
+  e2e-packaged:
+    name: Packaged-app browser e2e (@packaged)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.20.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: application/frontend/frontend/pnpm-lock.yaml
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: astral-sh/setup-uv@v5
+      - name: Install frontend dependencies
+        run: pnpm --dir application/frontend/frontend install --frozen-lockfile
+      - name: Install Playwright chromium
+        run: pnpm --dir application/frontend/frontend exec playwright install --with-deps chromium
+      - name: Build static UI served by the e2e fake backend
+        run: pnpm --dir application/frontend/frontend build
+      - name: Sync package test environment for the e2e fake backend
+        run: uv sync --project packages/agent-chat-minimal --extra test
+      - name: Run @packaged suites (self-contained, no credentials)
+        working-directory: application/frontend/frontend
+        env:
+          CI: "true"
+          E2E_PYTHON: ${{ github.workspace }}/packages/agent-chat-minimal/.venv/bin/python
+        run: |
+          pnpm playwright test -c e2e/thread-sync.config.ts
+          pnpm playwright test -c e2e/backend-base.config.ts
+          pnpm playwright test -c e2e/error-debug.config.ts
+          pnpm playwright test -c e2e/error-prod.config.ts

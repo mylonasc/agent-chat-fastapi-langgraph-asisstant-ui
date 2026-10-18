@@ -8,7 +8,7 @@
  */
 import { expect, test } from "@playwright/test";
 
-test("failed send surfaces the backend error according to server_mode", async ({
+test("failed send surfaces the backend error according to server_mode @packaged", async ({
   page,
 }) => {
   const pageErrors: string[] = [];

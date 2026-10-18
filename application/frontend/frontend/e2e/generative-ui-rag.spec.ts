@@ -8,9 +8,17 @@ import {
 
 const API_BASE = process.env.API_BASE_URL ?? "http://localhost:8010";
 
+/** Bearer credential for the fail-closed tool administration APIs (#36).
+ * Absent/unauthorized backends answer 503/401 and these specs skip. */
+function adminHeaders(): Record<string, string> {
+  const token = process.env.FULL_ADMIN_TOKEN;
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 async function getRuntimeFlags(request: APIRequestContext) {
   const overviewRes = await request.get(
-    `${API_BASE}/tools/overview?user_id=default_user`
+    `${API_BASE}/tools/overview?user_id=default_user`,
+    { headers: adminHeaders() }
   );
   if (!overviewRes.ok()) return null;
   const overview = await overviewRes.json();
@@ -56,7 +64,7 @@ async function openWidget(widget: Locator) {
   await expect(overviewTab).toBeVisible();
 }
 
-test("web_search generative widget shows indexing sources and counters", async ({
+test("web_search generative widget shows indexing sources and counters @full-backend", async ({
   page,
   request,
 }) => {
@@ -66,6 +74,7 @@ test("web_search generative widget shows indexing sources and counters", async (
   test.skip(!runtime.serper_configured, "SERPER_API_KEY is not configured");
 
   await request.post(`${API_BASE}/tools/web_search/configuration`, {
+    headers: adminHeaders(),
     data: { max_results: 3 },
   });
 
@@ -103,7 +112,7 @@ test("web_search generative widget shows indexing sources and counters", async (
   await expect(widget.getByText(/https?:\/\//i).first()).toBeVisible();
 });
 
-test("web_rag generative widget shows retrieved chunks and sources", async ({
+test("web_rag generative widget shows retrieved chunks and sources @full-backend", async ({
   page,
   request,
 }) => {
@@ -112,6 +121,7 @@ test("web_rag generative widget shows retrieved chunks and sources", async ({
   test.skip(!runtime.openai_configured, "OPENAI_API_KEY is not configured");
 
   const indexRes = await request.post(`${API_BASE}/tools/web_rag/tools`, {
+    headers: adminHeaders(),
     data: {
       action: "index",
       user_id: "default_user",
