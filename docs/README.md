@@ -1,5 +1,19 @@
 # Documentation Map
 
+## Fastest Local Ollama Route
+
+Read the [Ollama quick start](../packages/agent-chat-minimal/src/agent_chat_minimal/docs/ollama-quickstart.md)
+for the current starter-based workflow (no custom agent code for local defaults).
+It includes Python 3.12 selection, installing the Ollama extra, pulling a
+tool-capable model, endpoint customization, SQLite directories, and live
+streaming/context/history checks. The tool-free built-in chat shortcut in
+[issue #70](https://github.com/mylonasc/agent-chat-fastapi-langgraph-asisstant-ui/issues/70)
+is a proposal, not an available command on this branch.
+
+Agents using the installed enhanced package can run
+`minimal-chat-docs show ollama-quickstart` or discover it through
+`minimal-chat-setup describe --json`.
+
 ## Architecture
 
 The repository has a canonical portable application and two split development

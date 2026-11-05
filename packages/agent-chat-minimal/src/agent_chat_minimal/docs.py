@@ -8,6 +8,8 @@ docs.show("quickstart")
 ```
 """
 
+from __future__ import annotations
+
 GUIDES = (
     "index",
     "quickstart",
@@ -20,6 +22,8 @@ GUIDES = (
     "runtime-config",
     "setup",
     "starter",
+    "agent-onboarding",
+    "ollama-quickstart",
 )
 
 
@@ -45,3 +49,41 @@ def get(name: str) -> str:
 def show(name: str) -> None:
     """Print a guide to stdout."""
     print(get(name))
+
+
+def catalog() -> list[dict[str, str]]:
+    """Return guide names, titles, and summaries for agent discovery."""
+    entries = []
+    for name in GUIDES:
+        text = get(name)
+        title, _, rest = text.partition("\n")
+        summary = rest.strip().split("\n\n", 1)[0].replace("\n", " ")
+        entries.append({"name": name, "title": title.lstrip("# "), "summary": summary})
+    return entries
+
+
+def search(query: str, *, limit: int = 10) -> list[dict[str, str | int]]:
+    """Search literal text case-insensitively; return guide/line/heading context.
+
+    Results follow guide order, then line order. No regex evaluation, network,
+    external index, or optional dependency is needed.
+    """
+    if not query.strip():
+        raise ValueError("search query must not be empty")
+    if not isinstance(limit, int) or isinstance(limit, bool) or limit < 1:
+        raise ValueError("limit must be a positive integer")
+    needle = query.strip().casefold()
+    matches = []
+    for name in GUIDES:
+        heading = ""
+        in_code = False
+        for number, line in enumerate(get(name).splitlines(), 1):
+            if line.startswith("```"):
+                in_code = not in_code
+            if not in_code and line.startswith("#"):
+                heading = line.lstrip("# ")
+            if needle in line.casefold():
+                matches.append({"guide": name, "line": number, "heading": heading, "excerpt": line.strip()})
+                if len(matches) >= limit:
+                    return matches
+    return matches

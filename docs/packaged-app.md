@@ -1,5 +1,10 @@
 # Serve The Packaged App
 
+**Want local Ollama chat quickly?** Follow the
+[Ollama starter quick start](../packages/agent-chat-minimal/src/agent_chat_minimal/docs/ollama-quickstart.md).
+It explains the working no-custom-code route and distinguishes it from the
+tool-free `--agent chat` enhancement proposed in issue #70.
+
 `agent-chat-fastapi-langgraph-assistant-ui` is the canonical portable non-RAG
 application. It serves FastAPI, the Assistant UI static export, and agents from
 one process and one origin. The default port is 8011.

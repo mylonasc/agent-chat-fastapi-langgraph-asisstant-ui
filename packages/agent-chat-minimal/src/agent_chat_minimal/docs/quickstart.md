@@ -1,5 +1,9 @@
 # Quickstart
 
+For a local Ollama website without API keys or custom agent code, start with
+[ollama-quickstart.md](ollama-quickstart.md). It uses the existing tool-enabled
+starter and explains the tool-free shortcut still proposed in issue #70.
+
 ## Install
 
 ```bash
@@ -40,6 +44,8 @@ For the sidebar with previous chats, set `UI_PRESET=full` and open
 
 ## Next steps
 
+- Coding agent? → [agent-onboarding.md](agent-onboarding.md).
+- Generate an editable chat website? → [starter.md](starter.md).
 - Custom agent? → [agents.md](agents.md).
 - Another model provider? → [providers.md](providers.md).
 - Env vars and flags? → [configuration.md](configuration.md).
