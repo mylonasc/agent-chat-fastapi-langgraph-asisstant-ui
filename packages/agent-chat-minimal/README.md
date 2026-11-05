@@ -45,6 +45,22 @@ unless `MINIMAL_WEB_DIR` points to a static export.
 
 ## Built-In Documentation
 
+Coding agents can start with these offline commands:
+
+```bash
+minimal-chat-setup describe --json
+minimal-chat-docs show ollama-quickstart  # local model → baseline site
+minimal-chat-docs show agent-onboarding
+minimal-chat-docs search "persistence" --json
+minimal-chat-setup doctor --provider openai --preset full --json
+minimal-chat-init ./my-site --preset full --dry-run --json
+minimal-chat-init ./my-site --preset full --json
+```
+
+Generation produces an editable chat site with `AGENTS.md`, configuration,
+offline tests, and machine-readable next steps. It does not install dependencies,
+provision credentials, or launch services. See the bundled `starter` guide.
+
 The distribution includes these Markdown guides and exposes them without
 unpacking the wheel:
 
@@ -57,6 +73,9 @@ docs.show("agents")
 
 | Guide | Purpose |
 | --- | --- |
+| `index` | Complete guide index |
+| `agent-onboarding` | Agent discovery and baseline website workflow |
+| `ollama-quickstart` | Fast local-model setup, endpoints, SQLite, and live checks |
 | `quickstart` | Install, run, and make the first request |
 | `agents` | Implement, embed, and publish agents |
 | `providers` | Model specs and provider dependencies |
@@ -65,6 +84,8 @@ docs.show("agents")
 | `transport` | Assistant streaming transport boundary |
 | `persistence` | Durable repositories and checkpoints |
 | `runtime-config` | Runtime UI configuration and capabilities |
+| `setup` | Setup contracts, provider metadata, and diagnostics |
+| `starter` | Generate and run an editable project |
 
 Run the package tests and artifact smoke test from the repository root:
 

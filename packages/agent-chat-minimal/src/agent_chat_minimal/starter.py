@@ -24,7 +24,6 @@ from .setup import (
     TEMPLATE_VERSION,
     GenerationPlan,
     StarterOptions,
-    diagnose_options,
     exit_status_for,
     get_provider_descriptor,
     normalize_package_name,
@@ -72,6 +71,7 @@ def _expected_files(package: str) -> tuple[str, ...]:
             [
                 ".env.example",
                 ".gitignore",
+                "AGENTS.md",
                 "README.md",
                 "agent_chat.yaml",
                 "pyproject.toml",
@@ -118,6 +118,7 @@ def render_starter_files(options: StarterOptions) -> dict[str, str]:
         ".env.example": _render_env_example(options),
         ".gitignore": _render_gitignore(),
         "README.md": _render_readme(options),
+        "AGENTS.md": _render_agent_instructions(options),
         "starter-manifest.json": _render_manifest(options),
         f"src/{package}/__init__.py": _render_package_init(options),
         f"src/{package}/agents/__init__.py": _render_agents_init(),
@@ -284,7 +285,8 @@ def _render_env_example(options: StarterOptions) -> str:
         descriptor.credential_env if descriptor else None
     )
     lines = [
-        "# Copy to .env and fill in values. Generation never stores credentials.",
+        "# Credential placeholders only; export values in the server environment.",
+        "# The server does not automatically load .env files.",
         "# AGENT_CHAT_CONFIG=./agent_chat.yaml",
     ]
     if credential:
@@ -320,7 +322,9 @@ def _render_readme(options: StarterOptions) -> str:
     cred_setup = (
         f"export {credential}=...  # required for {options.provider}:{options.model}"
         if credential
-        else "# No API key needed for this provider configuration."
+        else "# Ensure Ollama is running and the model is installed."
+        if options.provider == "ollama"
+        else "# Export the credential(s) required by your selected upstream provider."
     )
     return f"""# {project}
 
@@ -332,8 +336,9 @@ persistence, and UI come from the installed
 ## Install
 
 ```bash
-pip install -e .            # base install
-pip install -e .[test]      # offline tests
+python -m venv .venv
+source .venv/bin/activate   # Windows: .venv\\Scripts\\activate
+python -m pip install -e '.[test]'
 ```
 
 Provider extras are already included in `pyproject.toml`
@@ -346,18 +351,20 @@ Provider extras are already included in `pyproject.toml`
 ```
 
 Only environment placeholders ship with the project; resolved credentials are
-never written to `agent_chat.yaml`.
+never written to `agent_chat.yaml`. The server does not automatically load
+`.env`; export variables explicitly or use your deployment's secret manager.
 
 ## Run
 
 ```bash
 {project}-serve --config ./agent_chat.yaml
 # ...or from the project directory, `--config` is optional: the server uses
-# `./agent_chat.yaml` when present (`AGENT_CHAT_CONFIG` overrides both).
+# `AGENT_CHAT_CONFIG` if set, otherwise `./agent_chat.yaml` when present.
 ```
 
 Open the printed address (same-origin UI, no rebuild needed). Switch presets
 with `ui_preset: minimal|full` in `agent_chat.yaml`, then restart.
+The default URL is <http://localhost:8011/>; `GET /health` checks server health.
 
 ## Check
 
@@ -384,7 +391,80 @@ without tools.
   override (no copied assets, no absolute paths).
 - `agent_chat.yaml` — versioned configuration; paths resolve relative to
   this file, so the project stays relocatable.
+- `AGENTS.md` — instructions and offline documentation commands for coding agents.
+
+## Library documentation
+
+```bash
+minimal-chat-docs show agent-onboarding
+minimal-chat-docs search "persistence" --json
+minimal-chat-setup describe --json
+```
+`GET /docs` is the API reference, not the library's setup guides.
 """
+
+
+def _render_agent_instructions(options: StarterOptions) -> str:
+    return f"""# Coding agent instructions for {options.project_name}
+
+This is a Python chat website using the installed
+`agent-chat-fastapi-langgraph-assistant-ui` library. The UI is bundled; do not
+create a Next.js project or install Node.js just to serve this application.
+
+## Discover before editing
+
+- `minimal-chat-setup describe --json`: provider metadata, documentation catalog,
+  configuration schema command, and onboarding workflow.
+- `minimal-chat-docs show agents`: graph implementation and extension contracts.
+- `minimal-chat-docs show configuration`: runtime configuration and presentation.
+- `minimal-chat-docs search '<literal text>' --json`: guide/line/heading results.
+- Python equivalent: `from agent_chat_minimal import docs; docs.get('starter')`.
+
+## Project ownership
+
+- Edit `src/{options.package_name}/agents/helper.py` for agent behavior/tools.
+- Edit `agent_chat.yaml` for presentation, questions, model, and storage.
+- Keep `src/{options.package_name}/server.py` a thin library composition.
+- No copied UI assets or absolute site-packages paths are needed.
+- Generation refuses non-empty destinations. Do not regenerate over user edits.
+
+## Install, verify, and serve
+
+From the project root in an activated virtual environment:
+
+```bash
+python -m pip install -e '.[test]'
+python -m pytest
+{options.project_name}-serve --config ./agent_chat.yaml --check
+{options.project_name}-serve --config ./agent_chat.yaml
+```
+
+Tests use a fake model and need no credentials or network. `--check` constructs
+the configured graph and may require exported credentials; it does not prove
+model connectivity or tool support. Open http://localhost:8011/ and check
+http://localhost:8011/health. `/docs` is Swagger API documentation.
+
+Never put credential values in tracked files, command output, or reports.
+`.env.example` lists names only; `.env` is not automatically loaded. Dependency
+installation and starting a real model/server are explicit operator actions.
+The full preset is a threaded chat UI, not the separate RAG demo backend.
+"""
+
+
+def starter_next_steps(options: StarterOptions) -> list[dict[str, Any]]:
+    """Commands as argv arrays, relative to the generated project directory.
+
+    Do not execute these automatically: installation may use the network and
+    serving starts a long-running process. No credential values are included.
+    """
+    descriptor = get_provider_descriptor(options.provider)
+    credential_env = options.credential_env or (descriptor.credential_env if descriptor else None)
+    return [
+        {"id": "install", "argv": ["python", "-m", "pip", "install", "-e", ".[test]"], "description": "In an activated virtual environment; may download dependencies."},
+        {"id": "test", "argv": ["python", "-m", "pytest"], "description": "Offline fake-model tests; no credentials required."},
+        {"id": "check", "argv": [f"{options.project_name}-serve", "--config", "./agent_chat.yaml", "--check"], "credential_env": credential_env, "description": "Construct the graph; connectivity and tool support are not tested."},
+        {"id": "serve", "argv": [f"{options.project_name}-serve", "--config", "./agent_chat.yaml"], "credential_env": credential_env, "description": "Start the server; open http://localhost:8011/ (health: /health)."},
+    ]
 
 
 def _render_manifest(options: StarterOptions) -> str:
@@ -400,6 +480,7 @@ def _render_manifest(options: StarterOptions) -> str:
         "persistence": options.persistence,
         "expected_files": list(_expected_files(options.package_name)),
         "required_extras": list(_required_extras(options)),
+        "next_steps": starter_next_steps(options),
     }
     return json.dumps(manifest, indent=2, sort_keys=True) + "\n"
 
@@ -665,6 +746,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--base-url", default=None)
     parser.add_argument("--credential-env", default=None)
+    parser.add_argument("--json", action="store_true", help="Emit structured results and errors on stdout")
     parser.add_argument(
         "--dry-run",
         action="store_true",
@@ -717,29 +799,25 @@ def main(argv=None) -> int:
     args = parser.parse_args(argv)
     try:
         options = options_from_args(args)
-    except StarterError as exc:
-        print(json.dumps({"ok": False, "error": str(exc), "code": exc.code}, indent=2), file=sys.stderr)
-        return exc.exit_status
-    if args.dry_run:
-        try:
+        if args.dry_run:
             plan = plan_starter(options, args.directory)
-        except StarterError as exc:
-            print(
-                json.dumps({"ok": False, "error": str(exc), "code": exc.code}, indent=2),
-                file=sys.stderr,
-            )
-            return exc.exit_status
-        print(json.dumps({"ok": True, "plan": plan.to_dict()}, indent=2, sort_keys=True))
-        return 0
-    report = diagnose_options(options)
-    if not report.valid:
-        print(report.to_json(), file=sys.stderr)
-        return exit_status_for(report.diagnostics)
-    try:
-        plan = generate_starter(options, args.directory)
+        else:
+            plan = generate_starter(options, args.directory)
     except StarterError as exc:
-        print(json.dumps({"ok": False, "error": str(exc), "code": exc.code}, indent=2), file=sys.stderr)
+        print(json.dumps({
+            "contract_version": SETUP_CONTRACT_VERSION,
+            "ok": False, "error": str(exc), "code": exc.code,
+            "diagnostics": [item.to_dict() for item in exc.diagnostics],
+        }, indent=2), file=sys.stdout if args.json else sys.stderr)
         return exc.exit_status
+    if args.dry_run or args.json:
+        print(json.dumps({
+            "contract_version": SETUP_CONTRACT_VERSION,
+            "ok": True, "dry_run": args.dry_run,
+            "plan": plan.to_dict(), "next_steps_cwd": plan.target_dir,
+            "next_steps": starter_next_steps(options),
+        }, indent=2, sort_keys=True))
+        return 0
     print(f"created {plan.project_name} in {plan.target_dir}")
     for relative in plan.expected_files:
         print(f"  {relative}")
@@ -754,4 +832,5 @@ __all__ = [
     "options_from_args",
     "plan_starter",
     "render_starter_files",
+    "starter_next_steps",
 ]

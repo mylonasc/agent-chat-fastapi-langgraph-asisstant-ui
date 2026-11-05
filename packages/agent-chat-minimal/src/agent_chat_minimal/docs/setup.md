@@ -1,4 +1,4 @@
-# Setup engine and future TUI
+# Setup discovery and diagnostics
 
 One offline setup engine serves scripts, the non-interactive initializer, and
 a future optional TUI. Import it from `agent_chat_minimal.setup`:
@@ -12,6 +12,23 @@ print(report.to_json())
 ```
 
 ## Contracts
+
+For command-line automation (no Python snippet required):
+
+```bash
+minimal-chat-setup describe --json
+minimal-chat-setup schema --json
+minimal-chat-setup doctor --provider openai --preset full --json
+```
+
+`describe` extends the setup metadata with the documentation catalog and command
+argv arrays. `doctor` separately checks local dependency versions, credential
+presence, and bundled UI availability; it does not install anything or test
+connectivity. `valid` describes option validation; `ready` describes the checked
+local prerequisites. Reports never contain credential values. These commands
+also work as `python -m agent_chat_minimal.onboarding ...`.
+
+See [agent-onboarding.md](agent-onboarding.md) for a complete baseline-site flow.
 
 - `StarterOptions`: versioned serializable inputs (project/package names,
   provider, model, preset, persistence, endpoint, credential env reference,
@@ -39,9 +56,9 @@ print(report.to_json())
 
 Validation never installs dependencies, downloads models, resolves
 credential values, or makes network calls. Reports always carry
-`connectivity: "not_tested"`. Explicit live checks (for example
-`minimal-chat-serve --check` with real credentials) are separate and
-opt-in. Diagnostics serialize to JSON without credential values; only
+`connectivity: "not_tested"`. `minimal-chat-serve --check` constructs the graph
+and may require credentials, but is not a connectivity test. Actual provider
+requests must be made explicitly. Diagnostics serialize to JSON without credential values; only
 environment variable names are stored.
 
 The base package has no TUI dependency. A future TUI presents these

@@ -33,6 +33,32 @@ durable SQLite storage, UI presets, configuration, and container use.
 
 ## Documentation
 
+### For Coding Agents
+
+**Local Ollama chat:** start with the
+[copy-paste Ollama quick start](packages/agent-chat-minimal/src/agent_chat_minimal/docs/ollama-quickstart.md).
+It covers Python 3.12, model availability, the current no-custom-code starter,
+endpoint configuration, durable history, and live checks. Issue #70's tool-free
+`--agent chat` shortcut is not implemented on this branch.
+
+The installed package provides offline discovery, searchable guides, and a safe
+project initializer—no repository checkout or frontend build is needed:
+
+```bash
+minimal-chat-setup describe --json
+minimal-chat-docs show agent-onboarding
+minimal-chat-docs search "provider" --json
+minimal-chat-init ./my-site --preset full --dry-run --json
+minimal-chat-init ./my-site --preset full --json
+```
+
+Generated projects include `AGENTS.md`, editable agent code, configuration,
+offline tests, and structured next steps. Installation, credentials, and starting
+services remain explicit actions. `/docs` is the running server's API reference;
+`minimal-chat-docs` reads the library guides bundled with your installed version.
+
+### Guides
+
 Read these in order for the shortest path through the repository:
 
 - [Documentation map](docs/README.md): architecture and guide index.

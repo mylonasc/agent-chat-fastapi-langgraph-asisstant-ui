@@ -10,6 +10,8 @@ minimal-chat-serve --port 8011
 
 Guides (shipped inside the wheel under `agent_chat_minimal/docs/`):
 
+- [agent-onboarding.md](agent-onboarding.md) — offline agent discovery and baseline site workflow.
+- [ollama-quickstart.md](ollama-quickstart.md) — fastest current local-model site route, endpoints, and durable history.
 - [quickstart.md](quickstart.md) — install, serve, first chat (2 minutes).
 - [agents.md](agents.md) — implement and serve your own agent.
 - [providers.md](providers.md) — model specs for OpenAI, Anthropic, Ollama, ….
@@ -18,6 +20,8 @@ Guides (shipped inside the wheel under `agent_chat_minimal/docs/`):
 - [transport.md](transport.md) — Assistant transport protocol boundary.
 - [persistence.md](persistence.md) — durable repositories and checkpoints.
 - [runtime-config.md](runtime-config.md) — runtime UI capabilities.
+- [setup.md](setup.md) — machine-readable setup contracts and diagnostics.
+- [starter.md](starter.md) — generate, test, and serve an editable project.
 - [index.md](index.md) — this file: architecture overview.
 
 Discoverability: every guide is readable at runtime without unpacking the wheel:
@@ -30,3 +34,11 @@ docs.show("threads") # prints to stdout
 ```
 
 FastAPI also serves interactive Swagger UI at `GET /docs` when the server runs.
+That is the API reference, not these library guides. Use the offline CLI:
+
+```bash
+minimal-chat-docs list --json
+minimal-chat-docs show agent-onboarding
+minimal-chat-docs search "provider" --json
+minimal-chat-setup describe --json
+```

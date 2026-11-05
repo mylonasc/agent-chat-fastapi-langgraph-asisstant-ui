@@ -4,8 +4,8 @@ This module is the shared setup engine used by scripts, the non-interactive
 initializer (AGS-04), and a future optional TUI. It performs offline
 validation only: it never installs dependencies, downloads models, makes
 network calls, or resolves credential values. Connectivity is always reported
-as ``not_tested`` here; explicit opt-in live probes live outside this module
-(for example ``minimal-chat-serve --check`` with real credentials).
+as ``not_tested`` here. ``minimal-chat-serve --check`` constructs the graph,
+but only an explicit provider request can test real connectivity.
 
 Template-backed plan/render/write implementation belongs to AGS-04, which
 builds on the :class:`StarterOptions` and :class:`GenerationPlan` contracts
@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Any, Literal, Protocol
 
 SETUP_CONTRACT_VERSION = 1
-TEMPLATE_VERSION = 1
+TEMPLATE_VERSION = 2
 
 EXIT_OK = 0
 EXIT_INVALID = 2
