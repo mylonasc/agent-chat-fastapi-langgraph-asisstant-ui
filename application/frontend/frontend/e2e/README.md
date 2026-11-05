@@ -31,13 +31,21 @@ E2E_PYTHON=/absolute/path/to/python pnpm playwright test -c e2e/chat-actions.con
 These suites run in CI on every artifact build
 (`.github/workflows/artifact-workflow.yml`, `e2e-packaged` job).
 
-The new `chat-actions` suite is a standalone reproduction suite, not yet added to
-CI. It intentionally fails until #71 is fixed (no `skip`/`fixme`/`xfail`): Refresh
+The `chat-actions` suite is a standalone regression suite, not yet added to
+CI. It asserts the expected behavior for #71 (no `skip`/`fixme`/`xfail`): Refresh
 must issue a new generation request, Edit must open a prefilled editor and allow
 an alternative conversation, and ordinary sends must not create a phantom `2/2`
 branch. It uses the existing fake backend, so no Ollama/model credentials are
 needed. Its Python interpreter needs the package dependencies and `httpx`.
 Override its default port (18102) with `E2E_PORT` if necessary.
+
+It also verifies alternatives survive reload and editing an earlier turn sends
+only the selected history while retaining the original continuation. The full
+preset uses `app/packaged-chat-adapter.ts` with Assistant UI's LocalRuntime for
+branch-aware edit/reload. Parent links are stored in transcript custom metadata;
+older transcripts without links are still imported chronologically. See
+`patches/README.md` for the pinned dependency compatibility patch this needs.
+The legacy minimal-preset transport is unchanged.
 
 Failure traces are retained under `test-results/`. The branch test attaches the
 observed user branch labels as JSON and checks both transient DOM mutations and

@@ -78,6 +78,18 @@ test("recompute regenerates the assistant response for the same prompt @packaged
   await expect(assistant).toContainText("reply-1");
   await expect(assistant).not.toHaveAttribute("data-message-id", originalId!);
   await expect(page.locator('[data-role="user"]')).toHaveCount(1);
+  await waitForStoredCount(page, 3);
+  await page.reload();
+  await expect(page.locator('[data-role="user"]')).toHaveCount(1);
+  await expect(page.locator('[data-role="assistant"]')).toHaveCount(1);
+  const previous = page
+    .locator('[data-role="assistant"] .aui-branch-picker-root')
+    .getByRole("button", { name: "Previous", exact: true });
+  await previous.click();
+  await expect(page.locator('[data-role="assistant"]')).toHaveAttribute(
+    "data-message-id",
+    originalId!,
+  );
 });
 
 test("edit resubmits a sent user message as an alternative conversation @packaged", async ({
@@ -121,6 +133,46 @@ test("edit resubmits a sent user message as an alternative conversation @package
     .click();
   await expect(page.locator('[data-role="user"]').first()).toContainText(
     "original prompt",
+  );
+  await waitForStoredCount(page, 4);
+  await page.reload();
+  await expect(page.locator('[data-role="user"]')).toHaveCount(1);
+  await page
+    .locator(".aui-user-branch-picker")
+    .getByRole("button", { name: "Previous", exact: true })
+    .click();
+  await expect(page.locator('[data-role="user"]')).toContainText(
+    "original prompt",
+  );
+});
+
+test("editing an earlier turn truncates inference history but retains its original continuation @packaged", async ({
+  page,
+}) => {
+  await send(page, "first prompt", 1);
+  await send(page, "second prompt", 2);
+  const user = page.locator('[data-role="user"]').first();
+  await user.hover();
+  await user.getByRole("button", { name: "Edit", exact: true }).click();
+  await page
+    .locator(".aui-edit-composer-input")
+    .fill("replacement first prompt");
+  await page
+    .getByRole("button", { name: "Update message", exact: true })
+    .click();
+  await expect(page.locator('[data-role="assistant"]')).toHaveCount(1);
+  await expect(page.locator('[data-role="assistant"]')).toContainText(
+    "reply-1",
+  );
+  await page
+    .locator(".aui-user-branch-picker")
+    .getByRole("button", { name: "Previous", exact: true })
+    .click();
+  await expect(page.locator('[data-role="user"]').nth(1)).toContainText(
+    "second prompt",
+  );
+  await expect(page.locator('[data-role="assistant"]').nth(1)).toContainText(
+    "reply-2",
   );
 });
 
@@ -172,5 +224,8 @@ test("ordinary sends do not create a phantom 2/2 branch on the first message @pa
   await expect(page.locator('[data-role="assistant"]').nth(1)).toContainText(
     "reply-2",
   );
+  await expect(page.locator(".aui-branch-picker-state")).toHaveCount(0);
+  await send(page, "third prompt after reload", 3);
+  await waitForStoredCount(page, 6);
   await expect(page.locator(".aui-branch-picker-state")).toHaveCount(0);
 });
