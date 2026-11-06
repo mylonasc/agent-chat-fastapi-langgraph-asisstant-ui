@@ -82,6 +82,30 @@ entries like the full backend.
 
 ## Persistence notes
 
+### Selected-branch inference history
+
+When `state.messages` is present in `POST /assistant`, it is the **complete
+selected branch** before applying request commands, not a checkpoint delta.
+An explicit `[]` means no prior messages (for example, editing the first turn).
+Include only the unchanged prefix and the edited prompt; for regeneration,
+omit the answer being regenerated and any abandoned continuation.
+
+For compiled LangGraph state graphs, the server normalizes reducer-backed
+messages with the graph's own reducer and supplies a LangGraph `Overwrite`
+input. Thus `add_messages` cannot merge omitted checkpoint messages back into
+the model context. This changes only the current message channel: historical
+checkpoints, other graph-state channels, and stored transcript alternatives
+are not deleted. Resuming either branch sends that branch's complete history,
+including after a SQLite restart. Other graph-state channels are **not**
+rewound to an earlier checkpoint by a message edit.
+
+For backward compatibility, command-only clients that **omit** `state.messages`
+keep the graph's ordinary delta/reducer behavior. Custom non-LangGraph objects
+implementing the minimal `ChatGraph.astream` protocol still receive a plain
+message list and own any internal checkpoint reconciliation themselves.
+
+### Storage
+
 - Default storage is in-memory (repositories + `MemorySaver` checkpointer):
   restarts lose it — identical to the full backend's default. Restart-safe
   backends plug in via `create_app(repositories=<SQLiteRepositories>,

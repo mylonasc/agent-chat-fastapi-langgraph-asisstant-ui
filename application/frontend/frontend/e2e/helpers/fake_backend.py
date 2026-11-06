@@ -16,28 +16,36 @@ PACKAGE_SRC = REPO_ROOT / "packages" / "agent-chat-minimal" / "src"
 assert PACKAGE_SRC.is_dir(), f"package source not found at {PACKAGE_SRC}"
 sys.path.insert(0, str(PACKAGE_SRC))
 
-from langchain_core.messages.ai import AIMessageChunk  # noqa: E402
+from langchain_core.messages import AIMessage  # noqa: E402
+from langgraph.graph import END, START, StateGraph  # noqa: E402
 
 from agent_chat_minimal import Settings, create_app  # noqa: E402
+from agent_chat_minimal.demo_agent.agent_factory import AgentState  # noqa: E402
 
 
-class EchoFake:
-    """Deterministic chat graph: reply-N per human message count.
+def make_echo_graph(checkpointer=None):
+    """Deterministic model inside a real checkpointed graph.
 
-    Assistant ids are unique per turn (like real LangChain run ids):
-    repeating ids such as ``ai-1`` in every thread would collide across
-    threads on transcript append (409) exactly like the legacy numeric
-    human ids did.
+    Count the model-facing messages *after* checkpoint loading/reduction,
+    not just the HTTP request. A stateless fake missed stale branch context
+    in #72. Unique assistant IDs also avoid cross-thread transcript collisions.
     """
 
-    async def astream(self, *args, **kwargs):
+    async def answer(state):
         import uuid
 
-        state_input = args[0] if args else {}
-        messages = state_input.get("messages", []) if isinstance(state_input, dict) else []
-        humans = sum(1 for m in messages if _is_human(m))
-        text = f"reply-{humans}"
-        yield (), "messages", (AIMessageChunk(content=text, id=f"ai-{uuid.uuid4().hex[:8]}"), {})
+        humans = sum(1 for m in state["messages"] if _is_human(m))
+        return {
+            "messages": [
+                AIMessage(content=f"reply-{humans}", id=f"ai-{uuid.uuid4().hex[:8]}")
+            ]
+        }
+
+    builder = StateGraph(AgentState)
+    builder.add_node("model", answer)
+    builder.add_edge(START, "model")
+    builder.add_edge("model", END)
+    return builder.compile(checkpointer=checkpointer)
 
 
 def _is_human(message) -> bool:
@@ -63,9 +71,13 @@ def main() -> None:
         server_mode=os.environ.get("E2E_SERVER_MODE", "prod"),
     )
     if os.environ.get("E2E_BOMB") == "1":
-        app = create_app(graph_factory=_bomb_factory, settings=settings, web_dir=web_dir)
+        app = create_app(
+            graph_factory=_bomb_factory, settings=settings, web_dir=web_dir
+        )
     else:
-        app = create_app(graph=EchoFake(), settings=settings, web_dir=web_dir)
+        app = create_app(
+            graph_factory=make_echo_graph, settings=settings, web_dir=web_dir
+        )
     import uvicorn
 
     uvicorn.run(app, host="127.0.0.1", port=port, log_level="info")

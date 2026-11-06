@@ -35,7 +35,13 @@ async function waitForStoredCount(page: Page, count: number) {
           const data = await fetch(`/threads/${threadId}/messages`, {
             headers,
           }).then((r) => r.json());
-          return data.messages?.length ?? -1;
+          // The API can return graph checkpoints before transcript writes.
+          // Wait for actual UI rows, not merely a matching checkpoint count.
+          return data.messages?.every(
+            (message: { role?: string }) => message.role,
+          )
+            ? data.messages.length
+            : -1;
         }),
       { timeout: 30_000 },
     )
@@ -45,6 +51,31 @@ async function waitForStoredCount(page: Page, count: number) {
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
   await expect(page.getByLabel("Message input", { exact: true })).toBeVisible();
+});
+
+test("checkpoint-only history hydrates and remains usable @packaged", async ({ page }) => {
+  await expect.poll(() => page.evaluate(() =>
+    localStorage.getItem("agent-chat.active-thread.v1"),
+  )).toBeTruthy();
+  const { threadId, subject } = await page.evaluate(() => ({
+    threadId: localStorage.getItem("agent-chat.active-thread.v1"),
+    subject: localStorage.getItem("agent-chat.anonymous-subject.v1"),
+  }));
+  // Invoke directly: no UI synchronizer has written transcript rows yet.
+  const response = await page.request.post("/assistant", {
+    headers: { "x-agent-chat-subject": subject! },
+    data: {
+      state: { messages: [], thread_id: threadId },
+      commands: [{ type: "add-message", message: {
+        role: "user", parts: [{ type: "text", text: "checkpoint-only prompt" }],
+      } }],
+    },
+  });
+  expect(response.ok()).toBe(true);
+  await page.reload();
+  await expect(page.locator('[data-role="user"]')).toContainText("checkpoint-only prompt");
+  await expect(page.locator('[data-role="assistant"]')).toContainText("reply-1");
+  await send(page, "continue checkpoint history", 2);
 });
 
 test("recompute regenerates the assistant response for the same prompt @packaged", async ({
@@ -173,6 +204,33 @@ test("editing an earlier turn truncates inference history but retains its origin
   );
   await expect(page.locator('[data-role="assistant"]').nth(1)).toContainText(
     "reply-2",
+  );
+  await send(page, "original continuation", 3);
+  // Keyboard activation also works when the long thread is scrolled to its end.
+  await page
+    .locator(".aui-user-branch-picker")
+    .first()
+    .getByRole("button", { name: "Next", exact: true })
+    .press("Enter");
+  await expect(page.locator('[data-role="user"]').first()).toContainText(
+    "replacement first prompt",
+  );
+  await send(page, "edited continuation", 2);
+  await waitForStoredCount(page, 10);
+  await page.reload();
+  await expect(page.locator('[data-role="user"]').first()).toContainText(
+    "replacement first prompt",
+  );
+  await expect(page.locator('[data-role="assistant"]').nth(1)).toContainText(
+    "reply-2",
+  );
+  await page
+    .locator(".aui-user-branch-picker")
+    .first()
+    .getByRole("button", { name: "Previous", exact: true })
+    .press("Enter");
+  await expect(page.locator('[data-role="assistant"]').nth(2)).toContainText(
+    "reply-3",
   );
 });
 

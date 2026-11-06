@@ -6,7 +6,8 @@ titles) and per-suite configs enforce the split; `--grep` also works.
 ## Packaged app (`@packaged`, self-contained)
 
 Run against the wheel's FastAPI + bundled UI via `helpers/fake_backend.py`
-(deterministic echo agent, no network, no credentials). Each suite spins its
+(deterministic echo model in a real checkpointed LangGraph, no network or
+credentials). Each suite spins its
 own server through the config's `webServer` entry.
 
 | Suite | Config | What it covers |
@@ -46,6 +47,13 @@ branch-aware edit/reload. Parent links are stored in transcript custom metadata;
 older transcripts without links are still imported chronologically. See
 `patches/README.md` for the pinned dependency compatibility patch this needs.
 The legacy minimal-preset transport is unchanged.
+
+The echo model counts model-facing human messages **after checkpoint loading**;
+this catches stale branch merging (#72), unlike the former stateless fake.
+`packages/agent-chat-minimal/tests/test_branch_history.py` additionally asserts
+exact human and assistant model input with memory/SQLite checkpoints, restores
+both branches from transcript parent links, continues each independently after
+a SQLite restart, and covers regeneration and command-only delta compatibility.
 
 Failure traces are retained under `test-results/`. The branch test attaches the
 observed user branch labels as JSON and checks both transient DOM mutations and

@@ -8,10 +8,12 @@ import {
   useAssistantState,
   useLocalRuntime,
   useThreadListItem,
-  type ThreadMessage,
+  ExportedMessageRepository,
 } from "@assistant-ui/react";
 
 import { createPackagedChatAdapter } from "./packaged-chat-adapter";
+import { converter } from "./MyMessageConverter";
+import type { LangChainMessage } from "@assistant-ui/react-langgraph";
 import { useApiClient } from "@/hooks/use-api-client";
 import type { ApiClient } from "@/lib/api-client";
 
@@ -51,7 +53,13 @@ function usePerThreadRuntime() {
     const fetchAndImport = async () => {
       try {
         const data = await client.getMessages(remoteId);
-        const incoming = (data.messages ?? []) as ThreadMessage[];
+        // An owned thread without transcript rows can return LangChain
+        // checkpoint messages. Normalize both that fallback and stored UI rows
+        // before import; raw checkpoint messages have no UI role/metadata.
+        const incoming = converter(
+          { messages: (data.messages ?? []) as LangChainMessage[] },
+          { isSending: false, pendingCommands: [], toolStatuses: {} },
+        ).messages;
 
         if (!isMounted) return;
         importedForRef.current = remoteId;
@@ -60,12 +68,13 @@ function usePerThreadRuntime() {
         // compared with the length of the selected branch to detect stale data.
         if (messageCountRef.current > 0) return;
         try {
+          const repository = ExportedMessageRepository.fromArray(incoming);
           runtime.thread.import({
-            messages: incoming.map((message, index) => ({
+            messages: repository.messages.map(({ message, parentId }) => ({
               message,
               parentId: Object.hasOwn(message.metadata?.custom ?? {}, "branchParentId")
                 ? message.metadata.custom.branchParentId as string | null
-                : index > 0 ? incoming[index - 1].id : null,
+                : parentId,
             })),
           });
         } catch (importErr) {

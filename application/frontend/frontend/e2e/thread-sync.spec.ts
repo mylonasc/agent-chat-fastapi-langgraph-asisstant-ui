@@ -66,14 +66,22 @@ async function waitForStoredCount(page: Page, count: number) {
     .poll(
       async () =>
         page.evaluate(async () => {
-          const subject = localStorage.getItem("agent-chat.anonymous-subject.v1");
+          const subject = localStorage.getItem(
+            "agent-chat.anonymous-subject.v1",
+          );
           const headers = subject ? { "x-agent-chat-subject": subject } : {};
-          const threads = await fetch("/threads", { headers }).then((r) => r.json());
+          const threads = await fetch("/threads", { headers }).then((r) =>
+            r.json(),
+          );
           if (!threads[0]) return -1;
           const messages = await fetch(`/threads/${threads[0].id}/messages`, {
             headers,
           }).then((r) => r.json());
-          return (messages.messages as unknown[]).length;
+          return messages.messages?.every(
+            (message: { role?: string }) => message.role,
+          )
+            ? messages.messages.length
+            : -1;
         }),
       { timeout: 30_000 },
     )
@@ -86,7 +94,9 @@ async function orderedRoles(page: Page): Promise<string[]> {
   const out: string[] = [];
   for (let i = 0; i < count; i++) {
     const role = await roles.nth(i).getAttribute("data-role");
-    const text = ((await roles.nth(i).innerText()) ?? "").replace(/\s+/g, " ").trim();
+    const text = ((await roles.nth(i).innerText()) ?? "")
+      .replace(/\s+/g, " ")
+      .trim();
     out.push(`${role}:${text.slice(0, 24)}`);
   }
   return out;
@@ -144,7 +154,9 @@ test("feedback persists across reload @packaged", async ({ page }) => {
   expect(bad).toEqual([]);
 });
 
-test("switching threads preserves each transcript @packaged", async ({ page }) => {
+test("switching threads preserves each transcript @packaged", async ({
+  page,
+}) => {
   const bad = trackResponses(page);
   await freshPage(page);
 
