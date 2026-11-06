@@ -33,6 +33,10 @@ durable SQLite storage, UI presets, configuration, and container use.
 
 ## Documentation
 
+For a ready-to-run local Ollama chat UI (no API key), see
+[Local Ollama Chat](application/ollama-chat/README.md). It uses the built library,
+streams responses, and saves conversations locally.
+
 Read these in order for the shortest path through the repository:
 
 - [Documentation map](docs/README.md): architecture and guide index.
