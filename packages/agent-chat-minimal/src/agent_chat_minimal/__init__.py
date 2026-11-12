@@ -72,7 +72,7 @@ from .server import (
 from .static_ui import bundled_ui_dir, is_ui_bundle, resolve_ui_dir
 from .threads import ThreadManager, ThreadMessageStore, ThreadMetadata
 
-__version__ = "0.6.2"
+__version__ = "0.7.1"
 
 __all__ = [
     "__version__",

@@ -18,6 +18,7 @@ from .capabilities import CapabilityProvider
 from .config import Settings
 from .domain import Feedback, FeedbackRating, MessageRole, Principal, Session, SessionStatus
 from .identity import DefaultPrincipalResolver
+from .graph_history import authoritative_graph_input
 from .persistence import validate_persistence_bundle
 from .services import (
     ConflictError,
@@ -837,6 +838,9 @@ def _build_app(
         config = {"configurable": {"thread_id": thread_id}}
 
         reducer = prepare_state or default_prepare_state
+        # Explicit messages (including []) are a selected-branch snapshot.
+        # Legacy command-only callers can still omit the key to send deltas.
+        has_history_snapshot = isinstance(request.state, dict) and "messages" in request.state
 
         async def run_callback(controller: RunController):
             if controller.state is None:
@@ -847,7 +851,11 @@ def _build_app(
             controller.state["messages"] = _sanitize_langchain_message_history(
                 reducer(controller.state, request)
             )
-            input_message = {"messages": list(controller.state["messages"])}
+            messages = list(controller.state["messages"])
+            input_message = (
+                authoritative_graph_input(instance, messages)
+                if has_history_snapshot else {"messages": messages}
+            )
             try:
                 async for namespace, event_type, chunk in instance.astream(
                     input_message,

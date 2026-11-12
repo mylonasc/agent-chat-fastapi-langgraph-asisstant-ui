@@ -13,6 +13,10 @@ import { type FC, memo, useState } from "react";
 import { CheckIcon, CopyIcon } from "lucide-react";
 
 import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button";
+import {
+  CodeBlock,
+  fenceLanguageFromNode,
+} from "@/components/assistant-ui/code-block";
 import { cn } from "@/lib/utils";
 
 const MarkdownTextImpl = () => {
@@ -27,8 +31,10 @@ const MarkdownTextImpl = () => {
 
 export const MarkdownText = memo(MarkdownTextImpl);
 
-const CodeHeader: FC<CodeHeaderProps> = ({ language, code }) => {
+const CodeHeader: FC<CodeHeaderProps> = ({ language, code, node }) => {
   const { isCopied, copyToClipboard } = useCopyToClipboard();
+  const fence = fenceLanguageFromNode(node) ?? language;
+  const label = fence && fence !== "unknown" ? fence : "text";
   const onCopy = () => {
     if (!code || isCopied) return;
     copyToClipboard(code);
@@ -37,7 +43,7 @@ const CodeHeader: FC<CodeHeaderProps> = ({ language, code }) => {
   return (
     <div className="aui-code-header-root mt-4 flex items-center justify-between gap-4 rounded-t-lg bg-muted-foreground/15 px-4 py-2 text-sm font-semibold text-foreground dark:bg-muted-foreground/20">
       <span className="aui-code-header-language lowercase [&>span]:text-xs">
-        {language}
+        {label}
       </span>
       <TooltipIconButton tooltip="Copy" onClick={onCopy}>
         {!isCopied && <CopyIcon />}
@@ -66,7 +72,7 @@ const useCopyToClipboard = ({
   return { isCopied, copyToClipboard };
 };
 
-const defaultComponents = memoizeMarkdownComponents({
+const memoizedComponents = memoizeMarkdownComponents({
   h1: ({ className, ...props }) => (
     <h1
       className={cn(
@@ -226,3 +232,13 @@ const defaultComponents = memoizeMarkdownComponents({
   },
   CodeHeader,
 });
+
+// The memoizer strips `node`, but it is the only place fence names containing
+// non-word characters (for example "c++" or "c#") survive assistant-ui's
+// /\w+/ language extraction. Keep these renderers unwrapped so they can read
+// the original fence name.
+const defaultComponents = {
+  ...memoizedComponents,
+  SyntaxHighlighter: CodeBlock,
+  CodeHeader,
+};

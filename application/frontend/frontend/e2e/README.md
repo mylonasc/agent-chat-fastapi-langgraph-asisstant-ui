@@ -6,7 +6,8 @@ titles) and per-suite configs enforce the split; `--grep` also works.
 ## Packaged app (`@packaged`, self-contained)
 
 Run against the wheel's FastAPI + bundled UI via `helpers/fake_backend.py`
-(deterministic echo agent, no network, no credentials). Each suite spins its
+(deterministic echo model in a real checkpointed LangGraph, no network or
+credentials). Each suite spins its
 own server through the config's `webServer` entry.
 
 | Suite | Config | What it covers |
@@ -14,6 +15,7 @@ own server through the config's `webServer` entry.
 | `thread-sync.spec.ts` | `e2e/thread-sync.config.ts` | Turn ordering, feedback + thread switching across reload |
 | `backend-base.spec.ts` | `e2e/backend-base.config.ts` | Same-origin backend I/O, titles, archive, starter page |
 | `error-surfacing.spec.ts` | `e2e/error-debug.config.ts` / `e2e/error-prod.config.ts` | Backend-error surfacing per `server_mode` |
+| `chat-actions.spec.ts` | `e2e/chat-actions.config.ts` | Recompute, edit/alternative branch, phantom user branch regression tests ([#71](https://github.com/mylonasc/agent-chat-fastapi-langgraph-asisstant-ui/issues/71)) |
 
 ```bash
 cd application/frontend/frontend
@@ -24,10 +26,39 @@ pnpm playwright test -c e2e/thread-sync.config.ts
 pnpm playwright test -c e2e/backend-base.config.ts
 pnpm playwright test -c e2e/error-debug.config.ts
 pnpm playwright test -c e2e/error-prod.config.ts
+E2E_PYTHON=/absolute/path/to/python pnpm playwright test -c e2e/chat-actions.config.ts
 ```
 
 These suites run in CI on every artifact build
 (`.github/workflows/artifact-workflow.yml`, `e2e-packaged` job).
+
+The `chat-actions` suite is a standalone regression suite, not yet added to
+CI. It asserts the expected behavior for #71 (no `skip`/`fixme`/`xfail`): Refresh
+must issue a new generation request, Edit must open a prefilled editor and allow
+an alternative conversation, and ordinary sends must not create a phantom `2/2`
+branch. It uses the existing fake backend, so no Ollama/model credentials are
+needed. Its Python interpreter needs the package dependencies and `httpx`.
+Override its default port (18102) with `E2E_PORT` if necessary.
+
+It also verifies alternatives survive reload and editing an earlier turn sends
+only the selected history while retaining the original continuation. The full
+preset uses `app/packaged-chat-adapter.ts` with Assistant UI's LocalRuntime for
+branch-aware edit/reload. Parent links are stored in transcript custom metadata;
+older transcripts without links are still imported chronologically. See
+`patches/README.md` for the pinned dependency compatibility patch this needs.
+The legacy minimal-preset transport is unchanged.
+
+The echo model counts model-facing human messages **after checkpoint loading**;
+this catches stale branch merging (#72), unlike the former stateless fake.
+`packages/agent-chat-minimal/tests/test_branch_history.py` additionally asserts
+exact human and assistant model input with memory/SQLite checkpoints, restores
+both branches from transcript parent links, continues each independently after
+a SQLite restart, and covers regeneration and command-only delta compatibility.
+
+Failure traces are retained under `test-results/`. The branch test attaches the
+observed user branch labels as JSON and checks both transient DOM mutations and
+the settled/reloaded conversation; final-DOM-only checks miss the transient
+indicator. Screenshots are disabled.
 
 ## Full backend (`@full-backend`, live stack only)
 

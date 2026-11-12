@@ -6,19 +6,21 @@ import {
   AssistantRuntimeProvider,
   unstable_useRemoteThreadListRuntime as useRemoteThreadListRuntime,
   useAssistantState,
-  useAssistantTransportRuntime,
+  useLocalRuntime,
   useThreadListItem,
+  ExportedMessageRepository,
 } from "@assistant-ui/react";
 
+import { createPackagedChatAdapter } from "./packaged-chat-adapter";
 import { converter } from "./MyMessageConverter";
+import type { LangChainMessage } from "@assistant-ui/react-langgraph";
 import { useApiClient } from "@/hooks/use-api-client";
 import type { ApiClient } from "@/lib/api-client";
-import { failedUserText, setRunError } from "@/lib/run-errors";
 
 // ------------------------------------------------------------------
 // RUNTIME HOOK
 // ------------------------------------------------------------------
-function usePerThreadTransportRuntime() {
+function usePerThreadRuntime() {
   const item = useThreadListItem();
   const backendThreadId = item.remoteId ?? item.id;
   // Never touch the backend before the deployment config resolves: the
@@ -35,28 +37,11 @@ function usePerThreadTransportRuntime() {
   const messageCountRef = React.useRef(messageCount);
   messageCountRef.current = messageCount;
 
-  // Memoize config to prevent runtime recreation on re-renders
-  const runtimeConfig = useMemo(() => ({
-    api: client.assistantUrl(),
-    headers: client.headers(),
-    converter,
-    initialState: {
-      messages: [],
-      thread_id: backendThreadId,
-    },
-    // A failed run drops the in-flight user message, leaving no message
-    // behind to host the error. Record it per thread so the thread can
-    // surface it (debug detail vs generic message is decided at render).
-    onError: (error: Error, params: { commands: readonly unknown[] }) => {
-      const text = error instanceof Error ? error.message : String(error ?? "Unknown error");
-      setRunError(backendThreadId, {
-        text,
-        userText: failedUserText(params.commands),
-      });
-    },
-  }), [backendThreadId, client]);
-
-  const runtime = useAssistantTransportRuntime(runtimeConfig);
+  const adapter = useMemo(
+    () => createPackagedChatAdapter(client, backendThreadId),
+    [backendThreadId, client],
+  );
+  const runtime = useLocalRuntime(adapter);
 
   useEffect(() => {
     if (!loaded) return;
@@ -68,22 +53,29 @@ function usePerThreadTransportRuntime() {
     const fetchAndImport = async () => {
       try {
         const data = await client.getMessages(remoteId);
-        const incoming = data.messages ?? [];
+        // An owned thread without transcript rows can return LangChain
+        // checkpoint messages. Normalize both that fallback and stored UI rows
+        // before import; raw checkpoint messages have no UI role/metadata.
+        const incoming = converter(
+          { messages: (data.messages ?? []) as LangChainMessage[] },
+          { isSending: false, pendingCommands: [], toolStatuses: {} },
+        ).messages;
 
         if (!isMounted) return;
         importedForRef.current = remoteId;
 
-        const threadRuntime = (runtime as any).thread;
-        if (!threadRuntime?.unstable_loadExternalState) return;
-        // Never clobber fresh local turns with a stale fetch: an import
-        // that raced a completed send would wipe the just-finished
-        // messages. Stored rows are only appended to, so skipping a fetch
-        // that holds fewer rows than the UI already shows is always safe.
-        if (incoming.length < messageCountRef.current) return;
+        // Only hydrate an empty runtime. Total stored branch rows cannot be
+        // compared with the length of the selected branch to detect stale data.
+        if (messageCountRef.current > 0) return;
         try {
-          threadRuntime.unstable_loadExternalState({
-            thread_id: backendThreadId,
-            messages: incoming,
+          const repository = ExportedMessageRepository.fromArray(incoming);
+          runtime.thread.import({
+            messages: repository.messages.map(({ message, parentId }) => ({
+              message,
+              parentId: Object.hasOwn(message.metadata?.custom ?? {}, "branchParentId")
+                ? message.metadata.custom.branchParentId as string | null
+                : parentId,
+            })),
           });
         } catch (importErr) {
            console.error("[Hydration:CRASH]", importErr);
@@ -199,7 +191,7 @@ function ProviderRuntime({
 
   const runtime = useRemoteThreadListRuntime({
     adapter: adapter as any, 
-    runtimeHook: usePerThreadTransportRuntime,
+    runtimeHook: usePerThreadRuntime,
   });
 
   return (

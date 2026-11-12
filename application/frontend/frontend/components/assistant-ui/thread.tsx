@@ -25,6 +25,8 @@ import {
   ThreadPrimitive,
   useAssistantApi,
   useAssistantState,
+  type ExportedMessageRepository,
+  type ThreadMessage,
 } from "@assistant-ui/react";
 
 import type { FC } from "react";
@@ -34,7 +36,7 @@ import * as m from "motion/react-m";
 
 import { Button } from "@/components/ui/button";
 import { useApiClient } from "@/hooks/use-api-client";
-import { ApiError } from "@/lib/api-client";
+import { ApiError, type ApiClient } from "@/lib/api-client";
 import {
   clearRunError,
   getRunError,
@@ -85,9 +87,9 @@ export const Thread: FC = () => {
            <WebRAGStatusToolUI />
            <AutoThreadTitle />
            <RememberRemoteThread />
-           <EnsureThreadInitialized />
-           <OrphanBranchPruner />
-           <TranscriptSynchronizer />
+            <EnsureThreadInitialized />
+            <OrphanBranchPruner />
+            <TranscriptSynchronizer />
 
           <ThreadPrimitive.Viewport className="aui-thread-viewport relative flex flex-1 flex-col overflow-x-auto overflow-y-scroll px-4">
             <ThreadPrimitive.If empty>
@@ -251,45 +253,74 @@ function syncedPayloadsFor(key: string): Map<string, string> {
   return seen;
 }
 
-/**
- * Drop orphaned pending nodes left behind when a server echo replaces the
- * optimistic pending message under a different id. Such orphans linger as
- * alternate branches (branch picker appears on the first message) because
- * the repository only ever adds — nothing removes. Rebuilding from the
- * active branch is safe here: message edit/reload adapters are not
- * configured, so no legitimate alternate branches can exist.
- */
+function transcriptPayloads(repository: ExportedMessageRepository): ThreadMessage[] {
+  return repository.messages
+    .filter(({ message }) => message.role !== "assistant" || message.status.type !== "running")
+    .map(({ message, parentId }) => ({
+      ...message,
+      metadata: {
+        ...message.metadata,
+        custom: { ...message.metadata.custom, branchParentId: parentId },
+      },
+    } as ThreadMessage));
+}
+
+const transcriptWrites = new Map<string, Promise<void>>();
+
+// Feedback and the debounced synchronizer share the same ordered write queue.
+// A quick rating must not insert an assistant before its ancestors or race an
+// identical append from the synchronizer.
+function persistTranscript(
+  client: ApiClient,
+  subject: string,
+  threadId: string,
+  messages: readonly ThreadMessage[],
+): Promise<void> {
+  const key = `${subject}::${threadId}`;
+  const seen = syncedPayloadsFor(key);
+  const write = (transcriptWrites.get(key) ?? Promise.resolve()).catch(() => {}).then(async () => {
+    for (const message of messages) {
+      if (seen.has(message.id)) continue;
+      try {
+        await client.appendMessage(threadId, message);
+      } catch (error) {
+        if (!(error instanceof ApiError && error.status === 409)) throw error;
+      }
+      seen.set(message.id, JSON.stringify(message));
+    }
+  });
+  transcriptWrites.set(key, write);
+  void write.finally(() => {
+    if (transcriptWrites.get(key) === write) transcriptWrites.delete(key);
+  }).catch(() => {});
+  return write;
+}
+
+// The legacy minimal transport cannot edit/reload and still needs echo cleanup.
+// Never rebuild a branch-capable runtime: that would erase real alternatives.
 const OrphanBranchPruner: FC = () => {
   const api = useAssistantApi();
   const messages = useAssistantState((s) => s.thread.messages);
   const isRunning = useAssistantState((s) => s.thread.isRunning);
+  const canEdit = useAssistantState((s) => s.thread.capabilities.edit);
   const wasRunning = useRef(false);
-
   useEffect(() => {
     const ended = wasRunning.current && !isRunning;
     wasRunning.current = isRunning;
-    if (!ended || messages.length === 0) return;
-    try {
-      const importer = (api.thread() as unknown as {
-        import?: (data: unknown) => void;
-      })?.import;
-      if (typeof importer !== "function") return;
-      importer.call(api.thread(), {
-        messages: messages.map((message: { id: string }, index: number) => ({
-          message: messages[index],
-          parentId: index > 0 ? (messages[index - 1] as { id: string }).id : null,
-        })),
-      });
-    } catch {
-      // Pruning is cosmetic cleanup; a failure must never break the thread.
-    }
-  }, [api, isRunning, messages]);
-
+    if (canEdit || !ended || messages.length === 0) return;
+    api.thread().import({
+      messages: messages.map((message, index) => ({
+        message,
+        parentId: index > 0 ? messages[index - 1].id : null,
+      })),
+    });
+  }, [api, canEdit, isRunning, messages]);
   return null;
 };
 
 /** Persist only completed turns; stable message IDs make retries idempotent. */
 const TranscriptSynchronizer: FC = () => {
+  const api = useAssistantApi();
   // Gated on loaded: pre-config appends would land on the build-time
   // fallback base instead of the deployment backend.
   const { client, identity, loaded } = useApiClient();
@@ -301,44 +332,20 @@ const TranscriptSynchronizer: FC = () => {
     if (!loaded) return;
     const threadId = threadItem.remoteId;
     if (!threadId || messages.length === 0) return;
-    const syncedPayloads = syncedPayloadsFor(
-      `${identity.subject ?? ""}::${threadId}`,
-    );
-    // Transport removes pending user commands after a completed run. Store
-    // user messages while they are still present; assistant payloads remain
-    // deferred until their final immutable state is available.
-    const messagesToSync = isRunning
-      ? messages.filter((message) => message.role === "user")
-      : messages;
+    // Persist parent links inside the verbatim payload, so hydration restores
+    // alternatives instead of flattening edited/regenerated turns into history.
+    const messagesToSync = transcriptPayloads(api.thread().export());
     if (messagesToSync.length === 0) return;
 
     // Assistant UI can publish a final state immediately after isRunning flips.
     // Wait for that burst to settle before storing an immutable transcript row.
     const timer = window.setTimeout(() => {
-      void (async () => {
-        for (const message of messagesToSync) {
-          if (message.id == null) continue;
-          const payload = JSON.stringify(message);
-          if (syncedPayloads.get(message.id) === payload) continue;
-          try {
-            await client.appendMessage(threadId, message);
-          } catch (error) {
-            // 409 means the server already stores this id: the durability
-            // goal is met, so record it instead of retrying forever.
-            const status =
-              error instanceof ApiError
-                ? error.status
-                : (error as { status?: unknown })?.status;
-            if (status !== 409) throw error;
-          }
-          syncedPayloads.set(message.id, payload);
-        }
-      })().catch(() => {
+      void persistTranscript(client, identity.subject ?? "", threadId, messagesToSync).catch(() => {
         // The next completed turn retries unchanged message IDs without duplicates.
       });
     }, 300);
     return () => window.clearTimeout(timer);
-  }, [client, identity.subject, isRunning, loaded, messages, threadItem.id, threadItem.remoteId]);
+  }, [api, client, identity.subject, isRunning, loaded, messages, threadItem.id, threadItem.remoteId]);
 
   return null;
 };
@@ -840,6 +847,7 @@ const AssistantMessage: FC = () => {
 };
 
 const MessageFeedbackControls: FC = () => {
+  const api = useAssistantApi();
   // Gated on loaded: the pre-config client points at the build-time
   // fallback base, whose 404s would mask real stored ratings.
   const { client, identity, loaded } = useApiClient();
@@ -883,12 +891,17 @@ const MessageFeedbackControls: FC = () => {
           feedback = await client.setFeedback(threadId, messageId, next);
         } catch (requestError) {
           // A user can rate before the debounced transcript write completes.
-          // Only then append the exact UI message and retry once; appending
-          // after it already exists could conflict on transient UI fields.
+          // Persist its canonical branch and retry once; never store transient
+          // message-view fields or insert the assistant ahead of its prompt.
           if (!(requestError instanceof Error && "status" in requestError && requestError.status === 404)) {
             throw requestError;
           }
-          await client.appendMessage(threadId, message);
+          await persistTranscript(
+            client,
+            identity.subject,
+            threadId,
+            transcriptPayloads(api.thread().export()),
+          );
           feedback = await client.setFeedback(threadId, messageId, next);
         }
         setRating(feedback.rating);
