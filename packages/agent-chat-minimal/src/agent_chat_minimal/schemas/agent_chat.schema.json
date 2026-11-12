@@ -12,6 +12,7 @@
     "default_agent": {"type": "string", "minLength": 1},
     "ui_preset": {"enum": ["minimal", "full"]},
     "api_base": {"type": "string"},
+    "base_path": {"type": "string", "description": "Public URL prefix, e.g. /platform/apps/chat; empty at origin root, no trailing slash."},
     "identity_mode": {"enum": ["anonymous", "delegated"]},
     "server_mode": {"enum": ["prod", "debug"]},
     "ui": {

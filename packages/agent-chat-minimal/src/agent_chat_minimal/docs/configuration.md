@@ -14,6 +14,7 @@ MINIMAL_WEB_DIR=            # override bundled web/ (empty = bundled)
 FULL_WEB_DIR=               # deprecated mount hook (no bundle ships)
 UI_PRESET=minimal           # runtime UI preset: minimal or full
 API_BASE=                   # same-origin default; absolute http(s) URL for split-port dev
+BASE_PATH=                  # public prefix, e.g. /platform/apps/chat; no trailing slash
 IDENTITY_MODE=anonymous     # anonymous or delegated (custom principal resolver)
 SERVER_MODE=prod            # prod hides backend error detail in the UI; debug surfaces it
 DATABASE_PATH=agent-chat.db # default application SQLite file
@@ -53,6 +54,42 @@ as `create_app`, validates `default_agent` membership, and passes
 environment state, so independent app instances can use different models in one
 process. Legacy no-argument factories that read `MODEL` themselves keep working
 through the documented environment fallback.
+
+## URL prefix deployment
+
+Set `BASE_PATH=/platform/apps/chat`, YAML `base_path: /platform/apps/chat`, or
+`Settings(base_path="/platform/apps/chat")`. The packaged CLI also supports
+`--base-path`. Empty means origin root; `/` and trailing slashes are rejected.
+Only URL-safe ASCII path segments are accepted (no dot segments, escapes,
+queries, fragments, or reserved `__agent_chat_base_path__` segment).
+
+New package builds relocate a compiled Next.js basePath marker throughout the
+static export once at startup, using a per-app temporary copy, not response-body
+rewrites. No Node or frontend rebuild is required at runtime; writable temporary
+storage is needed. Custom exports without the marker must already target their
+public prefix. Published 0.6.2/0.7.1 root-built bundles are not relocatable.
+
+Both prefix-stripping and prefix-preserving proxies are supported. Configure a
+proxy redirect from the bare prefix to its trailing-slash form and publish only
+the prefix externally. The app sets ASGI `root_path` and restores stripped
+request paths for correct generated URLs; do not configure a different mount or
+an additional Uvicorn prefix. `X-Forwarded-Prefix` is not trusted or consumed.
+The prefix is a deployment setting, not an authorization boundary.
+
+An empty `API_BASE` advertises `BASE_PATH` to the UI. An explicit same-origin
+path or absolute HTTP(S) `API_BASE` remains authoritative for API calls only;
+it does not change UI assets or runtime-config discovery. Restart after changing
+`BASE_PATH`.
+
+After restarting, open the public URL with its final slash, for example
+`https://chat.example.com/platform/apps/chat/`. Verify that
+`/platform/apps/chat/health` returns `{"status":"ok"}` and
+`/platform/apps/chat/api/config` advertises `"api_base":"/platform/apps/chat"`
+when `API_BASE` is empty. In the browser's Network panel, JS/CSS/fonts must load
+under `/platform/apps/chat/_next/`, never origin-root `/_next/`. Send a message
+with a configured provider to confirm client hydration and streaming; an HTTP
+200 or visible static page alone is not sufficient. If assets escape the
+prefix, check for an old wheel or root-built custom UI override.
 
 ## Server mode
 

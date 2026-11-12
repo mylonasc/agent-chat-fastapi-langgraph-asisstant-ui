@@ -175,6 +175,7 @@ def main(argv=None):
     parser.add_argument("--config", default=config_args.config, help=argparse.SUPPRESS)
     parser.add_argument("--host", default=env.host)
     parser.add_argument("--port", type=int, default=env.port)
+    parser.add_argument("--base-path", default=env.base_path, help="Public URL prefix, e.g. /chat")
     parser.add_argument(
         "--model",
         default=None,
@@ -195,6 +196,7 @@ def main(argv=None):
         env,
         host=args.host,
         port=args.port,
+        base_path=args.base_path,
         model=args.model or env.model,
         default_agent=args.agent or env.default_agent,
     )

@@ -34,6 +34,96 @@ provider extra when needed, for example
 See the package's [provider guide](../packages/agent-chat-minimal/src/agent_chat_minimal/docs/providers.md)
 for supported model specifications and credentials.
 
+## Reverse-proxy URL prefixes
+
+> This support requires an artifact built from the prefix fix. Published
+> 0.6.2/0.7.1 wheels do not support it. Until a release containing the fix is
+> available, follow [Build From This Repository](#build-from-this-repository)
+> below and install that wheel; setting `BASE_PATH` on an old wheel is not enough.
+
+Select a public prefix at runtime; no frontend rebuild or proxy response-body
+rewriting is needed for newly built package artifacts:
+
+```bash
+BASE_PATH=/platform/apps/chat minimal-chat-serve --port 8011
+# Equivalent: minimal-chat-serve --base-path /platform/apps/chat
+```
+
+The YAML setting is `base_path: /platform/apps/chat`; Python callers use
+`Settings(base_path="/platform/apps/chat")`. Use `""` (the default) for `/`.
+Prefixes must start with `/`, have no trailing slash, and contain only URL-safe
+ASCII letters, digits, `-`, `_`, `.`, and `~` in nonempty segments. Dot segments,
+URL escapes, and the reserved `__agent_chat_base_path__` segment are rejected.
+
+Publish `/platform/apps/chat/` through the proxy. Both stripping the prefix
+before forwarding and forwarding the complete public path are supported. Have
+the proxy redirect the bare `/platform/apps/chat` to `/platform/apps/chat/`.
+For example, either nginx form works (the `proxy_pass` trailing slash determines
+whether nginx strips the location prefix):
+
+```nginx
+location = /platform/apps/chat {
+    return 307 /platform/apps/chat/;
+}
+location /platform/apps/chat/ {
+    proxy_pass http://127.0.0.1:8011/; # omit final / to preserve the prefix
+    proxy_set_header Host $http_host;
+    proxy_buffering off;
+}
+```
+
+`BASE_PATH` configures the app's ASGI `root_path` and normalizes stripped paths
+before routing, so generated redirects retain the public prefix. Use the same
+setting with the ASGI factory; do not add a second independent prefix through
+Uvicorn `--root-path` or mount the app under a different path. `root_path` alone
+or `X-Forwarded-Prefix` does not relocate the UI. Configure trusted forwarded
+headers separately when TLS terminates at the proxy. Prefix configuration is
+not access control: restrict direct upstream access at the proxy/network layer.
+
+With `API_BASE` empty, the runtime manifest advertises `BASE_PATH` as the
+same-origin API base. An explicit `API_BASE=/other/api` or absolute HTTP(S) URL
+overrides that API destination without changing UI asset/config-discovery paths.
+
+Package staging compiles a reserved Next.js `basePath` marker. At startup the
+server copies the export into a per-app temporary directory and replaces that
+marker throughout HTML, Flight payloads, CSS, and compiled JS. Installed package
+files remain untouched; Node is not needed at runtime. Writable temporary
+storage is required, and changing the prefix requires restarting the app.
+Custom `MINIMAL_WEB_DIR`/`FULL_WEB_DIR` exports without the marker are served
+unchanged and must already be built for their public path (the server warns).
+Old 0.6.2/0.7.1 wheels do not contain this marker and are not repaired merely by
+setting a prefix; install an artifact built with this fix.
+
+### Verify the deployment
+
+For a proxy exposed at `https://chat.example.com`, open
+**`https://chat.example.com/platform/apps/chat/`** (including the final `/`).
+
+1. Check the public health and config endpoints:
+
+   ```bash
+   curl --fail https://chat.example.com/platform/apps/chat/health
+   curl --fail https://chat.example.com/platform/apps/chat/api/config
+   ```
+
+   Health should return `{"status":"ok"}`. With `API_BASE` unset or empty,
+   config should contain `"api_base":"/platform/apps/chat"`.
+2. In the browser's Network panel, reload the page. JS, CSS, and fonts must load
+   beneath `/platform/apps/chat/_next/`, and config must load from
+   `/platform/apps/chat/api/config`. There should be no requests to origin-root
+   `/_next/` or `/api/config` and no URLs containing `__agent_chat_base_path__`.
+3. With a configured model credential, send a message and check that a streamed
+   reply appears. A visible page or HTTP 200 alone does not prove hydration.
+4. Refresh the page. If using the full preset, check that thread history still
+   loads. Opening `/platform/apps/chat/admin` should redirect to the same path
+   with a final `/`; its “Back to chat” link should stay beneath the prefix.
+
+If assets escape to `/_next/`, confirm that you installed a newly built artifact
+and are not overriding it with a root-built `MINIMAL_WEB_DIR`. If config or API
+requests escape the prefix, check `BASE_PATH`, stale `API_BASE` values, and the
+proxy's forwarding rules. Restart the server after changing `BASE_PATH` and
+reload the browser. Do not use HTML-only URL rewriting as a workaround.
+
 ## Build From This Repository
 
 Use this when changing the unified frontend or packaging code. The build stages
@@ -47,6 +137,19 @@ python -m venv .venv-agent-chat
 OPENAI_API_KEY=sk-... .venv-agent-chat/bin/minimal-chat-serve --port 8011
 ```
 
+For a prefixed deployment, use the installed wheel's executable:
+
+```bash
+BASE_PATH=/platform/apps/chat API_BASE= UI_PRESET=full \
+  .venv-agent-chat/bin/minimal-chat-serve --port 8011
+```
+
+The wheel and sdist are written to `packages/agent-chat-minimal/dist/`. These
+are generated build outputs, not files committed to Git. Prefer a fresh virtual
+environment: a local build may carry the same version as an older installed
+release, and a plain `pip install` can otherwise leave that release in place.
+Node/pnpm are needed only on the build machine, not on the deployment host.
+
 For an editable source installation, stage the UI first. Otherwise the source
 server intentionally starts API-only:
 
@@ -55,6 +158,22 @@ packages/agent-chat-minimal/scripts/stage_ui.sh
 python -m pip install -e "packages/agent-chat-minimal[persistence]"
 minimal-chat-serve --port 8011
 ```
+
+### Maintainer release checklist
+
+1. Merge the fix and require the artifact CI checks to pass, including installed
+   wheel/sdist prefix browser tests.
+2. Choose an unused version newer than the current PyPI release and update
+   `__version__` in
+   `packages/agent-chat-minimal/src/agent_chat_minimal/__init__.py`. A local
+   artifact retaining an already-published version is for testing, not re-upload.
+3. Publish a GitHub Release from the release commit, tagged
+   `agent-chat-fastapi-langgraph-assistant-ui-vX.Y.Z`, matching that version.
+   `.github/workflows/publish-workflow.yml` rebuilds, tests, and publishes to
+   PyPI through Trusted Publishing. Pushing a feature branch does **not** publish.
+4. Install the released version into a fresh environment and repeat the public
+   prefix verification above. Update the availability note in this guide with
+   the first release containing the fix.
 
 ## Configuration And Persistence
 

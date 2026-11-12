@@ -106,7 +106,7 @@ def build_runtime_config(
         }
     return RuntimeConfig(
         version=RUNTIME_CONFIG_VERSION,
-        api_base=settings.api_base,
+        api_base=settings.api_base or settings.base_path,
         ui_preset=settings.ui_preset,
         identity_mode=settings.identity_mode,
         server_mode=settings.server_mode,

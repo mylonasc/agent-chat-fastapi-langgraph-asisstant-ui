@@ -1,6 +1,8 @@
 """Bundled static UI mounting."""
 
 import logging
+import shutil
+import tempfile
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -14,6 +16,44 @@ from .config import Settings
 logger = logging.getLogger(__name__)
 DEFAULT_WEB_DIR = Path(__file__).parent / "web"
 DEFAULT_WEB_FULL_DIR = Path(__file__).parent / "web_full"
+UI_BASE_PATH_MARKER = "/__agent_chat_base_path__"
+_TEXT_ASSET_SUFFIXES = {".html", ".js", ".css", ".json", ".txt", ".map", ".svg"}
+
+
+def materialize_ui(app: FastAPI, directory: Path, base_path: str) -> Path:
+    """Relocate a deliberately compiled basePath across the entire export.
+
+    Never mutate installed package data or rewrite response bodies. Per-app
+    temporary copies allow multiple prefixes in one process and preserve normal
+    StaticFiles caching/range behavior. Keep the directory alive with the app.
+    Legacy/custom exports without the marker are served unchanged; they must
+    already have been built for their public prefix.
+    """
+    if UI_BASE_PATH_MARKER.encode() not in (directory / "index.html").read_bytes():
+        if base_path:
+            logger.warning(
+                "UI at %s has no relocation marker; it must be built for base_path=%s. "
+                "API_BASE and ASGI root_path cannot relocate a root-built UI.",
+                directory, base_path,
+            )
+        return directory
+    temporary = tempfile.TemporaryDirectory(prefix="agent-chat-ui-")
+    try:
+        target = Path(temporary.name) / "web"
+        shutil.copytree(directory, target)
+        marker = UI_BASE_PATH_MARKER.encode()
+        for path in target.rglob("*"):
+            if path.is_file() and path.suffix in _TEXT_ASSET_SUFFIXES:
+                content = path.read_bytes()
+                if marker in content:
+                    path.write_bytes(content.replace(marker, base_path.encode()))
+    except BaseException:
+        temporary.cleanup()
+        raise
+    if not hasattr(app.state, "relocated_ui"):
+        app.state.relocated_ui = []
+    app.state.relocated_ui.append(temporary)
+    return target
 
 
 def bundled_ui_dir(preset: str = "minimal") -> Path:
@@ -86,11 +126,11 @@ def mount_static_ui(app: FastAPI, settings: Settings) -> None:
 
         @app.get("/full", include_in_schema=False)
         async def full_root():
-            return RedirectResponse(url="/full/", status_code=307)
+            return RedirectResponse(url=f"{settings.base_path}/full/", status_code=307)
 
         app.mount(
             "/full",
-            SPAStaticFiles(directory=resolved_full_dir, html=True),
+            SPAStaticFiles(directory=materialize_ui(app, resolved_full_dir, settings.base_path), html=True),
             name="web-full",
         )
     else:
@@ -110,7 +150,7 @@ def mount_static_ui(app: FastAPI, settings: Settings) -> None:
     if is_ui_bundle(resolved_web_dir):
         app.mount(
             "/",
-            SPAStaticFiles(directory=resolved_web_dir, html=True),
+            SPAStaticFiles(directory=materialize_ui(app, resolved_web_dir, settings.base_path), html=True),
             name="web",
         )
     else:

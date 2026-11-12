@@ -7,6 +7,9 @@ const nextConfig: NextConfig = {
   // runtime via /api/config) can be bundled into the portable Python
   // wheel and served same-origin by FastAPI.
   output: "export",
+  // Package builds reserve a marker that the server relocates consistently
+  // across HTML, Flight data, and compiled client chunks at startup.
+  basePath: process.env.NEXT_PUBLIC_UI_BASE_PATH || "",
   trailingSlash: true,
   images: {
     unoptimized: true,

@@ -13,6 +13,7 @@ from langchain_core.messages import HumanMessage
 from pydantic import BaseModel
 
 from .adapters.memory import InMemoryRepositories
+from .base_path import BasePathMiddleware
 from .capabilities import CapabilityProvider
 from .config import Settings
 from .domain import Feedback, FeedbackRating, MessageRole, Principal, Session, SessionStatus
@@ -537,7 +538,9 @@ def _build_app(
             eager_error = str(exc)
             logger.warning("graph_factory failed: %s", exc)
 
-    app = FastAPI(lifespan=lifespan)
+    app = FastAPI(lifespan=lifespan, root_path=settings.base_path)
+    if settings.base_path:
+        app.add_middleware(BasePathMiddleware, base_path=settings.base_path)
     app.state.settings = settings
     app.state.capabilities = capability_provider
     app.state.session_service = sessions

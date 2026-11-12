@@ -120,6 +120,20 @@ jobs:
             packages/agent-chat-minimal/scripts/smoke_test_wheel.sh "$artifact"
           done
 
+      - name: Install prefix browser-test dependencies
+        run: |
+          pnpm --dir tests/ui install --frozen-lockfile
+          pnpm --dir tests/ui exec playwright install --with-deps chromium
+
+      - name: Verify installed release archives under URL prefixes
+        run: |
+          for artifact in packages/agent-chat-minimal/dist/*; do
+            venv="$(mktemp -d)/venv"
+            uv venv --python 3.11 "$venv"
+            uv pip install --python "$venv/bin/python" "$artifact"
+            UI_PYTHON="$venv/bin/python" node tests/ui/scripts/verify-prefix.mjs
+          done
+
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:

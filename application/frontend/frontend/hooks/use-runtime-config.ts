@@ -15,10 +15,12 @@ export const BUILD_TIME_API_BASE =
   process.env.NEXT_PUBLIC_API_URL?.replace(/\/assistant$/, "") ??
   "http://localhost:8010";
 
+const UI_BASE_PATH = process.env.NEXT_PUBLIC_UI_BASE_PATH || "";
+
 let cachedConfig: Promise<RuntimeConfig> | null = null;
 
 function loadOnce(): Promise<RuntimeConfig> {
-  cachedConfig ??= fetchRuntimeConfig();
+  cachedConfig ??= fetchRuntimeConfig({ configBase: UI_BASE_PATH });
   return cachedConfig;
 }
 
@@ -57,8 +59,8 @@ export function useRuntimeConfig(): RuntimeConfigState {
     loaded,
     apiBase: resolveApiBase(
       loaded ? config : null,
-      BUILD_TIME_API_BASE,
-      BUILD_TIME_API_BASE,
+      BUILD_TIME_API_BASE || UI_BASE_PATH,
+      UI_BASE_PATH,
     ),
   };
 }

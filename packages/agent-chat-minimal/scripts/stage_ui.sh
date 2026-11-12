@@ -12,7 +12,9 @@ package="$repo_root/packages/agent-chat-minimal"
 web="$package/src/agent_chat_minimal/web"
 
 pnpm --dir "$frontend" install --frozen-lockfile
-NEXT_PUBLIC_API_BASE="" pnpm --dir "$frontend" build
+# Compile a consistent Next.js basePath, not a root build with patched HTML.
+# The server materializes this reserved marker throughout the export once.
+NEXT_PUBLIC_UI_BASE_PATH="/__agent_chat_base_path__" NEXT_PUBLIC_API_BASE="" pnpm --dir "$frontend" build
 rm -rf "$web"
 cp -R "$frontend/out" "$web"
 test -f "$web/index.html"
