@@ -36,10 +36,14 @@ for supported model specifications and credentials.
 
 ## Reverse-proxy URL prefixes
 
-> This support requires an artifact built from the prefix fix. Published
-> 0.6.2/0.7.1 wheels do not support it. Until a release containing the fix is
-> available, follow [Build From This Repository](#build-from-this-repository)
-> below and install that wheel; setting `BASE_PATH` on an old wheel is not enough.
+> Requires **0.7.2 or later**. Published 0.6.2/0.7.1 wheels do not support
+> prefix deployment; setting `BASE_PATH` on an old wheel is not enough.
+
+Install or upgrade in your deployment environment before configuring the prefix:
+
+```bash
+python -m pip install --upgrade 'agent-chat-fastapi-langgraph-assistant-ui>=0.7.2'
+```
 
 Select a public prefix at runtime; no frontend rebuild or proxy response-body
 rewriting is needed for newly built package artifacts:
@@ -171,9 +175,8 @@ minimal-chat-serve --port 8011
    `agent-chat-fastapi-langgraph-assistant-ui-vX.Y.Z`, matching that version.
    `.github/workflows/publish-workflow.yml` rebuilds, tests, and publishes to
    PyPI through Trusted Publishing. Pushing a feature branch does **not** publish.
-4. Install the released version into a fresh environment and repeat the public
-   prefix verification above. Update the availability note in this guide with
-   the first release containing the fix.
+4. Install the released version into a fresh environment, confirm its version,
+   and repeat the public prefix verification above.
 
 ## Configuration And Persistence
 

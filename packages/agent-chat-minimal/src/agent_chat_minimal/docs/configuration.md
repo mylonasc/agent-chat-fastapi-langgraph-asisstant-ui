@@ -57,7 +57,8 @@ through the documented environment fallback.
 
 ## URL prefix deployment
 
-Set `BASE_PATH=/platform/apps/chat`, YAML `base_path: /platform/apps/chat`, or
+Requires package version **0.7.2 or later**. Set
+`BASE_PATH=/platform/apps/chat`, YAML `base_path: /platform/apps/chat`, or
 `Settings(base_path="/platform/apps/chat")`. The packaged CLI also supports
 `--base-path`. Empty means origin root; `/` and trailing slashes are rejected.
 Only URL-safe ASCII path segments are accepted (no dot segments, escapes,

@@ -88,6 +88,8 @@ jobs:
           E2E_PYTHON: ${{ github.workspace }}/packages/agent-chat-minimal/.venv/bin/python
         run: |
           pnpm playwright test -c e2e/thread-sync.config.ts
+          pnpm playwright test -c e2e/chat-actions.config.ts
+          pnpm playwright test -c e2e/code-formatting.config.ts
           pnpm playwright test -c e2e/backend-base.config.ts
           pnpm playwright test -c e2e/error-debug.config.ts
           pnpm playwright test -c e2e/error-prod.config.ts
