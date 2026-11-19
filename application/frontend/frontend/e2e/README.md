@@ -63,7 +63,7 @@ indicator. Screenshots are disabled.
 ## Full backend (`@full-backend`, live stack only)
 
 `tool-availability.spec.ts` and `generative-ui-rag.spec.ts` (identical copies
-in `frontend/e2e/` and `frontend-full/e2e/`) assume the split Compose stack:
+in `frontend/e2e/`) assume the split Compose stack:
 full backend on `:8010` with `OPENAI_API_KEY`/`SERPER_API_KEY`, plus tool
 administration credentials via `FULL_ADMIN_TOKEN` (#36). Without reachable
 admin-authorized tool APIs they skip; they never run against the packaged
@@ -73,7 +73,7 @@ app (the default `playwright.config.ts` ignores them).
 # from either frontend dir, with the compose stack up:
 FULL_ADMIN_TOKEN=... API_BASE_URL=http://localhost:8010 \
   pnpm playwright test -c e2e/full-backend.config.ts   # frontend/
-pnpm test:e2e                                          # frontend-full/ (same suites)
+pnpm test:e2e                                          # canonical unified frontend
 ```
 
 ## Out of scope

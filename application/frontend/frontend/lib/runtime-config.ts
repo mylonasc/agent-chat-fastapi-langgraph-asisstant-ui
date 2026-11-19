@@ -108,7 +108,10 @@ export function parseRuntimeConfig(payload: unknown): RuntimeConfig {
   const tool = (name: keyof RuntimeConfig["tools"]): ToolCapability => {
     const info = asRecord(rawTools[name]);
     const fallback = DEFAULT_RUNTIME_CONFIG.tools[name];
-    const statusPath = asString(info.status_path, fallback.status_path ?? "");
+    const statusPath =
+      info.status_path === null
+        ? null
+        : asString(info.status_path, fallback.status_path ?? "");
     return {
       enabled: asBool(info.enabled, fallback.enabled),
       status_path: statusPath === "" ? null : statusPath,

@@ -11,6 +11,10 @@ const apiBase = process.env.FULL_API_URL ?? "http://localhost:8010";
 test.beforeEach(async ({ page }) => {
   await page.route(`${apiBase}/**`, async (route) => {
     const url = new URL(route.request().url());
+    if (url.pathname === "/api/config") {
+      await route.continue();
+      return;
+    }
     if (url.pathname === "/threads" && route.request().method() === "GET") {
       await route.fulfill({ json: [] });
       return;
@@ -20,7 +24,9 @@ test.beforeEach(async ({ page }) => {
       return;
     }
     if (url.pathname === "/tools/web_rag/status") {
-      await route.fulfill({ json: { index: { source_count: 0, document_count: 0 }, jobs: [] } });
+      await route.fulfill({
+        json: { index: { source_count: 0, document_count: 0 }, jobs: [] },
+      });
       return;
     }
     await route.fulfill({ json: {} });
@@ -28,25 +34,45 @@ test.beforeEach(async ({ page }) => {
 });
 
 test("full chat has a stable, accessible DOM", async ({ page }) => {
+  const unavailableCapabilityRequests: string[] = [];
+  page.on("request", (request) => {
+    const path = new URL(request.url()).pathname;
+    if (path === "/agents" || path === "/tools/web_rag/status") {
+      unavailableCapabilityRequests.push(path);
+    }
+  });
   await page.goto("/");
 
   await expect(page.locator("html")).toHaveAttribute("lang", "en");
   await expect(page).toHaveTitle("assistant-ui Starter App");
   await expect(page.getByRole("main")).toHaveCount(1);
-  await expect(page.getByRole("heading", { level: 1, name: "Hello there!" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", {
+      level: 1,
+      name: "Start chatting with agent: default",
+    }),
+  ).toBeVisible();
   await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
   await expect(page.getByLabel("Message input")).toBeVisible();
   await expect(page.getByRole("link", { name: "Admin" })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Add Attachment" })).toHaveCount(0);
-  await expect(page.getByText("Hello there!", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Add Attachment" }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByText("Ask a question or search and index web sources."),
+  ).toBeVisible();
 
   await expectNoHorizontalOverflow(page);
   await expectNoDuplicateIds(page);
   await expectVisibleControlsHaveNames(page);
   await expectInsideViewport(page, ".aui-composer-root");
+  await page.waitForTimeout(1500);
+  expect(unavailableCapabilityRequests).toEqual([]);
 });
 
-test("full chat responsive navigation remains operable", async ({ page }, testInfo) => {
+test("full chat responsive navigation remains operable", async ({
+  page,
+}, testInfo) => {
   await page.goto("/");
   const trigger = page.locator('[data-slot="sidebar-trigger"]');
   await expect(trigger).toBeVisible();

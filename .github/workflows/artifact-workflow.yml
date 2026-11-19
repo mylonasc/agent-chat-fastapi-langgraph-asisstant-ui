@@ -75,6 +75,12 @@ jobs:
       - uses: astral-sh/setup-uv@v5
       - name: Install frontend dependencies
         run: pnpm --dir application/frontend/frontend install --frozen-lockfile
+      - name: Check frontend types
+        run: pnpm --dir application/frontend/frontend typecheck
+      - name: Lint frontend
+        run: pnpm --dir application/frontend/frontend lint
+      - name: Check frontend formatting
+        run: pnpm --dir application/frontend/frontend prettier
       - name: Install Playwright chromium
         run: pnpm --dir application/frontend/frontend exec playwright install --with-deps chromium
       - name: Build static UI served by the e2e fake backend

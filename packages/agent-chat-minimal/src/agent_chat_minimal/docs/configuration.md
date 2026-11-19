@@ -279,3 +279,25 @@ checkout therefore starts API-only until
 `MINIMAL_WEB_DIR` points at a static export. Built wheels already contain the
 UI. For a local provider install the `ollama` extra and set, for example,
 `MODEL=ollama:qwen3.8:latest`; no OpenAI credential is needed.
+## Reverse proxy prefixes
+
+Set `BASE_PATH=/platform/apps/chat` (YAML: `base_path: /platform/apps/chat`, CLI:
+`--base-path /platform/apps/chat`) to serve the packaged UI and API through that
+public prefix. Empty means `/`; omit the trailing slash. The same bundle works
+without Node.js or rebuilding, including sdist installs. At startup the server
+relocates reserved markers in a temporary copy, leaving installed files intact.
+
+The proxy may strip or preserve the prefix. The application sets ASGI
+`root_path` from `BASE_PATH`; forwarded prefix headers are not trusted or
+auto-detected. Configure the proxy to redirect the exact prefix to its
+trailing-slash form, preserve public host/scheme correctly, and disable
+buffering for chat streaming. No proxy response-body rewriting is needed.
+Use URL-safe path segments starting with a letter, digit, `_`, or `-`, followed
+by letters, digits, `_`, `-`, `.`, or `~`.
+
+Leave `API_BASE` unset for the API to follow `BASE_PATH`. An explicit path or
+absolute HTTP(S) URL overrides the API location only, not UI assets or config
+discovery. Custom static exports without relocation markers must already
+target the correct prefix. A writable temporary directory is required for the
+bundled UI; old non-relocatable bundles are not supported under arbitrary
+prefixes.

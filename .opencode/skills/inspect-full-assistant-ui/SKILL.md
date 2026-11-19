@@ -5,7 +5,7 @@ description: Use when inspecting, testing, or improving the full Assistant UI fr
 
 # Inspect Full Assistant UI
 
-Inspect `application/frontend/frontend-full`, which uses Next.js 16,
+Inspect the full runtime preset in `application/frontend/frontend`, which uses Next.js 16,
 `@assistant-ui/react` 0.11, Radix/shadcn primitives, and the FastAPI API on
 port 8010.
 

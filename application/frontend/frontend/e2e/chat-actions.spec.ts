@@ -53,10 +53,14 @@ test.beforeEach(async ({ page }) => {
   await expect(page.getByLabel("Message input", { exact: true })).toBeVisible();
 });
 
-test("checkpoint-only history hydrates and remains usable @packaged", async ({ page }) => {
-  await expect.poll(() => page.evaluate(() =>
-    localStorage.getItem("agent-chat.active-thread.v1"),
-  )).toBeTruthy();
+test("checkpoint-only history hydrates and remains usable @packaged", async ({
+  page,
+}) => {
+  await expect
+    .poll(() =>
+      page.evaluate(() => localStorage.getItem("agent-chat.active-thread.v1")),
+    )
+    .toBeTruthy();
   const { threadId, subject } = await page.evaluate(() => ({
     threadId: localStorage.getItem("agent-chat.active-thread.v1"),
     subject: localStorage.getItem("agent-chat.anonymous-subject.v1"),
@@ -66,15 +70,25 @@ test("checkpoint-only history hydrates and remains usable @packaged", async ({ p
     headers: { "x-agent-chat-subject": subject! },
     data: {
       state: { messages: [], thread_id: threadId },
-      commands: [{ type: "add-message", message: {
-        role: "user", parts: [{ type: "text", text: "checkpoint-only prompt" }],
-      } }],
+      commands: [
+        {
+          type: "add-message",
+          message: {
+            role: "user",
+            parts: [{ type: "text", text: "checkpoint-only prompt" }],
+          },
+        },
+      ],
     },
   });
   expect(response.ok()).toBe(true);
   await page.reload();
-  await expect(page.locator('[data-role="user"]')).toContainText("checkpoint-only prompt");
-  await expect(page.locator('[data-role="assistant"]')).toContainText("reply-1");
+  await expect(page.locator('[data-role="user"]')).toContainText(
+    "checkpoint-only prompt",
+  );
+  await expect(page.locator('[data-role="assistant"]')).toContainText(
+    "reply-1",
+  );
   await send(page, "continue checkpoint history", 2);
 });
 

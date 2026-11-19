@@ -1,0 +1,23 @@
+.next/
+out/
+playwright-report/
+test-results/
+pnpm-lock.yaml
+
+# Pre-existing formatting debt. Remove entries as their feature slice lands.
+app/admin/page.tsx
+app/assistant.tsx
+components/assistant-ui/attachment.tsx
+components/assistant-ui/share-button.tsx
+components/assistant-ui/source-indexing-widget.tsx
+components/assistant-ui/thread-list.tsx
+components/assistant-ui/thread.tsx
+components/assistant-ui/tool-fallback.tsx
+components/tools/GraphToolUI.tsx
+e2e/README.md
+e2e/backend-base.spec.ts
+e2e/generative-ui-rag.spec.ts
+e2e/tool-availability.spec.ts
+lib/api-client.ts
+lib/identity.ts
+lib/runtime-config.ts

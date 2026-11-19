@@ -15,7 +15,7 @@ To serve a static export from a checkout on the same port, set the web directory
 before starting the server:
 
 ```bash
-MINIMAL_WEB_DIR=../../frontend/frontend-minimal/out \
+MINIMAL_WEB_DIR=../../frontend/frontend/out \
   uv run uvicorn server:app --port 8011
 ```
 

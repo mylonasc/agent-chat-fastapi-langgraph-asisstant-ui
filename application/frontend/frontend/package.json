@@ -8,7 +8,10 @@
     "build": "next build",
     "start": "next start",
     "test:e2e": "playwright test",
-    "lint": "next lint",
+    "test:unit": "playwright test --config e2e/api-normalize.config.ts",
+    "test:capabilities": "playwright test --config e2e/capabilities.config.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint . --max-warnings 57",
     "prettier": "prettier --check .",
     "prettier:fix": "prettier --write ."
   },

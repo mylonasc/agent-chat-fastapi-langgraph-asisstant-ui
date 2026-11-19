@@ -1,44 +1,45 @@
 "use client";
 
-import React, { useEffect } from "react";
-import  MyRuntimeProvider  from "./MyRuntimeProvider";
 import { Thread } from "@/components/assistant-ui/thread";
-import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { ThreadListSidebar } from "@/components/assistant-ui/threadlist-sidebar";
-import { Separator } from "@/components/ui/separator";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
+import { Separator } from "@/components/ui/separator";
+import {
+  SidebarInset,
+  SidebarProvider,
+  SidebarTrigger,
+} from "@/components/ui/sidebar";
+import { useApiClient } from "@/hooks/use-api-client";
+
+import MyRuntimeProvider from "./MyRuntimeProvider";
 
 export const Assistant = () => {
-  useEffect(() => console.log("[Assistant] mounted"), []);
+  const { config } = useApiClient();
+  const threadsEnabled = config.features.threads;
 
   return (
     <MyRuntimeProvider>
-      {/* <RuntimeInspector /> */}
-        {/* <MinimalProbe /> */}
-      
-        <SidebarProvider>
-          
-          <div className="flex h-dvh w-full pr-0.5">
-            <ThreadListSidebar />
+      <SidebarProvider>
+        <div className="flex h-dvh w-full pr-0.5">
+          {threadsEnabled && <ThreadListSidebar />}
 
-            <SidebarInset>
-              <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
-                <SidebarTrigger />
-                <Separator orientation="vertical" className="mr-2 h-4" />
-                <Breadcrumb />
-              </header>
-              
-              <div className="flex-1 overflow-hidden">
-                  
-                    {/* <RuntimeDebugProbe /> */}
-                    <Thread />
-              </div>
-              
-            </SidebarInset>
-          </div>
-          
-        </SidebarProvider>
-        
+          <SidebarInset>
+            <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
+              {threadsEnabled && (
+                <>
+                  <SidebarTrigger />
+                  <Separator orientation="vertical" className="mr-2 h-4" />
+                </>
+              )}
+              <Breadcrumb />
+            </header>
+
+            <div className="flex-1 overflow-hidden">
+              <Thread />
+            </div>
+          </SidebarInset>
+        </div>
+      </SidebarProvider>
     </MyRuntimeProvider>
   );
 };

@@ -89,7 +89,7 @@ const ThreadListItem: FC = () => {
       </ThreadListItemPrimitive.Trigger>
 
       <TooltipIconButton
-        className="aui-thread-list-item-rename size-4 p-0 text-foreground hover:text-primary"
+        className="aui-thread-list-item-rename size-6 p-1 text-foreground hover:text-primary"
         variant="ghost"
         tooltip="Rename thread"
         onClick={(e) => {
@@ -103,7 +103,7 @@ const ThreadListItem: FC = () => {
 
       <ThreadListItemPrimitive.Archive asChild>
         <TooltipIconButton
-          className="aui-thread-list-item-archive mr-3 ml-auto size-4 p-0 text-foreground hover:text-primary"
+          className="aui-thread-list-item-archive mr-3 ml-auto size-6 p-1 text-foreground hover:text-primary"
           variant="ghost"
           tooltip="Archive thread"
         >

@@ -118,6 +118,46 @@ async def health():
     return {"status": "ok"}
 
 
+@app.get("/api/config")
+async def runtime_ui_config(request: Request):
+    """Describe the full RAG composition to the shared runtime UI."""
+    return {
+        "version": 1,
+        "api_base": str(request.base_url).rstrip("/"),
+        "ui_preset": "full",
+        "identity_mode": "anonymous",
+        "server_mode": os.getenv("SERVER_MODE", "prod"),
+        "features": {
+            # This source-run demo has one fixed graph and no /agents route.
+            "agents": False,
+            "assistant": True,
+            "threads": True,
+            "transcripts": True,
+        },
+        "tools": {
+            "web_rag": {
+                "enabled": True,
+                # Tool rendering is available to chat, but browser polling is
+                # not: HTTP tool administration is protected by require_admin.
+                "status_path": None,
+            },
+            # HTTP administration requires a trusted bearer principal. The
+            # browser intentionally receives no backend credential, so it
+            # must not advertise an unusable admin action.
+            "admin": {"enabled": False, "status_path": None},
+            "sharing": {"enabled": False, "status_path": None},
+            "attachments": {"enabled": False, "status_path": None},
+        },
+        "presentation": {
+            "title": "Agent Chat RAG",
+            "welcome_heading": "How can I help?",
+            "welcome_description": "Ask a question or search and index web sources.",
+            "composer_placeholder": "Message the assistant...",
+            "questions": [],
+        },
+    }
+
+
 @app.on_event("startup")
 def startup_checks():
     if os.getenv("RAG_STARTUP_VALIDATION", "0") == "1":
