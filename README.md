@@ -59,8 +59,7 @@ application/backend/
   langgraph-server-minimal/         Compatibility entry point for the package
   full/                             Separate source-run RAG demo backend
 application/frontend/
-  frontend/                         Unified static UI built into the package
-  frontend-minimal/, frontend-full/ Legacy split Compose frontends
+  frontend/                         Unified packaged and Compose UI (both presets)
 docs/                               Maintainer and deployment guides
 .agent-recon/                       Architecture reconnaissance and implementation history
 ```

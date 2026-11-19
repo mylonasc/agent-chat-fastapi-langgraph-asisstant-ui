@@ -14,10 +14,24 @@ const viewport = mobile ? { width: 412, height: 915 } : { width: 1440, height: 9
 
 const browser = await chromium.launch({ headless: true });
 const page = await browser.newPage({ viewport });
+const pageErrors = [];
+const consoleErrors = [];
+page.on("pageerror", (error) => pageErrors.push(String(error)));
+page.on("console", (message) => {
+  if (message.type() === "error") consoleErrors.push(message.text());
+});
 
 try {
   await page.goto(url, { waitUntil: "domcontentloaded" });
   await page.locator("main").waitFor({ state: "visible" });
+  // Hydration mounts the assistant root after the server-rendered shell.
+  // Wait for it so geometry reflects the interactive app, not the shell.
+  await page
+    .locator(".aui-root")
+    .first()
+    .waitFor({ state: "attached", timeout: 15_000 })
+    .catch(() => {});
+  await page.waitForTimeout(500);
   const report = await page.evaluate(({ appName, inspectedUrl, viewportSize }) => {
     const isVisible = (element) => {
       const style = getComputedStyle(element);
@@ -97,6 +111,7 @@ try {
     };
   }, { appName: app, inspectedUrl: url, viewportSize: viewport });
 
+  report.errors = { pageErrors, consoleErrors };
   process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
 } finally {
   await browser.close();

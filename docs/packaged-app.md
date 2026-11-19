@@ -237,3 +237,58 @@ docker run --rm -p 8011:8011 -e OPENAI_API_KEY agent-chat-minimal
 ```
 
 For adding agents, continue with [Implementing agents](implementing-agents.md).
+## Reverse proxies and URL prefixes
+
+The bundled UI and API can share a public path prefix without rebuilding the
+frontend or rewriting response bodies at the proxy:
+
+```bash
+BASE_PATH=/platform/apps/chat minimal-chat-serve --port 8011
+# Equivalent: minimal-chat-serve --base-path /platform/apps/chat
+```
+
+Open `https://internal.example.com/platform/apps/chat/`. The YAML equivalent is
+`base_path: /platform/apps/chat`; the default empty string serves at `/`.
+Use slash-separated URL-safe segments (letters, digits, `_`, `-`, `.`, `~`;
+segments must start with a letter, digit, `_`, or `-`). Do not include a scheme,
+query, fragment, trailing slash, or dot traversal segments.
+
+For example, a prefix-stripping nginx proxy can use:
+
+```nginx
+location = /platform/apps/chat {
+    return 307 /platform/apps/chat/;
+}
+location /platform/apps/chat/ {
+    proxy_pass http://127.0.0.1:8011/;
+    proxy_http_version 1.1;
+    proxy_buffering off;  # deliver assistant stream chunks immediately
+    proxy_set_header Host $http_host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+```
+
+Prefix-preserving proxies also work: omit the trailing `/` from `proxy_pass`.
+Configure `BASE_PATH` to the **public** prefix in either case. The application
+sets FastAPI's ASGI `root_path` accordingly; no extra Uvicorn `--root-path` is
+needed. It does not infer a prefix from untrusted forwarded headers. A stripped
+upstream request cannot reveal whether the public URL ended in `/`, so configure
+the exact-prefix redirect at the proxy as above. Forwarded host/scheme trust and
+authentication remain deployment responsibilities.
+
+The package is built once with a reserved path marker in Next.js assets and
+client routing configuration. At application creation, Python materializes a
+temporary copy with that marker replaced by the configured prefix (including
+the empty root prefix). Installed package files stay untouched, so read-only
+package installations work; the process needs a writable temporary directory.
+Normal static-file responses, ETags, and ranges are preserved. No Node.js,
+frontend source, deployment-specific build, or proxy response-body rewriting
+is required for wheel or sdist installs.
+
+`API_BASE` normally stays unset: runtime configuration returns `BASE_PATH` as
+the same-origin API base. Set `API_BASE=/another/api` or an absolute HTTP(S) URL
+only when intentionally using a separate API. This does not move assets or
+configuration discovery out of `BASE_PATH`. Custom `MINIMAL_WEB_DIR` or
+`FULL_WEB_DIR` exports without the reserved marker are served unchanged and
+must already be built for their intended public location. Older prebuilt UI
+bundles do not become relocatable just by changing Python configuration.

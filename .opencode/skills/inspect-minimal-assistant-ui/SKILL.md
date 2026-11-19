@@ -5,7 +5,7 @@ description: Use when inspecting, testing, or improving the minimal Assistant UI
 
 # Inspect Minimal Assistant UI
 
-Inspect `application/frontend/frontend-minimal`, which uses Next.js 16,
+Inspect the minimal runtime preset in `application/frontend/frontend`, which uses Next.js 16,
 `@assistant-ui/react` 0.11, Assistant Transport, and D3 for the graph tool.
 
 ## Required Method
@@ -32,7 +32,7 @@ findings after the script exists and has been run.
 - Messages: `[data-role="user"]`, `[data-role="assistant"]`
 - Tool fallback: `.aui-tool-fallback-root`
 - Graph controls: roles `slider` and `checkbox` with their visible labels
-- Graph output: scope `svg`, `circle`, `line`, `text`, and `marker#arrow` to the graph tool container
+- Graph output: scope `svg`, `circle`, `line`, `text`, and `[id^="graph-arrow-"]` markers to the graph tool container
 
 Treat missing accessible names, duplicate IDs, horizontal overflow, controls
 outside the viewport, invalid SVG structure, and unstable DOM contracts as UI

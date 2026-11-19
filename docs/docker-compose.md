@@ -24,12 +24,14 @@ docker-compose -f docker-compose.minimal.yml up --build
 
 | Service | URL | Purpose |
 | --- | --- | --- |
-| `frontend-minimal` | <http://localhost:3000> | Legacy minimal Next.js UI |
+| `frontend-minimal` | <http://localhost:3000> | Canonical unified UI, minimal runtime preset |
 | `backend-minimal` | <http://localhost:8011> | Package compatibility entry point |
 
 The backend imports `agent_chat_minimal.create_default_app()`, so it has the
-same API behavior as the package but the UI remains a separate development
-service. Use the [packaged app](packaged-app.md) instead when you need the
+same API behavior as the package. Compose builds the canonical
+`application/frontend/frontend` source as a separate development service; the
+backend runtime manifest selects its minimal preset. Use the
+[packaged app](packaged-app.md) instead when you need the
 single-port distributable deployment.
 
 ## Full RAG Stack
@@ -40,7 +42,7 @@ docker-compose -f docker-compose.full.yml up --build
 
 | Service | URL | Purpose |
 | --- | --- | --- |
-| `frontend-full` | <http://localhost:3001> | Legacy full UI with threads and tool views |
+| `frontend-full` | <http://localhost:3001> | Canonical unified UI, full runtime preset |
 | `backend-full` | <http://localhost:8010> | Separate Web Search/RAG FastAPI demo |
 
 The full backend accepts `SERPER_API_KEY`, `EMBEDDING_PROVIDER`,
@@ -51,8 +53,8 @@ SQLite composition.
 
 HTTP tool/admin APIs are disabled by default. For local administration only,
 set the backend-only `FULL_ADMIN_TOKEN` in `.env` and send it as a bearer
-credential. Do not expose it through frontend environment variables. The legacy
-UI does not send admin credentials. See the
+credential. Do not expose it through frontend environment variables. The UI
+does not send admin credentials. See the
 [full backend authorization guide](../application/backend/full/README.md#http-tool-administration)
 for the trusted-principal hook and limitations: chat and agent-invoked tools
 still require an external authentication boundary before any public deployment.
@@ -66,3 +68,7 @@ docker-compose -f docker-compose.full.yml down
 
 Run one stack at a time unless you deliberately want both APIs and frontends.
 They use distinct host ports and may otherwise compete for Docker resources.
+
+Both Compose files build the same frontend manifest and lockfile. The service
+names and ports remain stable for existing commands; `/api/config` from each
+backend selects the relevant layout and capabilities at runtime.

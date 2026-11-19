@@ -3,9 +3,9 @@ import { expect, test } from "@playwright/test";
 const apiBase = process.env.FULL_API_URL ?? "http://localhost:8011";
 const enabled = process.env.PERSISTENCE_E2E === "1";
 
-test.skip(!enabled, "requires a local durable backend and Ollama model");
+test.skip(!enabled, "requires a durable backend and configured chat model");
 
-test("completed Ollama turns persist and accept feedback", async ({ page }) => {
+test("completed model turns persist and accept feedback", async ({ page }) => {
   test.setTimeout(180_000);
   await page.goto("/");
   await page.evaluate(() => localStorage.clear());
@@ -94,8 +94,8 @@ test("full preset keeps turn order and starts a distinct remote chat", async ({ 
     const headers = subject ? { "x-agent-chat-subject": subject } : {};
     return fetch(`${apiBase}/threads/${threadId}/messages`, { headers })
       .then((response) => response.json())
-      .then((data) => data.messages);
-  }, { apiBase, threadId }), { timeout: 30_000 }).toHaveLength(2);
+      .then((data) => data.messages.map((message: { role: string }) => message.role));
+  }, { apiBase, threadId }), { timeout: 30_000 }).toEqual(["user", "assistant"]);
 
   await page.reload();
   await expect(page.locator('[data-role="assistant"]')).toBeVisible();
@@ -106,7 +106,7 @@ test("full preset keeps turn order and starts a distinct remote chat", async ({ 
   )).toEqual(["user", "assistant"]);
 
   await page.getByRole("button", { name: /new thread/i }).click();
-  await expect(page.getByRole("heading", { name: "Hello there!" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Start chatting with agent:/ })).toBeVisible();
 
   await expect.poll(listThreads, { timeout: 30_000 }).toHaveLength(2);
 });

@@ -7,7 +7,13 @@ import {
 import { asAsyncIterableStream } from "assistant-stream/utils";
 import type { ApiClient } from "@/lib/api-client";
 import { setRunError } from "@/lib/run-errors";
-import { converter } from "./MyMessageConverter";
+import { createChatMessageConverter } from "@/lib/assistant/converter";
+
+const converter = createChatMessageConverter({
+  syntheticIdPrefix: "legacy-",
+  optimisticHumans: "while-sending",
+  hydrateStoredUiTranscript: true,
+});
 
 // Keep the graph's rich assistant/tool messages for subsequent turns. Hydrated
 // transcripts without this metadata still work for ordinary text conversations.

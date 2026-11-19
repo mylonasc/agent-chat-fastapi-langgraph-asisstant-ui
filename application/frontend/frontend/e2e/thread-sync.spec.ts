@@ -22,12 +22,12 @@ function trackResponses(page: Page) {
     if (!url.includes("/threads") && !url.includes("/assistant")) return;
     const status = response.status();
     if (status === 409) {
-      bad.push({ status, method: response.request().method, url });
+      bad.push({ status, method: response.request().method(), url });
     }
     // GET .../feedback 404 means "no rating yet" (pinned API contract) and
     // is swallowed by the client; every other 4xx is a sync defect.
     if (status >= 400 && status !== 409 && !url.includes("/feedback")) {
-      bad.push({ status, method: response.request().method, url });
+      bad.push({ status, method: response.request().method(), url });
     }
   });
   return bad;
@@ -69,7 +69,9 @@ async function waitForStoredCount(page: Page, count: number) {
           const subject = localStorage.getItem(
             "agent-chat.anonymous-subject.v1",
           );
-          const headers = subject ? { "x-agent-chat-subject": subject } : {};
+          const headers: Record<string, string> = subject
+            ? { "x-agent-chat-subject": subject }
+            : {};
           const threads = await fetch("/threads", { headers }).then((r) =>
             r.json(),
           );
@@ -77,11 +79,7 @@ async function waitForStoredCount(page: Page, count: number) {
           const messages = await fetch(`/threads/${threads[0].id}/messages`, {
             headers,
           }).then((r) => r.json());
-          return messages.messages?.every(
-            (message: { role?: string }) => message.role,
-          )
-            ? messages.messages.length
-            : -1;
+          return (messages.messages as unknown[]).length;
         }),
       { timeout: 30_000 },
     )

@@ -18,25 +18,39 @@ The test runner reuses applications already running on ports 3001 and 3000.
 If they are unavailable, Playwright starts the corresponding Compose stacks.
 Set `FULL_UI_URL`, `MINIMAL_UI_URL`, or `FULL_API_URL` to inspect other hosts.
 
+## OpenAI persistence E2E
+
+The durable full-preset tests can use OpenAI without Ollama or a local GPU.
+The launcher uses Python 3.11, starts the source package on port 8011, and
+creates isolated temporary SQLite databases that are removed after the run.
+It reads the credential from the environment and never writes it to disk:
+
+```bash
+cd tests/ui
+export OPENAI_API_KEY=...
+pnpm test:persistence:openai
+```
+
+The default model is `openai:gpt-4o-mini`. Override it with
+`OPENAI_E2E_MODEL=openai:<model>` when needed.
+
 Inspection commands print JSON so agents can compare structure, accessible
 names, target sizes, duplicate IDs, and overflow without visual judgment.
 
-## Installed-artifact URL prefix regression
+## Installed-package proxy prefix regression
+
+Build the wheel with `packages/agent-chat-minimal/scripts/build_wheel.sh`, then
+install it into a clean Python virtual environment. From `tests/ui`, run:
 
 ```bash
-packages/agent-chat-minimal/scripts/build_wheel.sh # from repository root
-uv venv --python 3.12 /tmp/opencode/prefix-venv
-uv pip install --python /tmp/opencode/prefix-venv/bin/python packages/agent-chat-minimal/dist/*.whl
-UI_PYTHON=/tmp/opencode/prefix-venv/bin/python node tests/ui/scripts/verify-prefix.mjs
+UI_PYTHON=/path/to/venv/bin/python node scripts/verify-base-path.mjs
 ```
 
-Run the Node command from the repository root after installing this harness's
-dependencies/browser. It outputs JSON for 12 cases: `/`, `/chat`, nested prefix;
-minimal/full presets; prefix-stripping/preserving proxies. Each case tests real
-hydration by sending a credential-free streamed message, reload, slash redirect,
-and client navigation (including Flight fetches/lazy chunks). Full mode also
-checks transcripts and feedback. Same-origin requests must remain under the
-prefix; HTTP failures (except absent feedback), uncaught page errors, and
-non-cancellation transport failures fail the run. The fixture imports the
-installed artifact, not an editable checkout. Artifact CI runs it for both the
-wheel and sdist.
+The reusable test launches the installed package with a credential-free graph
+and a real prefix-restricted streaming HTTP proxy. Chromium checks root,
+single-segment, and nested prefixes with prefix stripping and preservation.
+Both presets check asset/font loading, runtime bootstrap, redirects, refresh,
+client-side navigation, and requests escaping the prefix. The full preset also
+checks chat streaming, threads, transcript synchronization, and feedback.
+Output is structured JSON; it uses DOM assertions, not screenshots.
+Repeat with an environment installed from the sdist to verify both artifacts.

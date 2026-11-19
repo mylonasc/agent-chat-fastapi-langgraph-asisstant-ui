@@ -19,8 +19,15 @@ sys.path.insert(0, str(PACKAGE_SRC))
 from langchain_core.messages import AIMessage  # noqa: E402
 from langgraph.graph import END, START, StateGraph  # noqa: E402
 
-from agent_chat_minimal import Settings, create_app  # noqa: E402
+from agent_chat_minimal import (  # noqa: E402
+    CapabilityProvider,
+    Settings,
+    create_app,
+)
 from agent_chat_minimal.demo_agent.agent_factory import AgentState  # noqa: E402
+
+FEATURE_NAMES = ("agents", "assistant", "threads", "transcripts")
+TOOL_NAMES = ("web_rag", "admin", "sharing", "attachments")
 
 
 SYNTAX_SAMPLES = {
@@ -76,6 +83,36 @@ SYNTAX_SAMPLES = {
 SYNTAX_DEMO = "\n\n".join(
     f"```{language}\n{code}\n```" for language, code in SYNTAX_SAMPLES.items()
 )
+
+
+def _csv_env(name: str) -> set[str] | None:
+    """Return a comma-separated env set, or None when the variable is absent.
+
+    Presence means "replace this group with exactly the listed names", which
+    lets tests disable a default capability (for example ``E2E_FEATURES``
+    without ``threads``) as well as enable an optional one.
+    """
+    raw = os.environ.get(name)
+    if raw is None:
+        return None
+    return {item.strip() for item in raw.split(",") if item.strip()}
+
+
+def _capability_provider(preset: str) -> CapabilityProvider:
+    """Apply optional ``E2E_FEATURES``/``E2E_TOOLS`` capability overrides."""
+    provider = CapabilityProvider.for_preset(preset)
+    features = _csv_env("E2E_FEATURES")
+    tools = _csv_env("E2E_TOOLS")
+    if features is None and tools is None:
+        return provider
+    enabled = set(provider.enabled)
+    if features is not None:
+        enabled = {name for name in enabled if name in TOOL_NAMES}
+        enabled.update(name for name in FEATURE_NAMES if name in features)
+    if tools is not None:
+        enabled = {name for name in enabled if name in FEATURE_NAMES}
+        enabled.update(name for name in TOOL_NAMES if name in tools)
+    return CapabilityProvider(preset=preset, enabled=frozenset(enabled))
 
 
 def make_echo_graph(checkpointer=None):
@@ -155,19 +192,32 @@ class StreamBombFake:
 def main() -> None:
     port = int(os.environ.get("E2E_PORT", "18099"))
     web_dir = FRONTEND_DIR / "out"
+    preset = os.environ.get("E2E_UI_PRESET", "full")
     settings = Settings(
-        ui_preset="full",
+        ui_preset=preset,
         server_mode=os.environ.get("E2E_SERVER_MODE", "prod"),
     )
+    capability_provider = _capability_provider(preset)
     if os.environ.get("E2E_BOMB") == "1":
         app = create_app(
-            graph_factory=_bomb_factory, settings=settings, web_dir=web_dir
+            graph_factory=_bomb_factory,
+            settings=settings,
+            web_dir=web_dir,
+            capability_provider=capability_provider,
         )
     elif os.environ.get("E2E_STREAM_BOMB") == "1":
-        app = create_app(graph=StreamBombFake(), settings=settings, web_dir=web_dir)
+        app = create_app(
+            graph=StreamBombFake(),
+            settings=settings,
+            web_dir=web_dir,
+            capability_provider=capability_provider,
+        )
     else:
         app = create_app(
-            graph_factory=make_echo_graph, settings=settings, web_dir=web_dir
+            graph_factory=make_echo_graph,
+            settings=settings,
+            web_dir=web_dir,
+            capability_provider=capability_provider,
         )
     import uvicorn
 

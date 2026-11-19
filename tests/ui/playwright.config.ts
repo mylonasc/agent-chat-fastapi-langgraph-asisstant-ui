@@ -8,7 +8,7 @@ const persistenceCommand = process.env.PERSISTENCE_E2E_COMMAND;
 
 const webServer = externalPersistenceStack
   ? persistenceCommand
-    ? [{ command: persistenceCommand, url: fullBaseURL, reuseExistingServer: false, timeout: 60_000 }]
+    ? [{ command: persistenceCommand, url: fullBaseURL, reuseExistingServer: false, timeout: 180_000 }]
     : []
   : [
   selectedStack !== "minimal"

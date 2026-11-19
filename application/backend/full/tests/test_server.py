@@ -34,6 +34,22 @@ async def test_health():
 
 
 @pytest.mark.anyio
+async def test_runtime_ui_config_selects_full_rag_preset():
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        response = await ac.get("/api/config")
+
+    assert response.status_code == 200
+    config = response.json()
+    assert config["ui_preset"] == "full"
+    assert config["api_base"] == "http://test"
+    assert config["features"]["agents"] is False
+    assert config["features"]["threads"] is True
+    assert config["tools"]["web_rag"]["enabled"] is True
+    assert config["tools"]["web_rag"]["status_path"] is None
+    assert config["tools"]["admin"]["enabled"] is False
+
+
+@pytest.mark.anyio
 async def test_create_thread_on_chat():
     """Test that sending a message creates a record in the thread manager."""
     user_id = "test_user_1"

@@ -9,10 +9,11 @@ services:
       - "8011:8011"
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - API_BASE=http://localhost:8011
     env_file:
       - .env
     healthcheck:
-      test: ["CMD", ".venv/bin/python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8011/health')"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8011/health')"]
       interval: 5s
       timeout: 3s
       retries: 12
@@ -20,12 +21,12 @@ services:
 
   frontend-minimal:
     build:
-      context: ./application/frontend/frontend-minimal
+      context: ./application/frontend/frontend
       dockerfile: Dockerfile
     ports:
       - "3000:3000"
     environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8011/assistant
+      - NEXT_PUBLIC_API_BASE=http://localhost:8011
     depends_on:
       backend-minimal:
         condition: service_healthy
