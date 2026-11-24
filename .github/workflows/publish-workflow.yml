@@ -31,7 +31,9 @@ permissions:
 jobs:
   publish:
     name: Build and publish to PyPI
-    runs-on: ubuntu-latest
+    # Pinned: Playwright 1.58.2 has no chromium build for ubuntu-26.04
+    # (ubuntu-latest), which breaks the prefix browser-test setup.
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       id-token: write # required for PyPI trusted publishing (OIDC)
