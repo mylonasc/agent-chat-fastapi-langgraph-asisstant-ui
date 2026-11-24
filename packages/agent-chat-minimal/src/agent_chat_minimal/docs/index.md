@@ -22,6 +22,7 @@ Guides (shipped inside the wheel under `agent_chat_minimal/docs/`):
 - [runtime-config.md](runtime-config.md) — runtime UI capabilities.
 - [setup.md](setup.md) — machine-readable setup contracts and diagnostics.
 - [starter.md](starter.md) — generate, test, and serve an editable project.
+- [editable-ui.md](editable-ui.md) — rebuild and serve an edited UI from the sdist sources.
 - [index.md](index.md) — this file: architecture overview.
 
 Discoverability: every guide is readable at runtime without unpacking the wheel:

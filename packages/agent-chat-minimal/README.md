@@ -103,6 +103,7 @@ docs.show("agents")
 | `runtime-config` | Runtime UI configuration and capabilities |
 | `setup` | Setup contracts, provider metadata, and diagnostics |
 | `starter` | Generate and run an editable project |
+| `editable-ui` | Rebuild and serve an edited UI from the sdist sources |
 
 Run the package tests and artifact smoke test from the repository root:
 
