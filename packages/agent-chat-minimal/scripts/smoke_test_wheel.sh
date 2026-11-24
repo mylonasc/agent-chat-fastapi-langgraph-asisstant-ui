@@ -67,6 +67,8 @@ if command -v node >/dev/null; then
 fi
 echo "no node - good"
 
+"$venv/bin/python" "$package/scripts/verify_agent_onboarding.py"
+
 unset OPENAI_API_KEY
 require_free_port "package server" "$port"
 minimal-chat-serve --host 127.0.0.1 --port "$port" &
@@ -96,6 +98,7 @@ test "$("$curl_bin" -s -o /dev/null -w '%{http_code}' \
   "assert {p['name'] for p in describe_setup()['providers']} >= {'openai','ollama','litellm'}"
 "$venv/bin/minimal-chat-init" "$starter_dir" --project-name smoke-agent --provider openai
 test -f "$starter_dir/starter-manifest.json"
+test -f "$starter_dir/AGENTS.md"
 test -f "$starter_dir/src/smoke_agent/server.py"
 test -f "$starter_dir/src/smoke_agent/agents/helper.py"
 test -f "$starter_dir/agent_chat.yaml"

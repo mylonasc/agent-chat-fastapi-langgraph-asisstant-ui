@@ -1,5 +1,8 @@
 # Model providers
 
+**Local Ollama quick start:** read [ollama-quickstart.md](ollama-quickstart.md)
+or run `minimal-chat-docs show ollama-quickstart` for a copy-paste site setup.
+
 Factories take either a legacy `provider:name` spec, a structured `ModelConfig`,
 or an already-built chat model instance. Most specs resolve through LangChain's
 `init_chat_model`; direct LiteLLM uses its optional LangChain integration.

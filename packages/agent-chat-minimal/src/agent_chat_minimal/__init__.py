@@ -7,6 +7,8 @@ Quick links (also shipped as markdown in ``agent_chat_minimal/docs/``):
 - ``create_app(...)`` — serve one graph, a factory, or an agent registry.
 - ``Settings.from_env()`` — all env vars in one place.
 - ``GET /docs`` on a running server — interactive Swagger UI.
+- ``minimal-chat-setup describe --json`` — agent onboarding and setup discovery.
+- ``minimal-chat-docs`` — offline searchable library guides.
 
 Example:
     >>> from agent_chat_minimal import create_app

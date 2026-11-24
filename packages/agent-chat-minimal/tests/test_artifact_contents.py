@@ -62,6 +62,10 @@ def test_wheel_ships_schema_setup_starter_models_and_ui(artifacts):
         "agent_chat_minimal/setup.py",
         "agent_chat_minimal/starter.py",
         "agent_chat_minimal/models.py",
+        "agent_chat_minimal/docs_cli.py",
+        "agent_chat_minimal/onboarding.py",
+        "agent_chat_minimal/docs/agent-onboarding.md",
+        "agent_chat_minimal/docs/ollama-quickstart.md",
         "agent_chat_minimal/docs/setup.md",
         "agent_chat_minimal/docs/starter.md",
         "agent_chat_minimal/docs/providers.md",
@@ -81,6 +85,8 @@ def test_wheel_registers_console_entry_points(artifacts):
     assert "minimal-chat-serve" in text
     assert "minimal-chat-migrate" in text
     assert "minimal-chat-init" in text
+    assert "minimal-chat-docs" in text
+    assert "minimal-chat-setup" in text
 
 
 def test_sdist_ships_schema_templates_and_docs(artifacts):
@@ -91,8 +97,21 @@ def test_sdist_ships_schema_templates_and_docs(artifacts):
         "src/agent_chat_minimal/setup.py",
         "src/agent_chat_minimal/starter.py",
         "src/agent_chat_minimal/models.py",
+        "src/agent_chat_minimal/docs_cli.py",
+        "src/agent_chat_minimal/onboarding.py",
+        "src/agent_chat_minimal/docs/agent-onboarding.md",
+        "src/agent_chat_minimal/docs/ollama-quickstart.md",
         "src/agent_chat_minimal/docs/setup.md",
         "src/agent_chat_minimal/docs/starter.md",
         "src/agent_chat_minimal/web/index.html",
+        "ui-src/frontend/package.json",
+        "ui-src/frontend/app/page.tsx",
     ):
         assert any(m.endswith(expected_suffix) for m in members), expected_suffix
+
+
+def test_wheel_stays_runtime_only_without_editable_sources(artifacts):
+    members = _wheel_members(artifacts)
+    assert not any("ui_src" in m for m in members), [
+        m for m in members if "ui_src" in m
+    ]

@@ -1,18 +1,24 @@
 # Agent starter projects
 
+For the shortest local-model route, read
+[ollama-quickstart.md](ollama-quickstart.md): it covers a tool-capable Ollama
+model, endpoint selection, SQLite parent directories, and live verification.
+The current generated helper uses a greeting tool; it is not a tool-free template.
+
 Generate a user-owned project with an editable agent, thin server
 composition, versioned configuration, and relocatable UI resolution:
 
 ```bash
 minimal-chat-init ./my-agent --provider ollama --preset full --persistence sqlite
 minimal-chat-init ./my-agent --dry-run   # print the plan, write nothing
+minimal-chat-init ./my-agent --preset full --json  # structured result + next steps
 ```
 
 ## What generation does (and does not do)
 
 - Validates options through the shared setup engine (`agent_chat_minimal.setup`).
 - Renders `pyproject.toml`, `agent_chat.yaml`, `.env.example`, `.gitignore`,
-  `README.md`, `starter-manifest.json`, `src/<package>/agents/`,
+  `README.md`, `AGENTS.md`, `starter-manifest.json`, `src/<package>/agents/`,
   `src/<package>/server.py`, `src/<package>/ui.py`, and offline tests.
 - Fails when the destination exists and is not empty; existing projects are
   never overwritten, so reruns cannot clobber user edits.
@@ -23,12 +29,20 @@ minimal-chat-init ./my-agent --dry-run   # print the plan, write nothing
 
 ```bash
 cd my-agent
-pip install -e .[test]
-export OPENAI_API_KEY=...   # or your provider's credential
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install -e '.[test]'
+# For the Ollama example above, start Ollama and install the chosen model.
+# For OpenAI instead, export OPENAI_API_KEY (or the selected credential name).
 my-agent-serve --config ./agent_chat.yaml
 my-agent-serve --check       # build the helper graph and exit
 pytest                       # offline tests
 ```
+
+`.env` is not loaded automatically. The initializer never starts a server or
+executes the `next_steps` it reports. `--check` constructs the graph only; it
+does not verify connectivity or tool support. For an agent-oriented end-to-end
+workflow, run `minimal-chat-docs show agent-onboarding`.
 
 `agent_chat.yaml` paths resolve relative to the file, so the project works
 from any working directory and after relocation. The UI resolves through

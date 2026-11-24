@@ -55,6 +55,8 @@ test = [
 minimal-chat-serve = "agent_chat_minimal.server:main"
 minimal-chat-migrate = "agent_chat_minimal.adapters.sqlite:migration_main"
 minimal-chat-init = "agent_chat_minimal.starter:main"
+minimal-chat-docs = "agent_chat_minimal.docs_cli:main"
+minimal-chat-setup = "agent_chat_minimal.onboarding:main"
 
 # Third-party agents register here, e.g.
 # [project.entry-points."agent_chat.agents"]
