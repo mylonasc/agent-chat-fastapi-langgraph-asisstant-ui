@@ -90,28 +90,7 @@ jobs:
         run: |
           set -euo pipefail
           uv run --with twine twine check packages/agent-chat-minimal/dist/*
-          python3 - <<'EOF'
-          import glob
-          import tarfile
-          import zipfile
-
-          sdists = glob.glob("packages/agent-chat-minimal/dist/*.tar.gz")
-          wheels = glob.glob("packages/agent-chat-minimal/dist/*.whl")
-          assert len(sdists) == 1, sdists
-          assert len(wheels) == 1, wheels
-
-          with tarfile.open(sdists[0]) as tar:
-              names = tar.getnames()
-              assert any(name.endswith("/src/agent_chat_minimal/web/index.html") for name in names), "sdist is missing the bundled UI"
-              assert not any("/web_full/" in name for name in names), "sdist must not bundle the removed web_full UI"
-
-          with zipfile.ZipFile(wheels[0]) as whl:
-              names = whl.namelist()
-              assert "agent_chat_minimal/web/index.html" in names, "wheel is missing the bundled UI"
-              assert not any(name.startswith("agent_chat_minimal/web_full/") for name in names), "wheel must not bundle the removed web_full UI"
-
-          print("distributions verified: sdist and wheel bundle the unified UI")
-          EOF
+          packages/agent-chat-minimal/scripts/verify_distributions.sh
 
       - name: Smoke-test installed archives without Node
         run: |

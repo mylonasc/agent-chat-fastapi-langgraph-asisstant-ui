@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import {
   expectInsideViewport,
   expectNoDuplicateIds,
+  expectNoElementOverflow,
   expectNoHorizontalOverflow,
   expectVisibleControlsHaveNames,
 } from "../lib/dom-quality";
@@ -57,5 +58,41 @@ test("minimal chat suggestions and composer adapt to the viewport", async ({
     page.getByRole("button", { name: "Send message" }),
   ).toBeEnabled();
   await expectInsideViewport(page, ".aui-composer-root");
+  await expectNoHorizontalOverflow(page);
+});
+
+test("suggestion cards keep long text inside the card", async ({ page }) => {
+  const longPrompt =
+    "Write an exhaustively detailed step-by-step migration guide for moving " +
+    "a mission-critical production workload with zero downtime, including " +
+    "rollback plans, data validation checklists, and observability " +
+    "SupercalifragilisticexpialidociousSupercalifragilisticexpialidocious";
+  await page.route("**/api/config", async (route) => {
+    const response = await route.fetch();
+    const json = await response.json();
+    json.presentation.questions = [
+      {
+        id: "long-question",
+        label:
+          "This is an unusually long suggestion label that should still wrap inside its card",
+        prompt: longPrompt,
+      },
+      ...json.presentation.questions.slice(1),
+    ];
+    await route.fulfill({ response, json });
+  });
+  await page.goto("/");
+
+  const suggestions = page.locator(".aui-thread-welcome-suggestion");
+  await expect(suggestions.first()).toBeVisible();
+  await expect(
+    page.getByText("unusually long suggestion label"),
+  ).toBeVisible();
+
+  await expectNoElementOverflow(page, ".aui-thread-welcome-suggestion");
+  await expectNoElementOverflow(
+    page,
+    ".aui-thread-welcome-suggestion-text-1, .aui-thread-welcome-suggestion-text-2",
+  );
   await expectNoHorizontalOverflow(page);
 });

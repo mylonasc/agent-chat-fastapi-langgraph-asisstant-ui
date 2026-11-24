@@ -20,6 +20,7 @@ GUIDES = (
     "runtime-config",
     "setup",
     "starter",
+    "editable-ui",
 )
 
 

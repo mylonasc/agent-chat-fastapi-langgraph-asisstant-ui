@@ -43,6 +43,23 @@ For an editable install, run `scripts/stage_ui.sh` first; generated `web/`
 content is intentionally ignored by Git. Without it, a checkout runs API-only
 unless `MINIMAL_WEB_DIR` points to a static export.
 
+## Editable UI Sources
+
+The wheel ships the prebuilt UI only. The sdist is the editable-UI version:
+it also contains the full TypeScript/Next.js sources under `ui-src/frontend`.
+Extract it, rebuild, and serve the result via `MINIMAL_WEB_DIR`:
+
+```bash
+pip download --no-binary :all: agent-chat-fastapi-langgraph-assistant-ui
+tar -xzf agent-chat-fastapi-langgraph-assistant-ui-*.tar.gz
+cd agent-chat-fastapi-langgraph-assistant-ui-*/ui-src/frontend
+pnpm install --frozen-lockfile && pnpm build
+MINIMAL_WEB_DIR=$PWD/out minimal-chat-serve --port 8011
+```
+
+See the in-package `editable-ui` guide (`docs.show("editable-ui")`) for notes
+and limits.
+
 ## Built-In Documentation
 
 The distribution includes these Markdown guides and exposes them without

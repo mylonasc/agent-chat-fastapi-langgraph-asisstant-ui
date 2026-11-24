@@ -99,13 +99,13 @@ const ThreadSuggestions: FC<{
             <Button
               variant="ghost"
               disabled={disabled}
-              className="aui-thread-welcome-suggestion h-auto w-full flex-1 flex-wrap items-start justify-start gap-1 rounded-3xl border px-5 py-4 text-left text-sm @md:flex-col dark:hover:bg-accent/60"
+              className="aui-thread-welcome-suggestion h-auto w-full min-w-0 flex-1 flex-wrap items-start justify-start gap-1 overflow-hidden rounded-3xl border px-5 py-4 text-left text-sm whitespace-normal break-words @md:flex-col dark:hover:bg-accent/60"
               aria-label={suggestedAction.prompt}
             >
-              <span className="aui-thread-welcome-suggestion-text-1 font-medium">
+              <span className="aui-thread-welcome-suggestion-text-1 min-w-0 font-medium wrap-anywhere">
                 {suggestedAction.label}
               </span>
-              <span className="aui-thread-welcome-suggestion-text-2 text-muted-foreground">
+              <span className="aui-thread-welcome-suggestion-text-2 min-w-0 text-muted-foreground wrap-anywhere">
                 {suggestedAction.prompt}
               </span>
             </Button>

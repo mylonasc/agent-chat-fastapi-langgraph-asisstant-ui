@@ -163,6 +163,27 @@ python -m pip install -e "packages/agent-chat-minimal[persistence]"
 minimal-chat-serve --port 8011
 ```
 
+### Editable UI sources (sdist)
+
+The wheel ships the prebuilt UI (HTML/JS/CSS) only. The sdist is the
+editable-UI version: `packages/agent-chat-minimal/scripts/stage_ui_sources.sh`
+stages `application/frontend/frontend` sources (excluding install/build
+outputs) and the sdist carries them at the top level as `ui-src/frontend`,
+while the wheel excludes them to stay lean. From a clean machine without the
+monorepo checkout:
+
+```bash
+pip download --no-binary :all: agent-chat-fastapi-langgraph-assistant-ui
+tar -xzf agent-chat-fastapi-langgraph-assistant-ui-*.tar.gz
+cd agent-chat-fastapi-langgraph-assistant-ui-*/ui-src/frontend
+pnpm install --frozen-lockfile && pnpm build
+MINIMAL_WEB_DIR=$PWD/out minimal-chat-serve --port 8011
+```
+
+`build_wheel.sh` runs both staging scripts, so the sdist sources and the
+prebuilt `web/` bundle always match per release. The in-package
+`editable-ui` guide (`docs.show("editable-ui")`) has the full notes.
+
 ### Maintainer release checklist
 
 1. Merge the fix and require the artifact CI checks to pass, including installed

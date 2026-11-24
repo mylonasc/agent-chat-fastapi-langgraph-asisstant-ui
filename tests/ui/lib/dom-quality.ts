@@ -67,8 +67,35 @@ export async function expectVisibleControlsHaveNames(page: Page) {
   expect(unnamed, "visible interactive controls without accessible names").toEqual([]);
 }
 
-export async function expectInsideViewport(page: Page, selector: string) {
-  const locator = page.locator(selector).first();
+export async function expectNoElementOverflow(page: Page, selector: string) {
+  const findings = await page.evaluate((sel) => {
+    const bad: Array<{
+      index: number;
+      scrollWidth: number;
+      clientWidth: number;
+      outerHTML: string;
+    }> = [];
+    document.querySelectorAll<HTMLElement>(sel).forEach((element, index) => {
+      const style = getComputedStyle(element);
+      if (style.display === "none" || style.visibility === "hidden") {
+        return;
+      }
+      if (element.scrollWidth > element.clientWidth + 1) {
+        bad.push({
+          index,
+          scrollWidth: element.scrollWidth,
+          clientWidth: element.clientWidth,
+          outerHTML: element.outerHTML.slice(0, 240),
+        });
+      }
+    });
+    return bad;
+  }, selector);
+
+  expect(findings, `text overflows its container for ${selector}`).toEqual([]);
+}
+
+export async function expectInsideViewport(page: Page, selector: string) {  const locator = page.locator(selector).first();
   const edge = async (name: "left" | "right" | "top" | "bottom") =>
     locator.evaluate((element, edgeName) => {
       const box = element.getBoundingClientRect();

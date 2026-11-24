@@ -66,7 +66,9 @@ artifacts = ["src/agent_chat_minimal/migrations/**/*.py"]
 # The tracked .gitkeep placeholders would otherwise be collected twice (once
 # via `packages`, once via `force-include`) and fail the build with "A second
 # file is being added to the wheel archive at the same path".
-exclude = ["**/.gitkeep"]
+# The staged editable UI sources (ui_src/) are sdist-only; excluding them
+# here keeps the wheel runtime-only and the install size small.
+exclude = ["**/.gitkeep", "src/agent_chat_minimal/ui_src"]
 
 [tool.hatch.version]
 path = "src/agent_chat_minimal/__init__.py"
@@ -86,5 +88,9 @@ artifacts = ["src/agent_chat_minimal/migrations/**/*.py"]
 
 [tool.hatch.build.targets.sdist.force-include]
 "src/agent_chat_minimal/web" = "src/agent_chat_minimal/web"
+# Editable UI version: the staged TypeScript/Next.js sources land at the
+# sdist top level as `ui-src/`, so consumers can rebuild the UI without the
+# monorepo checkout (the wheel intentionally omits them).
+"src/agent_chat_minimal/ui_src" = "ui-src"
 # schemas/ is tracked package data and ships in the sdist without help;
 # only the gitignored staged web/ bundle needs forcing here.
