@@ -16,7 +16,9 @@ permissions:
 jobs:
   artifacts:
     name: Build and smoke-test package artifacts
-    runs-on: ubuntu-latest
+    # Pinned: Playwright 1.58.2 has no chromium build for ubuntu-26.04
+    # (ubuntu-latest), which breaks the browser-test setup steps.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -59,7 +61,9 @@ jobs:
 
   e2e-packaged:
     name: Packaged-app browser e2e (@packaged)
-    runs-on: ubuntu-latest
+    # Pinned: Playwright 1.58.2 has no chromium build for ubuntu-26.04
+    # (ubuntu-latest), which breaks the browser install step.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
