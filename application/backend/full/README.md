@@ -23,6 +23,13 @@ This exposes the backend at <http://localhost:8010> and the full frontend at
 [Docker Compose guide](../../../docs/docker-compose.md) for optional RAG
 environment variables and architecture boundaries.
 
+## Agent Monitoring
+
+The [OpenInference + Phoenix example](examples/phoenix_monitoring/README.md)
+adds opt-in tracing to this backend's existing graph and streaming API. It
+includes a local Phoenix collector, an instrumented launcher, and a sample
+request. Normal startup remains uninstrumented.
+
 ## HTTP Tool Administration
 
 All `/tools/web_rag/*`, `/tools/web_search/*`, and `/tools/overview` HTTP

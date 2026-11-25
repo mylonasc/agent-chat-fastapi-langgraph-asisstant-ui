@@ -1,0 +1,32 @@
+name: Full-agent Phoenix monitoring
+
+on:
+  pull_request:
+    paths:
+      - "application/backend/full/**"
+      - ".github/workflows/phoenix-monitoring.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  monitoring:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      matrix:
+        python: ["3.11", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: astral-sh/setup-uv@v5
+      - name: Validate collector configuration
+        run: docker compose -f application/backend/full/examples/phoenix_monitoring/compose.yml config --quiet
+      - name: Test instrumentation and authenticated Phoenix ingestion
+        working-directory: application/backend/full
+        env:
+          PHOENIX_DOCKER_TEST: "1"
+        run: uv run --locked --python ${{ matrix.python }} --extra phoenix --with pytest pytest tests/test_phoenix_monitoring.py tests/test_phoenix_ingestion.py -q

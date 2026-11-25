@@ -72,6 +72,8 @@ Read these in order for the shortest path through the repository:
   development stacks, ports, and environment variables.
 - [Implement an agent](docs/implementing-agents.md): embed a graph, register a
   named agent, or publish an entry-point plugin.
+- [Monitor the full agent with OpenInference + Phoenix](application/backend/full/examples/phoenix_monitoring/README.md):
+  an opt-in local tracing example for the RAG backend.
 - [Package README](packages/agent-chat-minimal/README.md): package-specific
   commands and the documentation shipped inside the wheel.
 
