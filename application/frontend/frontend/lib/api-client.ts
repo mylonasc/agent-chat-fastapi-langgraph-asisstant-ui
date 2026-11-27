@@ -13,6 +13,7 @@ import { FeedbackService } from "./api/services/feedback";
 import { RagService } from "./api/services/rag";
 import { TranscriptsService } from "./api/services/transcripts";
 import { ThreadsService } from "./api/services/threads";
+import { ToolingService } from "./api/services/tooling";
 
 export { ApiError } from "./api/errors";
 export type {
@@ -37,6 +38,7 @@ export class ApiClient {
   readonly feedback: FeedbackService;
   readonly agents: AgentsService;
   readonly rag: RagService;
+  readonly tooling: ToolingService;
 
   constructor(
     readonly apiBase: string,
@@ -48,6 +50,7 @@ export class ApiClient {
     this.feedback = new FeedbackService(this.transport);
     this.agents = new AgentsService(this.transport);
     this.rag = new RagService(this.transport);
+    this.tooling = new ToolingService(this.transport);
   }
 
   headers(extra?: HeadersInit): Headers {

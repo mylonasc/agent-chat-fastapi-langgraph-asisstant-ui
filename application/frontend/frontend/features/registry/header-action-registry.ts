@@ -11,6 +11,12 @@ import type { HeaderActionRegistration } from "./types";
  */
 export const HEADER_ACTION_REGISTRY: readonly HeaderActionRegistration[] = [
   {
+    id: "tooling",
+    isEnabled: (config) => Boolean(config.tooling?.enabled),
+    label: "Manage toolsets",
+    href: "/toolsets",
+  },
+  {
     id: "admin",
     isEnabled: isAdminEnabled,
     label: "Admin",

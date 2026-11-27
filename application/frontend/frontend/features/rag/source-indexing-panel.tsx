@@ -131,12 +131,12 @@ export function SourceIndexingPanel({
   return (
     <div
       data-testid={`source-indexing-widget-${toolName}`}
-      className="mb-4 overflow-hidden rounded-2xl border bg-background shadow-sm"
+      className="@container mb-4 overflow-hidden rounded-2xl border bg-background shadow-sm"
     >
       <button
         type="button"
         data-testid={`source-indexing-widget-toggle-${toolName}`}
-        className="flex w-full items-center justify-between border-b px-4 py-3 text-left"
+        className="flex w-full flex-wrap items-center justify-between gap-2 border-b px-4 py-3 text-left"
         onClick={() => setIsOpen((open) => !open)}
       >
         <span className="flex items-center gap-2 text-sm font-semibold">
@@ -157,7 +157,7 @@ export function SourceIndexingPanel({
 
       {isOpen && (
         <>
-          <div className="flex gap-2 border-b px-3 py-2">
+          <div className="flex flex-wrap gap-2 border-b px-3 py-2">
             {(["overview", "sources", "retrieval"] as const).map((name) => (
               <Button
                 key={name}
@@ -173,7 +173,7 @@ export function SourceIndexingPanel({
           </div>
 
           {panel === "overview" && (
-            <div className="grid gap-3 p-3 md:grid-cols-3">
+            <div className="grid gap-3 p-3 @md:grid-cols-3">
               <div className="rounded-xl border bg-muted/30 p-3">
                 <div className="mb-1 text-[11px] text-muted-foreground uppercase">
                   Indexer Tool
@@ -236,7 +236,7 @@ export function SourceIndexingPanel({
                 </div>
               </div>
 
-              <div className="rounded-xl border bg-muted/30 p-3 md:col-span-3">
+              <div className="rounded-xl border bg-muted/30 p-3 @md:col-span-3">
                 <div className="mb-1 text-[11px] text-muted-foreground uppercase">
                   Requested Tool Args
                 </div>
@@ -298,7 +298,7 @@ export function SourceIndexingPanel({
           )}
 
           {panel === "retrieval" && (
-            <div className="grid gap-3 p-3 md:grid-cols-2">
+            <div className="grid gap-3 p-3 @md:grid-cols-2">
               <div className="rounded-xl border bg-muted/20 p-3">
                 <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-muted-foreground uppercase">
                   <SearchIcon className="size-3.5" /> Top Documents

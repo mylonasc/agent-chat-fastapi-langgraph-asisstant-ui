@@ -1,0 +1,14 @@
+name: full-agent-phoenix
+
+services:
+  phoenix:
+    image: arizephoenix/phoenix@sha256:09ec48906c054a27dd09a88c8e6bcc24fe89649d3ecc94d3a8ed394e21279b31
+    ports:
+      - "127.0.0.1:6006:6006"
+    environment:
+      PHOENIX_WORKING_DIR: /data
+    volumes:
+      - phoenix-data:/data
+
+volumes:
+  phoenix-data:

@@ -6,8 +6,10 @@ import {
   expectNoHorizontalOverflow,
   expectVisibleControlsHaveNames,
 } from "../lib/dom-quality";
+import { mockTooling, toolingManifest } from "../lib/tooling-fixture";
 
 const apiBase = process.env.MINIMAL_API_URL ?? "http://localhost:8011";
+test.beforeEach(async ({ page }) => { await mockTooling(page, apiBase, "minimal"); });
 
 test("minimal chat has a stable, accessible DOM", async ({ page }) => {
   const agentRequests: string[] = [];
@@ -32,8 +34,11 @@ test("minimal chat has a stable, accessible DOM", async ({ page }) => {
   await expectNoDuplicateIds(page);
   await expectVisibleControlsHaveNames(page);
   await expectInsideViewport(page, ".aui-composer-root");
-  await expect.poll(() => agentRequests.length).toBeGreaterThan(0);
-  expect(agentRequests.every((url) => url.startsWith(apiBase))).toBe(true);
+  // Managed toolsets bind one configured agent; no legacy registry discovery.
+  await expect(
+    page.getByRole("link", { name: "Manage toolsets" }),
+  ).toBeVisible();
+  expect(agentRequests).toEqual([]);
 });
 
 test("minimal chat suggestions and composer adapt to the viewport", async ({
@@ -68,8 +73,7 @@ test("suggestion cards keep long text inside the card", async ({ page }) => {
     "rollback plans, data validation checklists, and observability " +
     "SupercalifragilisticexpialidociousSupercalifragilisticexpialidocious";
   await page.route("**/api/config", async (route) => {
-    const response = await route.fetch();
-    const json = await response.json();
+    const json = toolingManifest(apiBase, "minimal");
     json.presentation.questions = [
       {
         id: "long-question",
@@ -79,15 +83,13 @@ test("suggestion cards keep long text inside the card", async ({ page }) => {
       },
       ...json.presentation.questions.slice(1),
     ];
-    await route.fulfill({ response, json });
+    await route.fulfill({ json });
   });
   await page.goto("/");
 
   const suggestions = page.locator(".aui-thread-welcome-suggestion");
   await expect(suggestions.first()).toBeVisible();
-  await expect(
-    page.getByText("unusually long suggestion label"),
-  ).toBeVisible();
+  await expect(page.getByText("unusually long suggestion label")).toBeVisible();
 
   await expectNoElementOverflow(page, ".aui-thread-welcome-suggestion");
   await expectNoElementOverflow(

@@ -1,5 +1,18 @@
 import os
 from typing import Dict
+from contextlib import contextmanager
+from contextvars import ContextVar
+
+_overrides = ContextVar("web_tool_configuration", default=None)
+
+
+@contextmanager
+def tool_configuration(config):
+    token = _overrides.set(config)
+    try:
+        yield
+    finally:
+        _overrides.reset(token)
 
 
 def default_web_rag_config() -> dict:
@@ -20,6 +33,9 @@ class ToolConfigStore:
         self._configs: Dict[str, dict] = {"web_rag": default_web_rag_config()}
 
     def get(self, tool_name: str) -> dict:
+        overrides = _overrides.get()
+        if overrides is not None and tool_name in overrides:
+            return overrides[tool_name]
         return self._configs.get(tool_name, {})
 
     def set(self, tool_name: str, config: dict):

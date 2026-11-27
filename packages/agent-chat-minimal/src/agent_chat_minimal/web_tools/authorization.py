@@ -1,4 +1,4 @@
-"""Fail-closed authorization for the full demo's HTTP administration APIs.
+"""Fail-closed authorization for legacy Web RAG HTTP administration APIs.
 
 This boundary does not authenticate chat routes or agent-invoked tools.
 """

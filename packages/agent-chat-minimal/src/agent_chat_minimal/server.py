@@ -413,6 +413,13 @@ def _build_app(
     """
     from .registry import discover_agents
 
+    toolkit_manager = None
+    if settings.toolsets is not None:
+        if graph is not None or graph_factory is not None or agents is not None:
+            raise ValueError("Managed toolsets cannot be combined with opaque custom agent graphs")
+        from .toolkits.manager import ToolkitManager
+        toolkit_manager = ToolkitManager(settings)
+
     default_agent: str | None = settings.default_agent
     single_mode = graph is not None or graph_factory is not None
 
@@ -432,7 +439,10 @@ def _build_app(
             return factory(checkpointer=factory_checkpointer)
         return factory()
 
-    if single_mode:
+    if toolkit_manager is not None:
+        factories = {"configured": lambda: None}
+        default_agent = "configured"
+    elif single_mode:
         if graph is not None:
             factories: dict[str, Callable[..., Any]] = {
                 "default": lambda: graph
@@ -547,6 +557,18 @@ def _build_app(
     app.state.session_service = sessions
     app.state.transcript_service = transcripts
     app.state.principal_resolver = resolver
+    app.state.toolkit_manager = toolkit_manager
+    if toolkit_manager is not None:
+        from .toolkits.api import mount_toolkit_api
+        mount_toolkit_api(app, toolkit_manager, sessions, resolver, _service_error_to_http)
+
+    def managed_graph(thread_id, principal):
+        from .toolkits.engine import build_tools
+        from .demo_agent.agent_factory import make_tool_agent
+        snapshot = toolkit_manager.snapshot(toolkit_manager.thread_scope(thread_id, principal.subject))
+        tools = build_tools(snapshot, principal, toolkit_manager.web_data_path)
+        saver = getattr(checkpointer, "checkpointer", checkpointer)
+        return make_tool_agent(settings.model, tools, checkpointer=saver)
 
     async def _resolve_principal(request: Request) -> Principal:
         return await resolver.resolve(request)
@@ -663,11 +685,19 @@ def _build_app(
             await sessions.delete(principal, thread_id)
         except (NotFoundError, ForbiddenError, ConflictError) as exc:
             raise _service_error_to_http(exc) from exc
+        if toolkit_manager is not None:
+            await asyncio.to_thread(toolkit_manager.store.delete_thread, toolkit_manager.thread_scope(thread_id, principal.subject))
         return {"ok": True}
 
-    async def _checkpointer_fallback_messages(thread_id: str) -> list | None:
+    async def _checkpointer_fallback_messages(thread_id: str, principal: Principal) -> list | None:
         """Legacy hydration from graph state when no transcript is stored."""
-        instance = get_or_build(default_agent)
+        if toolkit_manager is not None:
+            try:
+                instance = await asyncio.to_thread(managed_graph, thread_id, principal)
+            except Exception:
+                return None
+        else:
+            instance = get_or_build(default_agent)
         if instance is not None and hasattr(instance, "get_state"):
             try:
                 config = {"configurable": {"thread_id": thread_id}}
@@ -696,7 +726,7 @@ def _build_app(
             # payload to the transcript synchronizer. Preserve that rich
             # stored payload (and its feedback ID), but restore missing human
             # messages from the checkpoint so hydration remains chronological.
-            fallback = await _checkpointer_fallback_messages(thread_id)
+            fallback = await _checkpointer_fallback_messages(thread_id, principal)
             users = []
             for message in fallback or []:
                 if not isinstance(message, dict) or message.get("type") != "human":
@@ -714,7 +744,7 @@ def _build_app(
             if users:
                 return {"messages": [*users, *payloads]}
             return {"messages": payloads}
-        fallback = await _checkpointer_fallback_messages(thread_id)
+        fallback = await _checkpointer_fallback_messages(thread_id, principal)
         return {"messages": fallback or []}
 
     @app.post("/threads/{thread_id}/messages")
@@ -802,7 +832,7 @@ def _build_app(
                     "hint": f"Available: {sorted(factories.keys())}",
                 },
             )
-        instance = get_or_build(agent_id)
+        instance = True if toolkit_manager is not None else get_or_build(agent_id)
         if instance is None:
             err = build_errors.get(agent_id) or eager_error
             if single_mode:
@@ -836,6 +866,14 @@ def _build_app(
         except (NotFoundError, ForbiddenError) as exc:
             raise _service_error_to_http(exc) from exc
         config = {"configurable": {"thread_id": thread_id}}
+        if toolkit_manager is not None:
+            try:
+                # A fresh immutable snapshot per request: configuration changes
+                # cannot change the tools of a turn already in progress.
+                instance = await asyncio.to_thread(managed_graph, thread_id, principal)
+            except Exception as exc:
+                logger.warning("Configured agent could not be built: %s", exc)
+                raise HTTPException(status_code=503, detail={"error": "agent_not_ready", "message": "Configured agent could not be built. Check tool dependencies and model credentials."}) from exc
 
         reducer = prepare_state or default_prepare_state
         # Explicit messages (including []) are a selected-branch snapshot.
@@ -947,7 +985,14 @@ def _build_app(
         from .runtime_config import build_runtime_config
 
         snapshot = build_runtime_config(settings, capability_provider)
-        return JSONResponse(content=snapshot.as_dict(), headers={"Cache-Control": "no-store"})
+        payload = snapshot.as_dict()
+        if toolkit_manager is not None:
+            payload["features"]["agents"] = False
+            payload["tooling"] = {"enabled": True, "tool_names": sorted(toolkit_manager.tool_names)}
+            # Renderer availability is stable for historical messages. Tool
+            # execution itself is controlled by the runtime policy snapshot.
+            payload["tools"]["web_rag"] = {"enabled": "web_rag" in toolkit_manager.tool_names, "status_path": None}
+        return JSONResponse(content=payload, headers={"Cache-Control": "no-store"})
 
     @app.post("/assistant")
     async def chat_endpoint(request: ScopedChatRequest, principal: PrincipalDep):

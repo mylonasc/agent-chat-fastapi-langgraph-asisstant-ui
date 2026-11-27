@@ -26,6 +26,7 @@ export interface RuntimeConfig {
   ui_preset: UiPreset;
   identity_mode: IdentityMode;
   server_mode: ServerMode;
+  tooling?: { enabled: boolean; tool_names: string[] };
   features: {
     agents: boolean;
     assistant: boolean;
@@ -66,9 +67,21 @@ export const DEFAULT_RUNTIME_CONFIG: RuntimeConfig = {
     welcome_description: "Ask a question to get started.",
     composer_placeholder: "Message the assistant...",
     questions: [
-      { id: "react-hooks", label: "Explain React hooks", prompt: "Explain React hooks like useState and useEffect" },
-      { id: "sql-query", label: "Write a SQL query", prompt: "Write a SQL query to find top customers" },
-      { id: "meal-plan", label: "Create a meal plan", prompt: "Create a meal plan for healthy weight loss" },
+      {
+        id: "react-hooks",
+        label: "Explain React hooks",
+        prompt: "Explain React hooks like useState and useEffect",
+      },
+      {
+        id: "sql-query",
+        label: "Write a SQL query",
+        prompt: "Write a SQL query to find top customers",
+      },
+      {
+        id: "meal-plan",
+        label: "Create a meal plan",
+        prompt: "Create a meal plan for healthy weight loss",
+      },
     ],
   },
 };
@@ -124,10 +137,20 @@ export function parseRuntimeConfig(payload: unknown): RuntimeConfig {
   const rawPresentation = asRecord(data.presentation);
   const defaults = DEFAULT_RUNTIME_CONFIG.presentation;
   const questions = Array.isArray(rawPresentation.questions)
-    ? rawPresentation.questions.filter((question): question is RuntimeConfig["presentation"]["questions"][number] => {
-        const item = asRecord(question);
-        return typeof item.id === "string" && typeof item.label === "string" && typeof item.prompt === "string";
-      }).map((question) => ({ ...question }))
+    ? rawPresentation.questions
+        .filter(
+          (
+            question,
+          ): question is RuntimeConfig["presentation"]["questions"][number] => {
+            const item = asRecord(question);
+            return (
+              typeof item.id === "string" &&
+              typeof item.label === "string" &&
+              typeof item.prompt === "string"
+            );
+          },
+        )
+        .map((question) => ({ ...question }))
     : defaults.questions;
 
   return {
@@ -136,6 +159,14 @@ export function parseRuntimeConfig(payload: unknown): RuntimeConfig {
     ui_preset: uiPreset === "full" ? "full" : "minimal",
     identity_mode: identityMode === "delegated" ? "delegated" : "anonymous",
     server_mode: serverMode === "debug" ? "debug" : "prod",
+    tooling: {
+      enabled: asBool(asRecord(data.tooling).enabled, false),
+      tool_names: Array.isArray(asRecord(data.tooling).tool_names)
+        ? (asRecord(data.tooling).tool_names as unknown[]).filter(
+            (name): name is string => typeof name === "string",
+          )
+        : [],
+    },
     features,
     tools: {
       web_rag: tool("web_rag"),
@@ -145,9 +176,18 @@ export function parseRuntimeConfig(payload: unknown): RuntimeConfig {
     },
     presentation: {
       title: asString(rawPresentation.title, defaults.title),
-      welcome_heading: asString(rawPresentation.welcome_heading, defaults.welcome_heading),
-      welcome_description: asString(rawPresentation.welcome_description, defaults.welcome_description),
-      composer_placeholder: asString(rawPresentation.composer_placeholder, defaults.composer_placeholder),
+      welcome_heading: asString(
+        rawPresentation.welcome_heading,
+        defaults.welcome_heading,
+      ),
+      welcome_description: asString(
+        rawPresentation.welcome_description,
+        defaults.welcome_description,
+      ),
+      composer_placeholder: asString(
+        rawPresentation.composer_placeholder,
+        defaults.composer_placeholder,
+      ),
       questions,
     },
   };

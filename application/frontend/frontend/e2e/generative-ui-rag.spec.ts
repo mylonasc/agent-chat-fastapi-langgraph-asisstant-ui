@@ -97,6 +97,8 @@ test("web_search generative widget shows indexing sources and counters @full-bac
   await expect(page.getByText("SEARCH_INDEX_WIDGET_OK")).toBeVisible({
     timeout: 180_000,
   });
+  await page.locator('[data-role="assistant"]').last()
+    .getByRole("button", { name: "Show details" }).click();
 
   const widget = widgetForTool(page, "web_search");
   await expect(widget).toBeVisible();
@@ -144,6 +146,8 @@ test("web_rag generative widget shows retrieved chunks and sources @full-backend
   );
 
   await expect(page.getByText("RAG_WIDGET_OK")).toBeVisible({ timeout: 180_000 });
+  await page.locator('[data-role="assistant"]').last()
+    .getByRole("button", { name: "Show details" }).click();
 
   const widget = widgetForTool(page, "web_rag");
   await expect(widget).toBeVisible();

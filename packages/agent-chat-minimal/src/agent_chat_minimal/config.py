@@ -6,7 +6,7 @@ stays dependency-light (no ``pydantic-settings`` required).
 
 import os
 import re
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Literal, Mapping
 
@@ -21,6 +21,7 @@ _CONFIG_FIELDS = frozenset(
         "auto_migrate", "persistence_enabled", "max_transcript_messages",
         "ui", "app_title", "welcome_heading",
         "welcome_description", "composer_placeholder", "proposed_questions",
+        "toolsets", "allowed_toolsets", "tool_config", "tool_settings_path", "tool_data_path",
     )
 )
 
@@ -106,8 +107,27 @@ class Settings:
     composer_placeholder: str = "Message the assistant..."
     # None means the YAML omitted questions; () means intentionally none.
     proposed_questions: tuple[ProposedQuestion, ...] | None = None
+    # None preserves opaque/custom agent compatibility. An explicit list (even
+    # empty) selects the managed, configurable-tool agent.
+    toolsets: tuple[str, ...] | None = None
+    allowed_toolsets: tuple[str, ...] | None = None
+    tool_config: dict[str, dict[str, Any]] = field(default_factory=dict)
+    tool_settings_path: str = "tool-settings.sqlite3"
+    tool_data_path: str = "data/web_rag"
 
     def __post_init__(self) -> None:
+        from .toolkits.catalog import ids
+
+        if self.toolsets is not None:
+            object.__setattr__(self, "toolsets", ids(self.toolsets))
+        if self.allowed_toolsets is not None:
+            object.__setattr__(self, "allowed_toolsets", ids(self.allowed_toolsets))
+            if self.toolsets is None:
+                raise ValueError("allowed_toolsets requires an explicit toolsets list")
+        if not isinstance(self.tool_config, dict):
+            raise ValueError("tool_config must be an object keyed by tool name")
+        if not self.tool_settings_path.strip() or not self.tool_data_path.strip():
+            raise ValueError("Tool settings and data paths must not be empty")
         if not self.host.strip():
             raise ValueError("host must not be empty")
         if not 1 <= self.port <= 65535:
@@ -179,8 +199,12 @@ class Settings:
             ),
             auto_migrate=auto_migrate_raw in {"true", "1"},
             max_transcript_messages=max_transcript_messages,
+            toolsets=os.getenv("TOOLSETS") if "TOOLSETS" in os.environ else None,
+            allowed_toolsets=os.getenv("ALLOWED_TOOLSETS") if "ALLOWED_TOOLSETS" in os.environ else None,
+            tool_settings_path=os.getenv("TOOL_SETTINGS_PATH", "tool-settings.sqlite3"),
+            tool_data_path=os.getenv("TOOL_DATA_PATH", "data/web_rag"),
             persistence_enabled=(
-                os.getenv("PERSISTENCE_ENABLED", "false").lower()
+                os.getenv("PERSISTENCE_ENABLED", "true" if "TOOLSETS" in os.environ else "false").lower()
                 in {"true", "1"}
                 or any(
                     os.getenv(name)
@@ -233,8 +257,10 @@ class Settings:
         if unknown:
             raise ValueError(f"unknown configuration field(s): {', '.join(sorted(unknown))}")
         values = asdict(cls())
+        if "toolsets" in document and "persistence_enabled" not in document:
+            values["persistence_enabled"] = True
         values.update(document)
-        for name in ("web_dir", "web_full_dir", "database_path", "checkpoint_database_path"):
+        for name in ("web_dir", "web_full_dir", "database_path", "checkpoint_database_path", "tool_settings_path", "tool_data_path"):
             value = values.get(name)
             if value and not Path(value).expanduser().is_absolute():
                 values[name] = str(config_path.parent / value)
@@ -289,6 +315,8 @@ def _present_env_overrides(environ: Mapping[str, str]) -> dict[str, Any]:
         "DATABASE_URL": "database_url", "DATABASE_PATH": "database_path",
         "CHECKPOINT_DATABASE_URL": "checkpoint_database_url",
         "CHECKPOINT_DATABASE_PATH": "checkpoint_database_path",
+        "TOOLSETS": "toolsets", "ALLOWED_TOOLSETS": "allowed_toolsets",
+        "TOOL_SETTINGS_PATH": "tool_settings_path", "TOOL_DATA_PATH": "tool_data_path",
     }
     for env_name, field_name in names.items():
         if env_name in environ:

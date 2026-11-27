@@ -4,16 +4,23 @@ services:
   backend-minimal:
     build:
       context: .
-      dockerfile: application/backend/langgraph-server-minimal/Dockerfile
+      dockerfile: scripts/Dockerfile.backend
+      args:
+        ALLOWED_TOOLSETS: ${ALLOWED_TOOLSETS-${TOOLSETS-calculator,weather,graph}}
     ports:
       - "8011:8011"
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - API_BASE=http://localhost:8011
+      - UI_PRESET=minimal
+      - PORT=8011
+      - TOOLSETS=${TOOLSETS-calculator,weather,graph}
     env_file:
       - .env
+    volumes:
+      - demo-minimal-data:/app/data
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8011/health')"]
+      test: ["CMD", ".venv/bin/python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8011/health')"]
       interval: 5s
       timeout: 3s
       retries: 12
@@ -30,3 +37,6 @@ services:
     depends_on:
       backend-minimal:
         condition: service_healthy
+
+volumes:
+  demo-minimal-data:

@@ -1,0 +1,10 @@
+.git
+**/.venv
+**/node_modules
+**/.next
+**/out
+**/__pycache__
+.demo-data
+.env
+**/test-results
+application/backend/full/data
