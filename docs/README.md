@@ -25,15 +25,20 @@ stacks:
    wheel runs the API and UI from one Python process on port 8011.
 2. `docker-compose.minimal.yml` starts that packaged application through its
    compatibility backend plus the unified frontend's minimal preset on port 3000.
-3. `docker-compose.full.yml` starts a separate source-run RAG backend on port
-   8010 plus the unified frontend's full preset on port 3001. Its Web Search and RAG tool
-   routes are not part of the portable package.
+3. `docker-compose.full.yml` starts the same canonical backend on port 8010
+   with the full frontend layout on port 3001. Toolsets are independent of
+   layout; optional web integrations live in the package and are enabled only
+   when selected. The old source-run RAG server is retained for legacy examples.
 
 ## Guides
 
 - [Packaged app](packaged-app.md): the recommended path for serving the
   portable application, including local wheel builds and persistence.
 - [Docker Compose](docker-compose.md): split-stack development workflows.
+- [Without Docker](local-development.md): run either demo from source with
+  uv, Node, pnpm, hot reload, and automatic process cleanup.
+- [Toolsets](toolsets.md): independent layout/tool selection, durable runtime
+  administration, per-conversation choices, and validated configuration knobs.
 - [OpenInference + Phoenix example](../application/backend/full/examples/phoenix_monitoring/README.md):
   trace the full RAG agent's graph, model calls, tools, and retrievers locally.
 - [Implementing agents](implementing-agents.md): graph contract, application

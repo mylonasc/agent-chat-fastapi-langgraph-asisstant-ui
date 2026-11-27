@@ -20,6 +20,16 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+web = [
+    "requests>=2.32.0,<3",
+    "langchain-community>=0.2.0",
+    "pypdf>=5.0.0",
+    "docx2txt>=0.8",
+    "rank-bm25>=0.2.2",
+    "fastembed>=0.3.6",
+    "faiss-cpu>=1.8.0",
+]
+web-search = ["requests>=2.32.0,<3"]
 openai = [
     "langchain-openai>=0.2.0",
 ]
@@ -52,6 +62,7 @@ test = [
 ]
 
 [project.scripts]
+agent-chat-serve = "agent_chat_minimal.composition:managed_main"
 minimal-chat-serve = "agent_chat_minimal.server:main"
 minimal-chat-migrate = "agent_chat_minimal.adapters.sqlite:migration_main"
 minimal-chat-init = "agent_chat_minimal.starter:main"

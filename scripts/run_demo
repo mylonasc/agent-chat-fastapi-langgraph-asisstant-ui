@@ -1,0 +1,236 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="$(cd -- "${script_dir}/.." && pwd)"
+
+usage() {
+  cat <<'EOF'
+Usage: scripts/run_demo [--ui minimal|full] [--runtime docker|local] [options]
+
+Run the current local checkout. Docker Compose is the default; --local runs
+the Python backend and Next.js dev server directly, without Docker.
+Neither mode pulls or changes your Git checkout. Minimal is the default.
+Docker startup rebuilds images; local startup installs locked dependencies.
+
+Set up once: copy .env.example to .env and set OPENAI_API_KEY.
+The full demo also needs SERPER_API_KEY to use Web Search.
+Docker mode requires Docker with the Compose v2 plugin and a running daemon.
+Local mode requires uv, Node.js 20.9+, and pnpm 10. uv provisions Python 3.11.
+
+Setups:
+      --ui NAME  Interface only: minimal (default) or full
+      --runtime NAME  docker (default) or local
+      --toolsets LIST  Comma-separated toolsets (default: calculator,weather,graph)
+      --allow-toolsets LIST  Runtime allowlist; defaults to the selected toolsets
+  -m, --minimal   Alias for --ui minimal: UI :3000, API :8011
+  -f, --full      Alias for --ui full: UI :3001, API :8010; does NOT imply RAG
+
+Options:
+      --local    Run from source; sync Python/Node dependencies and hot reload
+      --ui-port N   Local frontend port (default: 3000 minimal, 3001 full)
+      --api-port N  Local backend port (default: 8011 minimal, 8010 full)
+  -d, --detach    Docker only: start in the background, wait for services
+      --no-build Docker: reuse images; local: skip dependency installation
+      --logs     Docker only: follow logs (does not start the setup)
+      --stop     Docker only: remove selected containers, not volumes
+      --dry-run  Print the command without starting services or requiring .env
+  -h, --help     Show this help
+
+Examples:
+  ./scripts/run_demo --full
+  ./scripts/run_demo --minimal --detach
+  ./scripts/run_demo --full --logs
+  ./scripts/run_demo --full --stop
+  ./scripts/run_demo --full --local
+  ./scripts/run_demo --runtime local --ui full --toolsets calculator,web_search
+  ./scripts/run_demo --minimal --local --ui-port 3100 --api-port 8111
+
+Foreground mode streams logs; Ctrl-C stops the services it started.
+Local mode is foreground-only. Stop an existing Docker demo first, or use
+local port overrides. Run only one local frontend per checkout at a time.
+EOF
+}
+
+fail() {
+  printf 'run_demo: %s\n' "$*" >&2
+  exit 2
+}
+
+setup=""
+action="start"
+detach=false
+build=true
+dry_run=false
+local_mode=false
+ui_port=""
+api_port=""
+toolsets_set=false
+toolsets=""
+allowed_set=false
+allowed=""
+
+while (($#)); do
+  case "$1" in
+    -m|--minimal|-f|--full)
+      case "$1" in
+        -m|--minimal) selected="minimal" ;;
+        *) selected="full" ;;
+      esac
+      if [[ -n "$setup" && "$setup" != "$selected" ]]; then
+        fail "Choose either --minimal or --full, not both."
+      fi
+      setup="$selected"
+      ;;
+    -d|--detach) detach=true ;;
+    --ui|--runtime|--toolsets|--allow-toolsets)
+      option="$1"
+      shift
+      (($#)) || fail "$option requires a value."
+      case "$option" in
+        --ui)
+          [[ "$1" == minimal || "$1" == full ]] || fail "--ui must be minimal or full."
+          [[ -z "$setup" || "$setup" == "$1" ]] || fail "Conflicting UI selections."
+          setup="$1" ;;
+        --runtime)
+          case "$1" in
+            local) local_mode=true ;;
+            docker) local_mode=false ;;
+            *) fail "--runtime must be docker or local." ;;
+          esac ;;
+        --toolsets) toolsets="$1"; toolsets_set=true ;;
+        --allow-toolsets) allowed="$1"; allowed_set=true ;;
+      esac
+      ;;
+    --local) local_mode=true ;;
+    --ui-port|--api-port)
+      port_flag="$1"
+      shift
+      (($#)) || fail "$port_flag requires a port number."
+      [[ "$1" =~ ^[0-9]{1,5}$ ]] || fail "$port_flag requires a port between 1 and 65535."
+      port=$((10#$1))
+      ((port >= 1 && port <= 65535)) || fail "$port_flag requires a port between 1 and 65535."
+      if [[ "$port_flag" == "--ui-port" ]]; then ui_port="$port"; else api_port="$port"; fi
+      ;;
+    --no-build) build=false ;;
+    --logs|--stop)
+      selected="${1#--}"
+      if [[ "$action" != "start" && "$action" != "$selected" ]]; then
+        fail "Choose either --logs or --stop, not both."
+      fi
+      action="$selected"
+      ;;
+    --dry-run) dry_run=true ;;
+    -h|--help) usage; exit 0 ;;
+    *) fail "Unknown argument: $1. See --help." ;;
+  esac
+  shift
+done
+
+setup="${setup:-minimal}"
+if [[ "$action" != "start" && ( "$detach" == true || "$build" == false ) ]]; then
+  fail "--detach and --no-build apply only when starting a demo."
+fi
+if [[ "$local_mode" == true && ( "$action" != "start" || "$detach" == true ) ]]; then
+  fail "--local is foreground-only; --detach, --logs, and --stop are Docker-only options."
+fi
+if [[ "$local_mode" == false && ( -n "$ui_port" || -n "$api_port" ) ]]; then
+  fail "--ui-port and --api-port require --local. Docker ports are set in Compose."
+fi
+if [[ "$setup" == "full" ]]; then
+  ui_port="${ui_port:-3001}"
+  api_port="${api_port:-8010}"
+else
+  ui_port="${ui_port:-3000}"
+  api_port="${api_port:-8011}"
+fi
+[[ "$ui_port" != "$api_port" ]] || fail "The frontend and backend need different ports."
+
+compose=(docker compose
+  --project-directory "$repo_root"
+  --env-file "$repo_root/.env"
+  --file "$repo_root/docker-compose.$setup.yml")
+
+case "$action" in
+  start)
+    command=("${compose[@]}" up)
+    if [[ "$build" == true ]]; then
+      command+=(--build)
+    else
+      command+=(--no-build)
+    fi
+    if [[ "$detach" == true ]]; then
+      command+=(--detach --wait --wait-timeout 180)
+    fi
+    ;;
+  logs) command=("${compose[@]}" logs --follow --tail 100) ;;
+  stop) command=("${compose[@]}" down) ;;
+esac
+
+if [[ "$local_mode" == true ]]; then
+  backend_project="$repo_root/packages/agent-chat-minimal"
+  command=(uv run --project "$backend_project" --python 3.11 --env-file "$repo_root/.env")
+  if [[ "$build" == true ]]; then
+    command+=(--frozen --no-dev)
+    command+=(--extra persistence)
+  else
+    command+=(--no-sync)
+  fi
+  command+=(python "$script_dir/run_demo_local.py" --root "$repo_root" --setup "$setup"
+    --ui-port "$ui_port" --api-port "$api_port")
+  if [[ "$build" == false ]]; then command+=(--skip-install); fi
+  if [[ "$toolsets_set" == true ]]; then command+=(--toolsets "$toolsets"); fi
+  if [[ "$allowed_set" == true ]]; then command+=(--allow-toolsets "$allowed"); fi
+else
+  if [[ "$toolsets_set" == true ]]; then command=(env "TOOLSETS=$toolsets" "${command[@]}"); fi
+  if [[ "$allowed_set" == true ]]; then command=(env "ALLOWED_TOOLSETS=$allowed" "${command[@]}"); fi
+fi
+
+print_urls() {
+  printf '\n%s demo\n  Chat:     http://localhost:%s\n  API docs: http://localhost:%s/docs\n  Health:   http://localhost:%s/health\n' \
+    "$setup" "$ui_port" "$api_port" "$api_port"
+}
+
+if [[ "$dry_run" == true ]]; then
+  printf 'Command: '
+  printf '%q ' "${command[@]}"
+  printf '\n'
+  if [[ "$action" == "start" ]]; then print_urls; fi
+  exit 0
+fi
+
+if [[ ! -f "$repo_root/.env" ]]; then
+  printf 'run_demo: Missing %s/.env. Create it first:\n' "$repo_root" >&2
+  printf '  cp %q %q\n' "$repo_root/.env.example" "$repo_root/.env" >&2
+  fail "Then edit .env and set OPENAI_API_KEY (and SERPER_API_KEY for full Web Search)."
+fi
+
+if [[ "$local_mode" == true ]]; then
+  for tool in uv node pnpm; do
+    command -v "$tool" >/dev/null 2>&1 || fail "Local mode requires $tool on PATH. See --help."
+  done
+  printf 'Starting the %s demo locally (without Docker). Ctrl-C stops both servers.\n' "$setup"
+  exec "${command[@]}"
+fi
+
+command -v docker >/dev/null 2>&1 || fail "Docker is not installed or is not on PATH."
+docker compose version >/dev/null 2>&1 || fail "Docker Compose v2 is required. Install the Docker Compose plugin."
+docker info >/dev/null 2>&1 || fail "Cannot reach Docker. Start Docker and check your Docker permissions."
+
+if [[ "$action" == "start" ]]; then
+  if [[ "$build" == true ]]; then
+    printf 'Building and starting the %s demo from the current checkout.\n' "$setup"
+  else
+    printf 'Starting the %s demo with existing images (local changes are not rebuilt).\n' "$setup"
+  fi
+  if [[ "$detach" == true ]]; then
+    "${command[@]}"
+    print_urls
+    printf '\nUse --%s --logs to follow logs, or --%s --stop to stop the demo.\n' "$setup" "$setup"
+    exit 0
+  fi
+  print_urls
+  printf '\nOpen the chat URL once the frontend is ready. Ctrl-C stops the demo.\n\n'
+fi
+
+exec "${command[@]}"

@@ -5,6 +5,7 @@ import type { FC } from "react";
 
 import { HeaderActionHost } from "@/features/registry/registry-hosts";
 import { useApiClient } from "@/hooks/use-api-client";
+import { ConversationTools } from "@/features/tooling/conversation-tools";
 
 const ChatTitle: FC = () => {
   const api = useAssistantApi();
@@ -42,13 +43,16 @@ function cleanTitle(input: string): string {
 export const ThreadHeader: FC = () => {
   const { config } = useApiClient();
   return (
-    <div className="flex items-center justify-between border-b px-4 py-2">
+    <div className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-2">
       {config.features.threads ? (
         <ChatTitle />
       ) : (
         <span className="text-sm font-medium">{config.presentation.title}</span>
       )}
-      <HeaderActionHost />
+      <div className="flex flex-wrap items-center gap-2">
+        <ConversationTools />
+        <HeaderActionHost />
+      </div>
     </div>
   );
 };

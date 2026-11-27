@@ -21,7 +21,9 @@ export const TOOL_UI_REGISTRY: readonly ToolUiRegistration[] = [
   {
     id: "web-search",
     toolNames: ["web_search"],
-    isEnabled: isWebRagEnabled,
+    isEnabled: (config) =>
+      isWebRagEnabled(config) ||
+      Boolean(config.tooling?.tool_names.includes("web_search")),
     Component: WebSearchToolUI,
   },
   {
@@ -39,7 +41,9 @@ export const TOOL_UI_REGISTRY: readonly ToolUiRegistration[] = [
   {
     id: "render-graph",
     toolNames: ["render_graph"],
-    isEnabled: isMinimalPreset,
+    isEnabled: (config) =>
+      isMinimalPreset(config) ||
+      Boolean(config.tooling?.tool_names.includes("render_graph")),
     Component: GraphToolUI,
   },
 ];

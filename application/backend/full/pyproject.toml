@@ -5,6 +5,7 @@ description = "A langgraph + FastAPI server for assistant UI, supporting multipl
 readme = "README.md"
 requires-python = ">=3.11,<=3.14"
 dependencies = [
+    "agent-chat-fastapi-langgraph-assistant-ui[web,persistence]",
     "assistant-stream-ce>=0.0.2",
     "fastapi>=0.127.0",
     "langchain>=1.2.0",
@@ -18,6 +19,9 @@ dependencies = [
     "faiss-cpu>=1.8.0",
     "uvicorn>=0.34.0",
 ]
+
+[tool.uv.sources]
+agent-chat-fastapi-langgraph-assistant-ui = { path = "../../../packages/agent-chat-minimal", editable = true }
 
 [project.optional-dependencies]
 

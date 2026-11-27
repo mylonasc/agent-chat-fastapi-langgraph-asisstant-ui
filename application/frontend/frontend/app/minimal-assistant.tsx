@@ -9,6 +9,7 @@ import { ReactNode } from "react";
 import { Thread } from "@/components/assistant-ui/thread";
 import { useApiClient } from "@/hooks/use-api-client";
 import { createChatMessageConverter } from "@/lib/assistant/converter";
+import MyRuntimeProvider from "./MyRuntimeProvider";
 
 const converter = createChatMessageConverter({
   syntheticIdPrefix: "m-",
@@ -21,6 +22,21 @@ const converter = createChatMessageConverter({
  * The shared Thread view is reused; only the runtime composition differs.
  */
 export function MinimalAssistant({ children }: { children?: ReactNode }) {
+  const { config } = useApiClient();
+  return config.tooling?.enabled ? (
+    <MyRuntimeProvider>
+      {children ?? (
+        <main className="h-dvh">
+          <Thread />
+        </main>
+      )}
+    </MyRuntimeProvider>
+  ) : (
+    <LegacyMinimalAssistant>{children}</LegacyMinimalAssistant>
+  );
+}
+
+function LegacyMinimalAssistant({ children }: { children?: ReactNode }) {
   const { client } = useApiClient();
   const runtime = useAssistantTransportRuntime({
     initialState: {

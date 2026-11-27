@@ -25,9 +25,15 @@ import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button
 import { cn } from "@/lib/utils";
 
 import { MessageError } from "./thread-errors";
+import {
+  HiddenToolCall,
+  ShowTurnDetails,
+  useTurnDetails,
+} from "./turn-details";
 
 export const AssistantMessage: FC = () => {
   const messageId = useAssistantState((state) => state.message.id);
+  const turnDetails = useTurnDetails();
   return (
     <MessagePrimitive.Root asChild>
       <div
@@ -41,13 +47,16 @@ export const AssistantMessage: FC = () => {
               Text: MarkdownText,
               Reasoning: Reasoning,
               ReasoningGroup: ReasoningGroup,
-              tools: { Fallback: ToolFallback },
+              tools: turnDetails
+                ? { Override: HiddenToolCall }
+                : { Fallback: ToolFallback },
             }}
           />
           <MessageError />
         </div>
 
-        <div className="aui-assistant-message-footer mt-2 ml-2 flex">
+        <div className="aui-assistant-message-footer mt-2 ml-2 flex flex-wrap items-center">
+          <ShowTurnDetails />
           <BranchPicker />
           <AssistantActionBar />
           <MessageFeedbackControls />

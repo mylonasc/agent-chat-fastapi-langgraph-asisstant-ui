@@ -12,9 +12,9 @@ from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import StructuredTool
 from pydantic import BaseModel, Field
 
-from tools.config import CONFIG_STORE
-from tools.authorization import require_admin
-from tools.web_search.service import SerperSearchService
+from ..config import CONFIG_STORE
+from ..authorization import require_admin
+from ..web_search.service import SerperSearchService
 from .background_jobs import INDEXING_MANAGER
 from .indexer import WebRAGIndexer
 from .retrieval_manager import RETRIEVAL_MANAGER

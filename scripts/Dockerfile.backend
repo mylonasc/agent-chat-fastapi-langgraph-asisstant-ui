@@ -1,0 +1,13 @@
+FROM python:3.11-slim
+RUN pip install uv
+WORKDIR /app/packages/agent-chat-minimal
+COPY packages/agent-chat-minimal ./
+RUN uv sync --frozen --no-dev --extra persistence
+ARG ALLOWED_TOOLSETS=calculator,weather,graph
+ENV ALLOWED_TOOLSETS=${ALLOWED_TOOLSETS}
+RUN .venv/bin/python -c 'import os, subprocess; from agent_chat_minimal.toolkits.catalog import installation_extras; extras=installation_extras(os.environ["ALLOWED_TOOLSETS"]); subprocess.check_call(["uv", "sync", "--frozen", "--no-dev", "--extra", "persistence", *[part for extra in extras for part in ("--extra", extra)]])'
+ENV TOOL_SETTINGS_PATH=/app/data/tool-settings.sqlite3
+ENV TOOL_DATA_PATH=/app/data/web_rag
+ENV DATABASE_PATH=/app/data/chat.sqlite3
+ENV CHECKPOINT_DATABASE_PATH=/app/data/checkpoints.sqlite3
+CMD [".venv/bin/agent-chat-serve", "--host", "0.0.0.0"]

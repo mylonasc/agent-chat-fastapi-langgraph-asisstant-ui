@@ -1,6 +1,7 @@
 """Application composition and executable entry points."""
 
 import argparse
+import os
 from collections.abc import Callable
 from contextlib import asynccontextmanager
 from dataclasses import replace
@@ -166,15 +167,21 @@ def create_default_app() -> FastAPI:
     return create_configured_app(Settings.load())
 
 
-def main(argv=None):
+def main(argv=None, *, managed_default=False):
     config_parser = argparse.ArgumentParser(add_help=False)
     config_parser.add_argument("--config", help="Path to versioned agent-chat YAML")
     config_args, _ = config_parser.parse_known_args(argv)
     env = Settings.from_yaml(config_args.config) if config_args.config else Settings.load()
+    if managed_default and env.toolsets is None:
+        from .toolkits.catalog import BASIC
+        env = replace(env, toolsets=BASIC, persistence_enabled=env.persistence_enabled or ("PERSISTENCE_ENABLED" not in os.environ and not config_args.config and "AGENT_CHAT_CONFIG" not in os.environ))
     parser = argparse.ArgumentParser(description="Serve the minimal chat application")
     parser.add_argument("--config", default=config_args.config, help=argparse.SUPPRESS)
     parser.add_argument("--host", default=env.host)
     parser.add_argument("--port", type=int, default=env.port)
+    parser.add_argument("--ui", choices=("minimal", "full"), default=env.ui_preset, help="Interface layout, independent of toolsets")
+    parser.add_argument("--toolsets", default=None, help="Comma-separated enabled toolsets; an empty string enables no tools")
+    parser.add_argument("--allow-toolsets", default=None, help="Baked runtime toolset allowlist (defaults to --toolsets)")
     parser.add_argument("--base-path", default=env.base_path, help="Public URL prefix, e.g. /chat")
     parser.add_argument(
         "--model",
@@ -196,11 +203,26 @@ def main(argv=None):
         env,
         host=args.host,
         port=args.port,
+        ui_preset=args.ui,
+        toolsets=args.toolsets if args.toolsets is not None else env.toolsets,
+        allowed_toolsets=args.allow_toolsets if args.allow_toolsets is not None else env.allowed_toolsets,
+        persistence_enabled=(env.persistence_enabled or (args.toolsets is not None and not args.config and "AGENT_CHAT_CONFIG" not in os.environ and "PERSISTENCE_ENABLED" not in os.environ)),
         base_path=args.base_path,
         model=args.model or env.model,
         default_agent=args.agent or env.default_agent,
     )
+    if settings.toolsets is not None and args.agent is not None:
+        parser.error("--agent selects a legacy/custom agent; do not combine it with managed toolsets")
     if args.check:
+        if settings.toolsets is not None:
+            from .toolkits.manager import ToolkitManager
+            from .toolkits.engine import build_tools
+            from .domain import Principal
+            from .demo_agent.agent_factory import make_tool_agent
+            manager = ToolkitManager(settings)
+            make_tool_agent(settings.model, build_tools(manager.snapshot(), Principal("check"), settings.tool_data_path))
+            print("configured tool agent built OK")
+            return
         from .registry import discover_agents
 
         factories = discover_agents(model=settings.model)
@@ -213,3 +235,8 @@ def main(argv=None):
     uvicorn.run(
         create_configured_app(settings), host=settings.host, port=settings.port
     )
+
+
+def managed_main(argv=None):
+    """Consistently named entry point with the same defaults as the demo launcher."""
+    return main(argv, managed_default=True)

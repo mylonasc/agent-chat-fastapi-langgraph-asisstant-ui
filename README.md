@@ -11,9 +11,8 @@ Assistant UI frontend. It has two intentionally different ways to run:
 | **Packaged app** | One Python process that serves a reusable agent API and bundled UI | `minimal-chat-serve` on port 8011 |
 | **Docker Compose** | The repository's split frontend/backend development stacks | `docker-compose.*.yml` |
 
-Start with the packaged app for a new deployment or a new non-RAG agent. Use
-the Compose stacks when developing the legacy split applications, especially
-the full RAG demo.
+Start with the packaged app for deployment. For current source development,
+use the demo launcher with either layout and explicitly selected toolsets.
 
 ## Quick Start
 
@@ -32,6 +31,29 @@ server. See the [packaged app guide](docs/packaged-app.md) for local builds,
 durable SQLite storage, UI presets, configuration, and container use.
 
 ## Documentation
+
+To test the latest local checkout with Docker, configure `.env` from
+`.env.example`, then run:
+
+```bash
+./scripts/run_demo --minimal          # http://localhost:3000
+./scripts/run_demo --full             # http://localhost:3001 (full layout)
+./scripts/run_demo --full --detach    # start in the background
+./scripts/run_demo --full --local     # without Docker; requires uv, Node, pnpm
+./scripts/run_demo --runtime local --ui full --toolsets calculator,weather,graph
+./scripts/run_demo --help
+```
+
+Docker mode rebuilds images from your local source by default. See the
+[Compose guide](docs/docker-compose.md#local-demo-launcher) for logs and shutdown.
+For native source development with hot reload, see
+[Run without Docker](docs/local-development.md).
+
+**Layout and tools are independent.** Both demo layouts use basic tools by
+default; add `web_search,web_rag` explicitly when wanted. **Manage toolsets**
+provides durable administrator controls; **Conversation tools** selects a
+permitted subset for each conversation. See [Toolsets and runtime configuration](docs/toolsets.md)
+for shared packaged/local/Docker naming, configuration knobs, and authorization.
 
 For a ready-to-run local Ollama chat UI (no API key), see
 [Local Ollama Chat](application/ollama-chat/README.md). It uses the built library,
@@ -85,18 +107,17 @@ packages/agent-chat-minimal/        Canonical portable Python application
   scripts/                          Static UI staging, wheel build, artifact smoke test
 application/backend/
   langgraph-server-minimal/         Compatibility entry point for the package
-  full/                             Separate source-run RAG demo backend
+  full/                             Legacy source-run RAG server/examples
 application/frontend/
   frontend/                         Unified packaged and Compose UI (both presets)
 docs/                               Maintainer and deployment guides
 .agent-recon/                       Architecture reconnaissance and implementation history
 ```
 
-The package owns the minimal server's routes, transport, settings, persistence,
-and static UI behavior. `application/backend/langgraph-server-minimal` is a
-thin compatibility composition root, not a second implementation. The full
-backend is separate because it provides source-run Web Search/RAG tools that
-the portable package does not include.
+The package owns the shared server, toolset policy, optional web integrations,
+persistence, and static UI behavior. Both demo layouts use this backend.
+`application/backend/langgraph-server-minimal` and the old RAG tools namespace
+are compatibility entry points; legacy RAG examples remain under `full/`.
 
 ## Development Checks
 

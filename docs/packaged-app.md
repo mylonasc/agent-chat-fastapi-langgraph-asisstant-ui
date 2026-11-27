@@ -1,5 +1,10 @@
 # Serve The Packaged App
 
+For the current checkout's configurable toolsets and canonical
+`agent-chat-serve --ui full --toolsets ...` command, see [Toolsets](toolsets.md).
+Build/install a new wheel to use these source changes; older published wheels
+retain the legacy commands and behavior described below.
+
 **Want local Ollama chat quickly?** Follow the
 [Ollama starter quick start](../packages/agent-chat-minimal/src/agent_chat_minimal/docs/ollama-quickstart.md).
 It explains the working no-custom-code route and distinguishes it from the

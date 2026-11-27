@@ -35,7 +35,7 @@ export const Assistant = () => {
             </header>
 
             <div className="flex-1 overflow-hidden">
-              <Thread />
+              <Thread toolDetails />
             </div>
           </SidebarInset>
         </div>

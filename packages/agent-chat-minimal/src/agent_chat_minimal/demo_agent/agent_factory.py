@@ -92,7 +92,8 @@ def make_tool_agent(
             ``config={"configurable": {"thread_id": ...}}`` at invoke time.
     """
     try:
-        llm = resolve_llm(model).bind_tools(tools)
+        base_llm = resolve_llm(model)
+        llm = base_llm.bind_tools(tools) if tools else base_llm
     except Exception as exc:
         converted = _tools_error_or_original(model, exc)
         if converted is exc:
@@ -118,8 +119,11 @@ def make_tool_agent(
 
     workflow = StateGraph(AgentState)
     workflow.add_node("agent", call_model)
-    workflow.add_node("tools", tool_node)
     workflow.set_entry_point("agent")
-    workflow.add_conditional_edges("agent", tools_condition)
-    workflow.add_edge("tools", "agent")
+    if tools:
+        workflow.add_node("tools", tool_node)
+        workflow.add_conditional_edges("agent", tools_condition)
+        workflow.add_edge("tools", "agent")
+    else:
+        workflow.add_edge("agent", "__end__")
     return workflow.compile(checkpointer=checkpointer)

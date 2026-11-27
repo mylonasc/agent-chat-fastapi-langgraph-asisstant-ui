@@ -3,10 +3,10 @@ name: agent-chat-full
 services:
   backend-full:
     build:
-      context: ./application/backend/full
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: scripts/Dockerfile.backend
       args:
-        DOCLING_VARIANT: ${DOCLING_VARIANT:-none}
+        ALLOWED_TOOLSETS: ${ALLOWED_TOOLSETS-${TOOLSETS-calculator,weather,graph}}
     ports:
       - "8010:8010"
     environment:
@@ -17,10 +17,14 @@ services:
       - AGENT_MODE=${AGENT_MODE:-react}
       - DOCLING_VARIANT=${DOCLING_VARIANT:-none}
       - RAG_STARTUP_VALIDATION=${RAG_STARTUP_VALIDATION:-0}
+      - UI_PRESET=full
+      - PORT=8010
+      - API_BASE=http://localhost:8010
+      - TOOLSETS=${TOOLSETS-calculator,weather,graph}
     env_file:
       - .env
     volumes:
-      - ./application/backend/full/data:/app/data
+      - demo-full-data:/app/data
     healthcheck:
       test: ["CMD", ".venv/bin/python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8010/health')"]
       interval: 5s
@@ -39,3 +43,6 @@ services:
     depends_on:
       backend-full:
         condition: service_healthy
+
+volumes:
+  demo-full-data:

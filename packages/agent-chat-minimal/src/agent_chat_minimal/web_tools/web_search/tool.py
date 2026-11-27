@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import importlib
 from typing import Any, cast
 
 import requests
@@ -10,10 +11,22 @@ from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import StructuredTool
 from pydantic import BaseModel, Field
 
-from tools.config import CONFIG_STORE
-from tools.authorization import require_admin
-from tools.web_rag.background_jobs import INDEXING_MANAGER
-from tools.web_rag.retrieval_manager import RETRIEVAL_MANAGER
+from ..config import CONFIG_STORE
+from ..authorization import require_admin
+
+
+class _LazyResource:
+    def __init__(self, module, name):
+        self.module = module
+        self.name = name
+
+    def __getattr__(self, name):
+        resource = getattr(importlib.import_module(self.module, __package__), self.name)
+        return getattr(resource, name)
+
+
+INDEXING_MANAGER = _LazyResource("..web_rag.background_jobs", "INDEXING_MANAGER")
+RETRIEVAL_MANAGER = _LazyResource("..web_rag.retrieval_manager", "RETRIEVAL_MANAGER")
 
 from .service import SerperSearchService
 
@@ -151,6 +164,7 @@ class WebSearchTool:
             pass
 
         if auto_index or as_rag_chunks:
+            # Search-only installations never import embedding/vector packages.
             rag_config = self._get_rag_config()
             links = [cast(str, r.get("link")) for r in results if r.get("link")]
             selected_links = links[:rag_urls_to_index]

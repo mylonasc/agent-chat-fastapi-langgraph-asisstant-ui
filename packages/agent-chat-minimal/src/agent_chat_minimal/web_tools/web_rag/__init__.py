@@ -1,0 +1,1 @@
+"""Optional Web RAG integration."""

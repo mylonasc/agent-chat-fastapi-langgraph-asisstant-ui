@@ -9,7 +9,9 @@ One static UI is served at `/`; select `UI_PRESET=minimal` or `UI_PRESET=full`.
 `PERSISTENCE_ENABLED=true` with separate `DATABASE_PATH` and
 `CHECKPOINT_DATABASE_PATH` values.
 
-`application/backend/full` remains a development-only RAG extension with
-separate tool/storage behavior. New non-RAG work must target the package.
+Current demo launch modes all target the package. RAG/search are optional
+toolsets independent of the layout; see [Toolsets](toolsets.md). The old
+`application/backend/full` server is retained for legacy examples, and its
+tool imports forward to the shared optional implementations.
 `/full/` was removed in 0.4.0. `FULL_WEB_DIR` is a compatibility override
 scheduled for removal in the next major release.

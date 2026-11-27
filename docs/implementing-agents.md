@@ -88,12 +88,14 @@ minimal-chat-serve --agent shout --check
 `GET /agents` shows built-ins (`weather`, `calculator`) plus successfully
 loaded plugins. Plugin names cannot replace built-ins; choose a unique name.
 
-## Full RAG Backend
+## Managed Toolsets and Legacy RAG Backend
 
-`application/backend/full` has no plugin registry. Its agents and tools are
-assembled in source, primarily under `fastlang/server/` and `tools/`. Change it
-only when extending the separate RAG demo; do not expect those tools to ship in
-the portable package.
+For configurable tools, target the shared package's `toolkits/` catalogue and
+composition engine; see [Toolsets](toolsets.md). Optional web integrations live
+in `agent_chat_minimal/web_tools/` and are shared by all current launch modes.
+Opaque custom agent graphs retain their existing registry path and are not
+silently rewritten by managed-tool policy. `application/backend/full` remains
+only for the legacy RAG server/examples and compatibility imports.
 
 The package's in-wheel version of this guide is
 [`agents.md`](../packages/agent-chat-minimal/src/agent_chat_minimal/docs/agents.md).

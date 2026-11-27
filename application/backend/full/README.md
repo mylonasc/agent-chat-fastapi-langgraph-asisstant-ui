@@ -1,5 +1,13 @@
 # Full RAG Demo Backend
 
+> **Legacy server/examples.** The current demo launcher uses the canonical
+> packaged backend for both layouts. Use
+> `./scripts/run_demo --runtime local --ui full --toolsets web_search,web_rag`
+> from the repository root for the current RAG experience. Tool implementations
+> now live once under `agent_chat_minimal/web_tools`; the `tools` namespace here
+> is an import compatibility adapter. The instructions below describe the
+> retained legacy server, not what `run_demo --full` launches.
+
 This is a separate source-run FastAPI demo with Web Search and RAG tool routes.
 It is not included in the portable `agent-chat-minimal` package and has no
 plugin agent registry. Use it when developing the full RAG experience; use the
@@ -11,10 +19,10 @@ Run the backend from this directory:
 ./start_server.sh
 ```
 
-The recommended full-stack development command is:
+The current shared full-stack development command is:
 
 ```bash
-docker-compose -f docker-compose.full.yml up --build
+./scripts/run_demo --runtime docker --ui full --toolsets web_search,web_rag
 ```
 
 This exposes the backend at <http://localhost:8010> and the full frontend at

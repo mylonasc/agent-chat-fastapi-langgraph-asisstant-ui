@@ -81,3 +81,5 @@ test-results/
 
 # Generated application data
 application/backend/full/data/
+/.demo-data/
+**/tool-settings.sqlite3*

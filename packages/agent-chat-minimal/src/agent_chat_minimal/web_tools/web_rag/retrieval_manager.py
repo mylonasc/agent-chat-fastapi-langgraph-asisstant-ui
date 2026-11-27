@@ -1,6 +1,6 @@
 import hashlib
 import json
-from typing import Dict, Tuple
+from pathlib import Path
 
 from .indexer import WebRAGIndexer
 
@@ -13,7 +13,7 @@ class RetrievalManager:
 
     def __init__(self):
         # (user_id, config_hash) -> retriever
-        self._cache: Dict[Tuple[str, str], object] = {}
+        self._cache: dict[tuple, object] = {}
 
     @staticmethod
     def _config_signature(config: dict) -> str:
@@ -23,7 +23,13 @@ class RetrievalManager:
 
     def get_retriever(self, config: dict, user_id: str, k: int = 5):
         sig = self._config_signature(config)
-        key = (user_id, sig)
+        path = (
+            Path(config.get("base_path", "data/web_rag"))
+            / f"user_{user_id}"
+            / "documents.json"
+        )
+        version = path.stat().st_mtime_ns if path.exists() else 0
+        key = (user_id, sig, k, version)
 
         if key in self._cache:
             retriever = self._cache[key]
@@ -34,6 +40,10 @@ class RetrievalManager:
         indexer = WebRAGIndexer(config, user_id)
         retriever = indexer.get_retriever(k=k)
 
+        # Retain only the latest corpus snapshot for this namespace.
+        self._cache = {
+            key_: value for key_, value in self._cache.items() if key_[0] != user_id
+        }
         self._cache[key] = retriever
         return retriever
 

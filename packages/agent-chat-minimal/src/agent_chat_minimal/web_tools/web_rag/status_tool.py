@@ -5,7 +5,7 @@ from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import StructuredTool
 from pydantic import BaseModel, Field
 
-from tools.config import CONFIG_STORE
+from ..config import CONFIG_STORE
 
 from .background_jobs import INDEXING_MANAGER
 from .status import get_index_status

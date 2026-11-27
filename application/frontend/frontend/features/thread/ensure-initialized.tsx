@@ -22,7 +22,11 @@ export function useEnsureThreadInitialized() {
   if (!loaded) {
     return { canSend: false, isInitializing: true };
   }
-  if (!config.features.threads || config.ui_preset !== "full" || !threadItem) {
+  if (
+    !config.features.threads ||
+    (config.ui_preset !== "full" && !config.tooling?.enabled) ||
+    !threadItem
+  ) {
     return { canSend: true, isInitializing: false };
   }
   const ready = !!threadItem.remoteId;
@@ -60,7 +64,11 @@ export const EnsureThreadInitialized: FC = () => {
   useEffect(() => {
     // Capability-gated: a threadless deployment has no local thread item to
     // bind and must not call the thread-initialize endpoint.
-    if (!config.features.threads || config.ui_preset !== "full") return;
+    if (
+      !config.features.threads ||
+      (config.ui_preset !== "full" && !config.tooling?.enabled)
+    )
+      return;
     const localId = threadItem?.id;
     if (!localId || threadItem?.remoteId) return;
     if (store.isInitializing(localId)) return;
@@ -91,6 +99,7 @@ export const EnsureThreadInitialized: FC = () => {
     api,
     config.features.threads,
     config.ui_preset,
+    config.tooling?.enabled,
     store,
     threadsLoading,
     threadItem?.id,

@@ -27,10 +27,32 @@ Open <http://localhost:8011/>. The same process provides the UI, `GET /health`,
 
 ```bash
 cp .env.example .env
-docker-compose -f docker-compose.minimal.yml up --build
+# Edit .env and set your model credentials, then:
+./scripts/run_demo --minimal
 # or the separate RAG demo:
-docker-compose -f docker-compose.full.yml up --build
+./scripts/run_demo --full
 ```
 
-The minimal split UI is at <http://localhost:3000>; the full RAG demo UI is at
-<http://localhost:3001>.
+The minimal split UI is at <http://localhost:3000>; the full layout is at
+<http://localhost:3001>. The launcher rebuilds the current local checkout.
+Use `--detach` for background startup, `--logs` to follow logs, and `--stop`
+to stop the selected setup. Run `./scripts/run_demo --help` for all options.
+
+**Naming update:** `full` selects the full UI, not a RAG backend. Both setups
+use the common packaged backend and basic tools by default. Use
+`--toolsets calculator,web_search,web_rag` explicitly for RAG/search. See
+[Toolsets](docs/toolsets.md) for runtime controls and configuration.
+
+## Without Docker
+
+With uv, Node.js 20.9+, pnpm 10, and a configured `.env`:
+
+```bash
+./scripts/run_demo --minimal --local
+./scripts/run_demo --full --local
+```
+
+This installs locked dependencies and runs the latest backend/frontend source
+with hot reload. Ctrl-C stops both servers. Use `--ui-port` and `--api-port`
+to avoid conflicts with an existing Docker demo. See the
+[local development guide](docs/local-development.md) for details.

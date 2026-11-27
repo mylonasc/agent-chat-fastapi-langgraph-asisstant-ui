@@ -6,10 +6,16 @@ from tools.web_rag.background_jobs import BackgroundIndexingManager
 def test_background_indexing_job_completes(monkeypatch):
     manager = BackgroundIndexingManager(max_workers=1)
 
-    monkeypatch.setattr(
-        "tools.web_rag.background_jobs.WebRAGIndexer.index_url",
-        lambda self, url: None,
-    )
+    class StubIndexer:
+        def __init__(self, config, user_id):
+            pass
+
+        def index_url(self, url, progress_callback=None):
+            if progress_callback:
+                progress_callback("indexing", {"chunks": 2})
+            return {"documents": 1, "chunks": 2, "parser": "pypdf"}
+
+    monkeypatch.setattr("tools.web_rag.background_jobs.WebRAGIndexer", StubIndexer)
 
     job_id = manager.start_job({"embedding_provider": "fastembed"}, "u1", ["a", "b"])
 

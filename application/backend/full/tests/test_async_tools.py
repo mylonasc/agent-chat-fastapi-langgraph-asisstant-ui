@@ -17,7 +17,7 @@ def test_web_rag_empty_index_returns_structured_payload(monkeypatch):
     )
 
     tool = WebRAGTool().get_langchain_tool()
-    raw = tool.invoke({"query": "latest news", "user_id": "default_user"})
+    raw = tool.invoke({"query": "latest news", "user_id": "default_user", "auto_bootstrap_web": False})
     payload = json.loads(raw)
 
     assert payload["status"] == "empty_index"
@@ -147,10 +147,14 @@ def test_web_rag_bootstraps_from_web_when_empty(monkeypatch):
             }
         ],
     )
-    monkeypatch.setattr(
-        "tools.web_rag.tool.WebRAGIndexer.index_url",
-        lambda self, url: None,
-    )
+    class StubIndexer:
+        def __init__(self, config, user_id):
+            pass
+
+        def index_url(self, url):
+            return {"documents": 1, "chunks": 1, "parser": "pypdf"}
+
+    monkeypatch.setattr("tools.web_rag.tool.WebRAGIndexer", StubIndexer)
 
     tool = WebRAGTool().get_langchain_tool()
     raw = tool.invoke({"query": "example domain", "user_id": "default_user"})

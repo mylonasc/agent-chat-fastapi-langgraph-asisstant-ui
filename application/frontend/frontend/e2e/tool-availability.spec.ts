@@ -77,8 +77,11 @@ test("web_search and web_rag are available from chat UI @full-backend", async ({
   });
 
   await test.step("Verify tool calls appear in UI", async () => {
-    await expect(page.getByText(/Tool:\s*web_search/i)).toBeVisible();
-    await expect(page.getByText(/Tool:\s*web_rag/i)).toBeVisible();
     await expect(page.getByText("TOOLS_OK")).toBeVisible();
+    await page.locator('[data-role="assistant"]').last()
+      .getByRole("button", { name: "Show details" }).click();
+    const panel = page.getByTestId("turn-details-sidebar");
+    await expect(panel.getByTestId("source-indexing-widget-web_search")).toBeVisible();
+    await expect(panel.getByTestId("source-indexing-widget-web_rag")).toBeVisible();
   });
 });
